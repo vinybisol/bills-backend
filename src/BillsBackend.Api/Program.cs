@@ -17,7 +17,7 @@ builder.Services
 // (user-secrets locally, environment / GitHub Secrets in CI/CD) and must use the
 // pooler endpoint with "SSL Mode=Require". ---
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Neon")));
+    options.UseNpgsql(NeonConnectionString.Normalize(builder.Configuration.GetConnectionString("Neon"))));
 
 // --- Identity services ---
 builder.Services.AddSingleton(TimeProvider.System);
