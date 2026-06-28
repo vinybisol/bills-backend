@@ -31,7 +31,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Publish
-        run: dotnet publish src/BillsBackend.Api/BillsBackend.Api.csproj --configuration Release --output ./publish
+        run: dotnet publish src/BillsBackend.Api/BillsBackend.Api.csproj -c Release -r win-x86 --self-contained true -o ./publish
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
