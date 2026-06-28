@@ -10,7 +10,7 @@ namespace BillsBackend.UnitTests;
 /// Firebase uid into the internal <c>app_user</c> and just-in-time provisioning.
 /// </summary>
 [TestFixture]
-public class UserProvisioningServiceTests
+public sealed class UserProvisioningServiceTests
 {
     private static readonly DateTimeOffset FixedNow =
         new(2026, 06, 28, 12, 00, 00, TimeSpan.Zero);
@@ -21,11 +21,14 @@ public class UserProvisioningServiceTests
     [Test]
     public async Task GetOrCreateAsync_NewFirebaseUid_CreatesAndPersistsUser()
     {
+        // Arrange
         await using var db = TestSupport.NewInMemoryContext();
         var service = CreateService(db);
 
+        // Act
         var user = await service.GetOrCreateAsync("firebase-uid-1", "alice@example.com");
 
+        // Assert
         Assert.That(user.Id, Is.GreaterThan(0));
         Assert.That(user.FirebaseUid, Is.EqualTo("firebase-uid-1"));
         Assert.That(user.Email, Is.EqualTo("alice@example.com"));
@@ -37,23 +40,29 @@ public class UserProvisioningServiceTests
     [Test]
     public async Task GetOrCreateAsync_NewUser_StampsCreatedAtFromTimeProvider()
     {
+        // Arrange
         await using var db = TestSupport.NewInMemoryContext();
         var service = CreateService(db);
 
+        // Act
         var user = await service.GetOrCreateAsync("firebase-uid-2", email: null);
 
+        // Assert
         Assert.That(user.CreatedAt, Is.EqualTo(FixedNow));
     }
 
     [Test]
     public async Task GetOrCreateAsync_ExistingFirebaseUid_ReturnsSameUserWithoutDuplicate()
     {
+        // Arrange
         await using var db = TestSupport.NewInMemoryContext();
         var service = CreateService(db);
 
+        // Act
         var first = await service.GetOrCreateAsync("firebase-uid-3", "bob@example.com");
         var second = await service.GetOrCreateAsync("firebase-uid-3", "bob@example.com");
 
+        // Assert
         Assert.That(second.Id, Is.EqualTo(first.Id));
         Assert.That(await db.Users.CountAsync(), Is.EqualTo(1));
     }
@@ -63,11 +72,13 @@ public class UserProvisioningServiceTests
     [TestCase("   ")]
     public void GetOrCreateAsync_MissingFirebaseUid_ThrowsArgumentException(string? firebaseUid)
     {
+        // Arrange
         using var db = TestSupport.NewInMemoryContext();
         var service = CreateService(db);
 
+        // Act / Assert
         Assert.That(
             async () => await service.GetOrCreateAsync(firebaseUid!, "x@example.com"),
-            Throws.ArgumentException);
+            Throws.InstanceOf<ArgumentException>());
     }
 }

@@ -14,7 +14,7 @@ namespace BillsBackend.IntegrationTests;
 /// Hosts the API in-memory for integration tests, swapping PostgreSQL for the EF Core
 /// in-memory provider and validating tokens against the local test signing key.
 /// </summary>
-public class CustomWebApplicationFactory : WebApplicationFactory<Program>
+public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"integration-{Guid.NewGuid()}";
 

@@ -9,7 +9,7 @@ namespace BillsBackend.IntegrationTests;
 /// full pipeline: JWT validation, just-in-time provisioning and the JSON response.
 /// </summary>
 [TestFixture]
-public class HealthEndpointTests
+public sealed class HealthEndpointTests
 {
     private CustomWebApplicationFactory _factory = null!;
     private HttpClient _client = null!;
@@ -31,12 +31,15 @@ public class HealthEndpointTests
     [Test]
     public async Task GetHealth_WithValidToken_ReturnsOkAndInternalUserId()
     {
+        // Arrange
         using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
         request.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateValidToken("firebase-alice"));
 
+        // Act
         using var response = await _client.SendAsync(request);
 
+        // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         var body = await response.Content.ReadFromJsonAsync<HealthDto>();
@@ -48,31 +51,39 @@ public class HealthEndpointTests
     [Test]
     public async Task GetHealth_WithSameTokenTwice_ProvisionsUserOnceAndReturnsSameId()
     {
+        // Arrange
         var token = TestTokens.CreateValidToken("firebase-repeat");
 
+        // Act
         var firstId = await GetUserIdAsync(token);
         var secondId = await GetUserIdAsync(token);
 
+        // Assert
         Assert.That(secondId, Is.EqualTo(firstId));
     }
 
     [Test]
     public async Task GetHealth_WithUntrustedSignature_ReturnsUnauthorized()
     {
+        // Arrange
         using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
         request.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateTokenWithUntrustedSignature());
 
+        // Act
         using var response = await _client.SendAsync(request);
 
+        // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
     [Test]
     public async Task GetHealth_WithoutToken_ReturnsUnauthorized()
     {
+        // Arrange / Act
         using var response = await _client.GetAsync("/health");
 
+        // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 

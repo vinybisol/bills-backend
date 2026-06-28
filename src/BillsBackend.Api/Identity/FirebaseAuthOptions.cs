@@ -10,7 +10,7 @@ namespace BillsBackend.Api.Identity;
 /// both the token issuer (<c>https://securetoken.google.com/&lt;project-id&gt;</c>) and the
 /// expected audience (<c>&lt;project-id&gt;</c>).
 /// </remarks>
-public class FirebaseAuthOptions
+public sealed class FirebaseAuthOptions
 {
     /// <summary>
     /// The name of the configuration section that binds to this options type.

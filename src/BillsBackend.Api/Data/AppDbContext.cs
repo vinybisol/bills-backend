@@ -11,7 +11,7 @@ namespace BillsBackend.Api.Data;
 /// (Neon) schema described in the project conventions.
 /// </remarks>
 /// <param name="options">The options used to configure the context.</param>
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
     /// <summary>
     /// Gets the set of application users.

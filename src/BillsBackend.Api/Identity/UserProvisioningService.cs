@@ -10,7 +10,7 @@ namespace BillsBackend.Api.Identity;
 /// <param name="db">The database context used to look up and persist users.</param>
 /// <param name="timeProvider">The clock used to stamp newly provisioned users.</param>
 /// <param name="logger">The logger used to record provisioning events.</param>
-public class UserProvisioningService(
+public sealed class UserProvisioningService(
     AppDbContext db,
     TimeProvider timeProvider,
     ILogger<UserProvisioningService> logger) : IUserProvisioningService
@@ -21,10 +21,7 @@ public class UserProvisioningService(
         string? email,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(firebaseUid))
-        {
-            throw new ArgumentException("Firebase uid must be provided.", nameof(firebaseUid));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(firebaseUid);
 
         var existing = await db.Users
             .FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid, cancellationToken);
@@ -33,12 +30,7 @@ public class UserProvisioningService(
             return existing;
         }
 
-        var user = new AppUser
-        {
-            FirebaseUid = firebaseUid,
-            Email = email,
-            CreatedAt = timeProvider.GetUtcNow(),
-        };
+        var user = AppUser.Provision(firebaseUid, email, timeProvider.GetUtcNow());
 
         db.Users.Add(user);
 

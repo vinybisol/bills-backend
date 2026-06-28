@@ -91,7 +91,7 @@ await app.RunAsync();
 /// </summary>
 /// <param name="UserId">The internal <c>app_user.id</c> resolved from the token.</param>
 /// <param name="Status">A constant liveness indicator.</param>
-internal record HealthResponse(long UserId, string Status);
+internal sealed record HealthResponse(long UserId, string Status);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API
