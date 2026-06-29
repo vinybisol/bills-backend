@@ -1,4 +1,5 @@
 using BillsBackend.Api.Domain;
+using BillsBackend.Api.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace BillsBackend.Api.Data;
@@ -9,15 +10,27 @@ namespace BillsBackend.Api.Data;
 /// <remarks>
 /// Column and table names are mapped to <c>snake_case</c> to match the PostgreSQL
 /// (Neon) schema described in the project conventions.
+/// <para>
+/// The <paramref name="currentOwner"/> service scopes all domain entity queries to the
+/// authenticated user via global query filters. Callers must set
+/// <see cref="ICurrentOwner.Id"/> from the resolved <c>app_user.id</c> before issuing
+/// any filtered query.
+/// </para>
 /// </remarks>
 /// <param name="options">The options used to configure the context.</param>
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+/// <param name="currentOwner">The scoped current-owner context used by query filters.</param>
+public sealed class AppDbContext(
+    DbContextOptions<AppDbContext> options,
+    ICurrentOwner currentOwner) : DbContext(options)
 {
-    /// <summary>
-    /// Gets the set of application users.
-    /// </summary>
-    /// <value>The <see cref="AppUser"/> entities tracked by the context.</value>
+    /// <summary>Gets the set of application users.</summary>
     public DbSet<AppUser> Users => Set<AppUser>();
+
+    /// <summary>
+    /// Gets the pre-filtered set of budget categories for the current owner.
+    /// Only active categories belonging to the authenticated owner are visible.
+    /// </summary>
+    public DbSet<Category> Categories => Set<Category>();
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -53,6 +66,39 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
             entity.HasIndex(u => u.FirebaseUid)
                 .IsUnique();
+        });
+
+        modelBuilder.Entity<Category>(entity =>
+        {
+            entity.ToTable("category");
+
+            entity.HasKey(c => c.Id);
+            entity.Property(c => c.Id)
+                .HasColumnName("id")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(c => c.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            entity.Property(c => c.Name)
+                .HasColumnName("name")
+                .IsRequired();
+
+            entity.Property(c => c.Active)
+                .HasColumnName("active")
+                .IsRequired();
+
+            entity.Property(c => c.CreatedAt)
+                .HasColumnName("created_at")
+                .IsRequired();
+
+            entity.HasIndex(c => new { c.OwnerId, c.Name })
+                .IsUnique();
+
+            // Restricts all Category reads to the current owner's active rows.
+            // currentOwner.Id is evaluated at query-execution time from the scoped service.
+            entity.HasQueryFilter(c => c.Active && c.OwnerId == currentOwner.Id);
         });
     }
 }

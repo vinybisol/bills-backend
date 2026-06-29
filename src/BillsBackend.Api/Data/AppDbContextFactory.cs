@@ -1,3 +1,4 @@
+using BillsBackend.Api.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -33,6 +34,6 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
             .UseNpgsql(NeonConnectionString.Normalize(connectionString))
             .Options;
 
-        return new AppDbContext(options);
+        return new AppDbContext(options, new CurrentOwner());
     }
 }
