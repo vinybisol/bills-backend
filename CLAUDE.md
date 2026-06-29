@@ -58,3 +58,15 @@ API do sistema de orçamento pessoal. Este arquivo define como os agentes devem 
 - Migrations versionadas pelo EF Core; nunca alterar migration já aplicada.
 - Validação de entrada em todos os endpoints.
 - Filtro global por `owner_id` nas queries (isolamento por usuário na aplicação).
+
+## Setup local de testes
+
+Os testes de integração apontam para um banco PostgreSQL real no Neon (banco `bills_test`).
+
+Configure a connection string antes de rodar `dotnet test`:
+```bash
+dotnet user-secrets set "ConnectionStrings:NeonTest" "<connection-string-do-neon-test>" \
+  --project tests/BillsBackend.IntegrationTests
+```
+
+No CI, a connection string vem do GitHub Secret `NEON_TEST_CONNECTION_STRING`.

@@ -1,6 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using BillsBackend.Api.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
+using Respawn;
 
 namespace BillsBackend.IntegrationTests;
 
@@ -13,19 +18,37 @@ public sealed class MeEndpointTests
 {
     private CustomWebApplicationFactory _factory = null!;
     private HttpClient _client = null!;
+    private Respawner _respawner = null!;
+    private NpgsqlConnection _dbConnection = null!;
 
     [OneTimeSetUp]
-    public void OneTimeSetUp()
+    public async Task OneTimeSetUp()
     {
         _factory = new CustomWebApplicationFactory();
         _client = _factory.CreateClient();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.MigrateAsync();
+
+        _dbConnection = new NpgsqlConnection(_factory.TestConnectionString);
+        await _dbConnection.OpenAsync();
+        _respawner = await Respawner.CreateAsync(_dbConnection, new RespawnerOptions
+        {
+            DbAdapter = DbAdapter.Postgres,
+            TablesToIgnore = ["__EFMigrationsHistory"]
+        });
     }
 
+    [SetUp]
+    public async Task ResetDatabase() => await _respawner.ResetAsync(_dbConnection);
+
     [OneTimeTearDown]
-    public void OneTimeTearDown()
+    public async Task OneTimeTearDown()
     {
+        await _dbConnection.DisposeAsync();
         _client.Dispose();
-        _factory.Dispose();
+        await _factory.DisposeAsync();
     }
 
     [Test]
