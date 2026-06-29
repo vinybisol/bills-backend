@@ -8,7 +8,7 @@ namespace BillsBackend.Api.Identity;
 /// Default <see cref="IUserProvisioningService"/> backed by the <see cref="AppDbContext"/>.
 /// </summary>
 /// <param name="db">The database context used to look up and persist users.</param>
-/// <param name="timeProvider">The clock used to stamp newly provisioned users.</param>
+/// <param name="timeProvider">The clock used to stamp newly provisioned users and seed categories.</param>
 /// <param name="logger">The logger used to record provisioning events.</param>
 public sealed class UserProvisioningService(
     AppDbContext db,
@@ -38,6 +38,7 @@ public sealed class UserProvisioningService(
         try
         {
             await db.SaveChangesAsync(cancellationToken);
+            await SeedDefaultCategoriesAsync(user.Id, cancellationToken);
             logger.LogInformation("Provisioned new app_user {UserId} on first authenticated request.", user.Id);
             return user;
         }
@@ -55,5 +56,15 @@ public sealed class UserProvisioningService(
 
             throw;
         }
+    }
+
+    private async Task SeedDefaultCategoriesAsync(long ownerId, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        foreach (var name in Category.DefaultNames)
+        {
+            db.Categories.Add(Category.Create(ownerId, name, now));
+        }
+        await db.SaveChangesAsync(cancellationToken);
     }
 }

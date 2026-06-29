@@ -1,4 +1,5 @@
 using BillsBackend.Api.Data;
+using BillsBackend.Api.Domain;
 using BillsBackend.Api.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // --- Identity services ---
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IUserProvisioningService, UserProvisioningService>();
+builder.Services.AddScoped<ICurrentOwner, CurrentOwner>();
 
 // --- Authentication: validate Firebase-issued JWTs ---
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -102,22 +104,148 @@ app.MapGet("/me", async (
 })
 .RequireAuthorization();
 
+// --- Category endpoints ---
+
+app.MapPost("/categories", async (
+    CreateCategoryRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Results.BadRequest("Name is required.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var trimmedName = req.Name.Trim();
+    if (await db.Categories.AnyAsync(c => c.Name == trimmedName, ct))
+        return Results.Conflict("A category with that name already exists.");
+
+    var category = Category.Create(appUser.Id, trimmedName, timeProvider.GetUtcNow());
+    db.Categories.Add(category);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Created($"/categories/{category.Id}", new CategoryDto(category.Id, category.Name));
+})
+.RequireAuthorization();
+
+app.MapGet("/categories", async (
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var categories = await db.Categories
+        .OrderBy(c => c.Name)
+        .Select(c => new CategoryDto(c.Id, c.Name))
+        .ToListAsync(ct);
+
+    return Results.Ok(categories);
+})
+.RequireAuthorization();
+
+app.MapPut("/categories/{id:long}", async (
+    long id,
+    UpdateCategoryRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Results.BadRequest("Name is required.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id, ct);
+    if (category is null)
+        return Results.NotFound();
+
+    var trimmedName = req.Name.Trim();
+    if (category.Name != trimmedName &&
+        await db.Categories.AnyAsync(c => c.Id != id && c.Name == trimmedName, ct))
+        return Results.Conflict("A category with that name already exists.");
+
+    category.Rename(trimmedName);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new CategoryDto(category.Id, category.Name));
+})
+.RequireAuthorization();
+
+app.MapDelete("/categories/{id:long}", async (
+    long id,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id, ct);
+    if (category is null)
+        return Results.NotFound();
+
+    category.Deactivate();
+    await db.SaveChangesAsync(ct);
+
+    return Results.NoContent();
+})
+.RequireAuthorization();
+
 await app.RunAsync();
 
-/// <summary>
-/// The payload returned by the authenticated <c>GET /health</c> endpoint.
-/// </summary>
+/// <summary>The payload returned by the authenticated <c>GET /health</c> endpoint.</summary>
 /// <param name="UserId">The internal <c>app_user.id</c> resolved from the token.</param>
 /// <param name="Status">A constant liveness indicator.</param>
 internal sealed record HealthResponse(long UserId, string Status);
 
-/// <summary>
-/// The payload returned by the authenticated <c>GET /me</c> endpoint.
-/// </summary>
+/// <summary>The payload returned by the authenticated <c>GET /me</c> endpoint.</summary>
 /// <param name="Id">The internal <c>app_user.id</c> resolved from the token.</param>
 /// <param name="Name">The user's display name; <see cref="string.Empty"/> when no name claim was present.</param>
 /// <param name="Email">The user's e-mail address, or <see langword="null"/> when the token carries no e-mail claim.</param>
 internal sealed record MeResponse(long Id, string Name, string? Email);
+
+/// <summary>The payload returned by category read operations.</summary>
+/// <param name="Id">The internal category id.</param>
+/// <param name="Name">The category display name.</param>
+internal sealed record CategoryDto(long Id, string Name);
+
+/// <summary>The request body for <c>POST /categories</c>.</summary>
+/// <param name="Name">The desired category name.</param>
+internal sealed record CreateCategoryRequest(string Name);
+
+/// <summary>The request body for <c>PUT /categories/{id}</c>.</summary>
+/// <param name="Name">The new name for the category.</param>
+internal sealed record UpdateCategoryRequest(string Name);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API
