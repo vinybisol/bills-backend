@@ -449,6 +449,150 @@ app.MapDelete("/incomes/{id:long}", async (
 })
 .RequireAuthorization();
 
+// --- Bill endpoints ---
+
+app.MapPost("/bills", async (
+    CreateBillRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Results.BadRequest("Name is required.");
+
+    if (req.DefaultAmount < 0)
+        return Results.BadRequest("Default amount must be zero or greater.");
+
+    if (req.SplitRatio < 0m || req.SplitRatio > 1m)
+        return Results.BadRequest("SplitRatio must be between 0 and 1.");
+
+    if (req.SplitRatio < 1m && req.PersonId is null)
+        return Results.BadRequest("PersonId is required when SplitRatio is less than 1.");
+
+    if (req.SplitRatio == 1m && req.PersonId is not null)
+        return Results.BadRequest("PersonId must be null when SplitRatio is 1.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    if (!await db.Categories.AnyAsync(c => c.Id == req.CategoryId, ct))
+        return Results.NotFound("Category not found.");
+
+    if (req.PersonId is not null && !await db.Persons.AnyAsync(p => p.Id == req.PersonId.Value, ct))
+        return Results.NotFound("Person not found.");
+
+    var bill = Bill.Create(appUser.Id, req.Name, req.CategoryId, req.Kind, req.DefaultAmount, req.SplitRatio, req.PersonId, timeProvider.GetUtcNow());
+    db.Bills.Add(bill);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Created($"/bills/{bill.Id}", new BillDto(bill.Id, bill.Name, bill.CategoryId, bill.Kind, bill.DefaultAmount, bill.SplitRatio, bill.PersonId));
+})
+.RequireAuthorization();
+
+app.MapGet("/bills", async (
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var bills = await db.Bills
+        .OrderBy(b => b.Name)
+        .Select(b => new BillDto(b.Id, b.Name, b.CategoryId, b.Kind, b.DefaultAmount, b.SplitRatio, b.PersonId))
+        .ToListAsync(ct);
+
+    return Results.Ok(bills);
+})
+.RequireAuthorization();
+
+app.MapPut("/bills/{id:long}", async (
+    long id,
+    UpdateBillRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Results.BadRequest("Name is required.");
+
+    if (req.DefaultAmount < 0)
+        return Results.BadRequest("Default amount must be zero or greater.");
+
+    if (req.SplitRatio < 0m || req.SplitRatio > 1m)
+        return Results.BadRequest("SplitRatio must be between 0 and 1.");
+
+    if (req.SplitRatio < 1m && req.PersonId is null)
+        return Results.BadRequest("PersonId is required when SplitRatio is less than 1.");
+
+    if (req.SplitRatio == 1m && req.PersonId is not null)
+        return Results.BadRequest("PersonId must be null when SplitRatio is 1.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var bill = await db.Bills.FirstOrDefaultAsync(b => b.Id == id, ct);
+    if (bill is null)
+        return Results.NotFound();
+
+    if (!await db.Categories.AnyAsync(c => c.Id == req.CategoryId, ct))
+        return Results.NotFound("Category not found.");
+
+    if (req.PersonId is not null && !await db.Persons.AnyAsync(p => p.Id == req.PersonId.Value, ct))
+        return Results.NotFound("Person not found.");
+
+    bill.Update(req.Name, req.CategoryId, req.Kind, req.DefaultAmount, req.SplitRatio, req.PersonId);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new BillDto(bill.Id, bill.Name, bill.CategoryId, bill.Kind, bill.DefaultAmount, bill.SplitRatio, bill.PersonId));
+})
+.RequireAuthorization();
+
+app.MapDelete("/bills/{id:long}", async (
+    long id,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var bill = await db.Bills.FirstOrDefaultAsync(b => b.Id == id, ct);
+    if (bill is null)
+        return Results.NotFound();
+
+    bill.Deactivate();
+    await db.SaveChangesAsync(ct);
+
+    return Results.NoContent();
+})
+.RequireAuthorization();
+
 await app.RunAsync();
 
 /// <summary>The payload returned by the authenticated <c>GET /health</c> endpoint.</summary>
@@ -506,6 +650,34 @@ internal sealed record CreateIncomeRequest(string Name, IncomeKind Kind, decimal
 /// <param name="Kind">The new income kind.</param>
 /// <param name="DefaultAmount">The new default planned amount; must be zero or greater.</param>
 internal sealed record UpdateIncomeRequest(string Name, IncomeKind Kind, decimal DefaultAmount);
+
+/// <summary>The payload returned by bill read operations.</summary>
+/// <param name="Id">The internal bill id.</param>
+/// <param name="Name">The bill template display name.</param>
+/// <param name="CategoryId">The category this bill belongs to.</param>
+/// <param name="Kind">The bill kind.</param>
+/// <param name="DefaultAmount">The default planned amount.</param>
+/// <param name="SplitRatio">The owner's fraction of the expense (0 to 1).</param>
+/// <param name="PersonId">The person who owes the remaining fraction, or <see langword="null"/> when SplitRatio is 1.</param>
+internal sealed record BillDto(long Id, string Name, long CategoryId, BillKind Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
+
+/// <summary>The request body for <c>POST /bills</c>.</summary>
+/// <param name="Name">The bill template name.</param>
+/// <param name="CategoryId">The category this bill belongs to.</param>
+/// <param name="Kind">The bill kind.</param>
+/// <param name="DefaultAmount">The default planned amount; must be zero or greater.</param>
+/// <param name="SplitRatio">The owner's fraction of the expense; must be in [0, 1].</param>
+/// <param name="PersonId">Required when SplitRatio is less than 1; must be null when SplitRatio is 1.</param>
+internal sealed record CreateBillRequest(string Name, long CategoryId, BillKind Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
+
+/// <summary>The request body for <c>PUT /bills/{id}</c>.</summary>
+/// <param name="Name">The new bill template name.</param>
+/// <param name="CategoryId">The new category.</param>
+/// <param name="Kind">The new bill kind.</param>
+/// <param name="DefaultAmount">The new default planned amount; must be zero or greater.</param>
+/// <param name="SplitRatio">The new owner fraction; must be in [0, 1].</param>
+/// <param name="PersonId">Required when SplitRatio is less than 1; must be null when SplitRatio is 1.</param>
+internal sealed record UpdateBillRequest(string Name, long CategoryId, BillKind Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API

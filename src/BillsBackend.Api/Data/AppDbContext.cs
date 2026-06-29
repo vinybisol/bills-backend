@@ -44,6 +44,12 @@ public sealed class AppDbContext(
     /// </summary>
     public DbSet<Income> Incomes => Set<Income>();
 
+    /// <summary>
+    /// Gets the pre-filtered set of bill templates for the current owner.
+    /// Only active bills belonging to the authenticated owner are visible.
+    /// </summary>
+    public DbSet<Bill> Bills => Set<Bill>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -185,6 +191,58 @@ public sealed class AppDbContext(
             // Restricts all Income reads to the current owner's active rows.
             // currentOwner.Id is evaluated at query-execution time from the scoped service.
             entity.HasQueryFilter(i => i.Active && i.OwnerId == currentOwner.Id);
+        });
+
+        modelBuilder.Entity<Bill>(entity =>
+        {
+            entity.ToTable("bill");
+
+            entity.HasKey(b => b.Id);
+            entity.Property(b => b.Id)
+                .HasColumnName("id")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(b => b.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            entity.Property(b => b.Name)
+                .HasColumnName("name")
+                .IsRequired();
+
+            entity.Property(b => b.CategoryId)
+                .HasColumnName("category_id")
+                .IsRequired();
+
+            entity.Property(b => b.Kind)
+                .HasColumnName("kind")
+                .IsRequired()
+                .HasConversion(
+                    v => v == BillKind.Recurring ? "recurring" : "one_off",
+                    v => v == "recurring" ? BillKind.Recurring : BillKind.OneOff);
+
+            entity.Property(b => b.DefaultAmount)
+                .HasColumnName("default_amount")
+                .IsRequired();
+
+            entity.Property(b => b.SplitRatio)
+                .HasColumnName("split_ratio")
+                .IsRequired();
+
+            entity.Property(b => b.PersonId)
+                .HasColumnName("person_id");
+
+            entity.Property(b => b.Active)
+                .HasColumnName("active")
+                .IsRequired();
+
+            entity.Property(b => b.CreatedAt)
+                .HasColumnName("created_at")
+                .IsRequired();
+
+            // Restricts all Bill reads to the current owner's active rows.
+            // currentOwner.Id is evaluated at query-execution time from the scoped service.
+            entity.HasQueryFilter(b => b.Active && b.OwnerId == currentOwner.Id);
         });
     }
 }
