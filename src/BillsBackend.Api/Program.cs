@@ -329,6 +329,126 @@ app.MapDelete("/persons/{id:long}", async (
 })
 .RequireAuthorization();
 
+// --- Income endpoints ---
+
+app.MapPost("/incomes", async (
+    CreateIncomeRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Results.BadRequest("Name is required.");
+
+    if (req.Kind is not ("recurring" or "one_off"))
+        return Results.BadRequest("Kind must be 'recurring' or 'one_off'.");
+
+    if (req.DefaultAmount < 0)
+        return Results.BadRequest("Default amount must be zero or greater.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var income = Income.Create(appUser.Id, req.Name, req.Kind, req.DefaultAmount, timeProvider.GetUtcNow());
+    db.Incomes.Add(income);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Created($"/incomes/{income.Id}", new IncomeDto(income.Id, income.Name, income.Kind, income.DefaultAmount));
+})
+.RequireAuthorization();
+
+app.MapGet("/incomes", async (
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var incomes = await db.Incomes
+        .OrderBy(i => i.Name)
+        .Select(i => new IncomeDto(i.Id, i.Name, i.Kind, i.DefaultAmount))
+        .ToListAsync(ct);
+
+    return Results.Ok(incomes);
+})
+.RequireAuthorization();
+
+app.MapPut("/incomes/{id:long}", async (
+    long id,
+    UpdateIncomeRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Results.BadRequest("Name is required.");
+
+    if (req.Kind is not ("recurring" or "one_off"))
+        return Results.BadRequest("Kind must be 'recurring' or 'one_off'.");
+
+    if (req.DefaultAmount < 0)
+        return Results.BadRequest("Default amount must be zero or greater.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var income = await db.Incomes.FirstOrDefaultAsync(i => i.Id == id, ct);
+    if (income is null)
+        return Results.NotFound();
+
+    income.Update(req.Name, req.Kind, req.DefaultAmount);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new IncomeDto(income.Id, income.Name, income.Kind, income.DefaultAmount));
+})
+.RequireAuthorization();
+
+app.MapDelete("/incomes/{id:long}", async (
+    long id,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var income = await db.Incomes.FirstOrDefaultAsync(i => i.Id == id, ct);
+    if (income is null)
+        return Results.NotFound();
+
+    income.Deactivate();
+    await db.SaveChangesAsync(ct);
+
+    return Results.NoContent();
+})
+.RequireAuthorization();
+
 await app.RunAsync();
 
 /// <summary>The payload returned by the authenticated <c>GET /health</c> endpoint.</summary>
@@ -367,6 +487,25 @@ internal sealed record CreatePersonRequest(string Name);
 /// <summary>The request body for <c>PUT /persons/{id}</c>.</summary>
 /// <param name="Name">The new name for the person.</param>
 internal sealed record UpdatePersonRequest(string Name);
+
+/// <summary>The payload returned by income read operations.</summary>
+/// <param name="Id">The internal income id.</param>
+/// <param name="Name">The income template display name.</param>
+/// <param name="Kind">The income kind: <c>recurring</c> or <c>one_off</c>.</param>
+/// <param name="DefaultAmount">The default planned amount.</param>
+internal sealed record IncomeDto(long Id, string Name, string Kind, decimal DefaultAmount);
+
+/// <summary>The request body for <c>POST /incomes</c>.</summary>
+/// <param name="Name">The income template name.</param>
+/// <param name="Kind">The income kind: <c>recurring</c> or <c>one_off</c>.</param>
+/// <param name="DefaultAmount">The default planned amount; must be zero or greater.</param>
+internal sealed record CreateIncomeRequest(string Name, string Kind, decimal DefaultAmount);
+
+/// <summary>The request body for <c>PUT /incomes/{id}</c>.</summary>
+/// <param name="Name">The new income template name.</param>
+/// <param name="Kind">The new income kind: <c>recurring</c> or <c>one_off</c>.</param>
+/// <param name="DefaultAmount">The new default planned amount; must be zero or greater.</param>
+internal sealed record UpdateIncomeRequest(string Name, string Kind, decimal DefaultAmount);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API

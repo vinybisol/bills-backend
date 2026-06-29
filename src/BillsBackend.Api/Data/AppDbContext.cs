@@ -38,6 +38,12 @@ public sealed class AppDbContext(
     /// </summary>
     public DbSet<Person> Persons => Set<Person>();
 
+    /// <summary>
+    /// Gets the pre-filtered set of income templates for the current owner.
+    /// Only active incomes belonging to the authenticated owner are visible.
+    /// </summary>
+    public DbSet<Income> Incomes => Set<Income>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -138,6 +144,44 @@ public sealed class AppDbContext(
             // Restricts all Person reads to the current owner's active rows.
             // currentOwner.Id is evaluated at query-execution time from the scoped service.
             entity.HasQueryFilter(p => p.Active && p.OwnerId == currentOwner.Id);
+        });
+
+        modelBuilder.Entity<Income>(entity =>
+        {
+            entity.ToTable("income");
+
+            entity.HasKey(i => i.Id);
+            entity.Property(i => i.Id)
+                .HasColumnName("id")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(i => i.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            entity.Property(i => i.Name)
+                .HasColumnName("name")
+                .IsRequired();
+
+            entity.Property(i => i.Kind)
+                .HasColumnName("kind")
+                .IsRequired();
+
+            entity.Property(i => i.DefaultAmount)
+                .HasColumnName("default_amount")
+                .IsRequired();
+
+            entity.Property(i => i.Active)
+                .HasColumnName("active")
+                .IsRequired();
+
+            entity.Property(i => i.CreatedAt)
+                .HasColumnName("created_at")
+                .IsRequired();
+
+            // Restricts all Income reads to the current owner's active rows.
+            // currentOwner.Id is evaluated at query-execution time from the scoped service.
+            entity.HasQueryFilter(i => i.Active && i.OwnerId == currentOwner.Id);
         });
     }
 }
