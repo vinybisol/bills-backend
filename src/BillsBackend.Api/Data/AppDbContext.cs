@@ -32,6 +32,12 @@ public sealed class AppDbContext(
     /// </summary>
     public DbSet<Category> Categories => Set<Category>();
 
+    /// <summary>
+    /// Gets the pre-filtered set of persons for the current owner.
+    /// Only active persons belonging to the authenticated owner are visible.
+    /// </summary>
+    public DbSet<Person> Persons => Set<Person>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -99,6 +105,39 @@ public sealed class AppDbContext(
             // Restricts all Category reads to the current owner's active rows.
             // currentOwner.Id is evaluated at query-execution time from the scoped service.
             entity.HasQueryFilter(c => c.Active && c.OwnerId == currentOwner.Id);
+        });
+
+        modelBuilder.Entity<Person>(entity =>
+        {
+            entity.ToTable("person");
+
+            entity.HasKey(p => p.Id);
+            entity.Property(p => p.Id)
+                .HasColumnName("id")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(p => p.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            entity.Property(p => p.Name)
+                .HasColumnName("name")
+                .IsRequired();
+
+            entity.Property(p => p.AppUserId)
+                .HasColumnName("app_user_id");
+
+            entity.Property(p => p.Active)
+                .HasColumnName("active")
+                .IsRequired();
+
+            entity.Property(p => p.CreatedAt)
+                .HasColumnName("created_at")
+                .IsRequired();
+
+            // Restricts all Person reads to the current owner's active rows.
+            // currentOwner.Id is evaluated at query-execution time from the scoped service.
+            entity.HasQueryFilter(p => p.Active && p.OwnerId == currentOwner.Id);
         });
     }
 }

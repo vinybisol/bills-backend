@@ -221,6 +221,114 @@ app.MapDelete("/categories/{id:long}", async (
 })
 .RequireAuthorization();
 
+// --- Person endpoints ---
+
+app.MapPost("/persons", async (
+    CreatePersonRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Results.BadRequest("Name is required.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var person = Person.Create(appUser.Id, req.Name, timeProvider.GetUtcNow());
+    db.Persons.Add(person);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Created($"/persons/{person.Id}", new PersonDto(person.Id, person.Name));
+})
+.RequireAuthorization();
+
+app.MapGet("/persons", async (
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var persons = await db.Persons
+        .OrderBy(p => p.Name)
+        .Select(p => new PersonDto(p.Id, p.Name))
+        .ToListAsync(ct);
+
+    return Results.Ok(persons);
+})
+.RequireAuthorization();
+
+app.MapPut("/persons/{id:long}", async (
+    long id,
+    UpdatePersonRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Results.BadRequest("Name is required.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var person = await db.Persons.FirstOrDefaultAsync(p => p.Id == id, ct);
+    if (person is null)
+        return Results.NotFound();
+
+    person.Rename(req.Name);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new PersonDto(person.Id, person.Name));
+})
+.RequireAuthorization();
+
+app.MapDelete("/persons/{id:long}", async (
+    long id,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var person = await db.Persons.FirstOrDefaultAsync(p => p.Id == id, ct);
+    if (person is null)
+        return Results.NotFound();
+
+    person.Deactivate();
+    await db.SaveChangesAsync(ct);
+
+    return Results.NoContent();
+})
+.RequireAuthorization();
+
 await app.RunAsync();
 
 /// <summary>The payload returned by the authenticated <c>GET /health</c> endpoint.</summary>
@@ -246,6 +354,19 @@ internal sealed record CreateCategoryRequest(string Name);
 /// <summary>The request body for <c>PUT /categories/{id}</c>.</summary>
 /// <param name="Name">The new name for the category.</param>
 internal sealed record UpdateCategoryRequest(string Name);
+
+/// <summary>The payload returned by person read operations.</summary>
+/// <param name="Id">The internal person id.</param>
+/// <param name="Name">The person's display name.</param>
+internal sealed record PersonDto(long Id, string Name);
+
+/// <summary>The request body for <c>POST /persons</c>.</summary>
+/// <param name="Name">The desired person name.</param>
+internal sealed record CreatePersonRequest(string Name);
+
+/// <summary>The request body for <c>PUT /persons/{id}</c>.</summary>
+/// <param name="Name">The new name for the person.</param>
+internal sealed record UpdatePersonRequest(string Name);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API
