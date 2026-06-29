@@ -1,4 +1,20 @@
-name: CI
+name: CI/CD
+
+# Single pipeline so deploy is strictly sequenced after build/test.
+#
+# Triggers:
+#   - pull_request -> runs only build-and-test (deploy is gated off PRs)
+#   - push develop -> build-and-test, then deploy (needs) -> Azure Web App (F1)
+#   - push main    -> build-and-test only
+#
+# Required GitHub configuration for the deploy job (set before the first run):
+#   - Variable  AZURE_WEBAPP_NAME            -> the Azure Web App name
+#   - Secret    AZURE_WEBAPP_PUBLISH_PROFILE -> the app's publish profile XML
+#
+# Runtime configuration (set in the Azure Web App, not here):
+#   - ConnectionStrings__Neon  -> Neon pooler connection string (SSL Mode=Require)
+#   - Firebase__ProjectId      -> Firebase project id
+# Database migrations are applied automatically on application startup.
 
 on:
   push:
@@ -28,3 +44,30 @@ jobs:
 
       - name: Test
         run: dotnet test BillsBackend.slnx --configuration Release --no-build --verbosity normal
+
+  deploy:
+    name: Deploy to Azure (F1)
+    runs-on: ubuntu-latest
+    environment: development
+    # Run only after CI passes, and only on a merge into develop (never on PRs or main).
+    needs: build-and-test
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish
+        run: dotnet publish src/BillsBackend.Api/BillsBackend.Api.csproj -c Release -r win-x86 --self-contained true -o ./publish
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ./publish
