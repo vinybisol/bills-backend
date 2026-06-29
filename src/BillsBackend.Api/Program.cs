@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using BillsBackend.Api.Data;
 using BillsBackend.Api.Domain;
 using BillsBackend.Api.Identity;
@@ -6,6 +7,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Serialize enums as snake_case strings (e.g. IncomeKind.OneOff → "one_off") in all endpoints.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.SnakeCaseLower)));
 
 // --- Configuration: Firebase (strongly-typed, validated on startup) ---
 builder.Services
@@ -343,9 +349,6 @@ app.MapPost("/incomes", async (
     if (string.IsNullOrWhiteSpace(req.Name))
         return Results.BadRequest("Name is required.");
 
-    if (req.Kind is not ("recurring" or "one_off"))
-        return Results.BadRequest("Kind must be 'recurring' or 'one_off'.");
-
     if (req.DefaultAmount < 0)
         return Results.BadRequest("Default amount must be zero or greater.");
 
@@ -398,9 +401,6 @@ app.MapPut("/incomes/{id:long}", async (
 {
     if (string.IsNullOrWhiteSpace(req.Name))
         return Results.BadRequest("Name is required.");
-
-    if (req.Kind is not ("recurring" or "one_off"))
-        return Results.BadRequest("Kind must be 'recurring' or 'one_off'.");
 
     if (req.DefaultAmount < 0)
         return Results.BadRequest("Default amount must be zero or greater.");
@@ -491,21 +491,21 @@ internal sealed record UpdatePersonRequest(string Name);
 /// <summary>The payload returned by income read operations.</summary>
 /// <param name="Id">The internal income id.</param>
 /// <param name="Name">The income template display name.</param>
-/// <param name="Kind">The income kind: <c>recurring</c> or <c>one_off</c>.</param>
+/// <param name="Kind">The income kind.</param>
 /// <param name="DefaultAmount">The default planned amount.</param>
-internal sealed record IncomeDto(long Id, string Name, string Kind, decimal DefaultAmount);
+internal sealed record IncomeDto(long Id, string Name, IncomeKind Kind, decimal DefaultAmount);
 
 /// <summary>The request body for <c>POST /incomes</c>.</summary>
 /// <param name="Name">The income template name.</param>
-/// <param name="Kind">The income kind: <c>recurring</c> or <c>one_off</c>.</param>
+/// <param name="Kind">The income kind.</param>
 /// <param name="DefaultAmount">The default planned amount; must be zero or greater.</param>
-internal sealed record CreateIncomeRequest(string Name, string Kind, decimal DefaultAmount);
+internal sealed record CreateIncomeRequest(string Name, IncomeKind Kind, decimal DefaultAmount);
 
 /// <summary>The request body for <c>PUT /incomes/{id}</c>.</summary>
 /// <param name="Name">The new income template name.</param>
-/// <param name="Kind">The new income kind: <c>recurring</c> or <c>one_off</c>.</param>
+/// <param name="Kind">The new income kind.</param>
 /// <param name="DefaultAmount">The new default planned amount; must be zero or greater.</param>
-internal sealed record UpdateIncomeRequest(string Name, string Kind, decimal DefaultAmount);
+internal sealed record UpdateIncomeRequest(string Name, IncomeKind Kind, decimal DefaultAmount);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API

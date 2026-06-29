@@ -165,7 +165,10 @@ public sealed class AppDbContext(
 
             entity.Property(i => i.Kind)
                 .HasColumnName("kind")
-                .IsRequired();
+                .IsRequired()
+                .HasConversion(
+                    v => v == IncomeKind.Recurring ? "recurring" : "one_off",
+                    v => v == "recurring" ? IncomeKind.Recurring : IncomeKind.OneOff);
 
             entity.Property(i => i.DefaultAmount)
                 .HasColumnName("default_amount")

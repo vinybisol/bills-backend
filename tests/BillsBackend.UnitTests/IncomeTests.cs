@@ -19,19 +19,7 @@ public sealed class IncomeTests
     public void Create_BlankName_ThrowsArgumentException(string? name)
     {
         Assert.That(
-            () => Income.Create(1L, name!, "recurring", 1000m, FixedNow),
-            Throws.InstanceOf<ArgumentException>());
-    }
-
-    [TestCase("salary")]
-    [TestCase("")]
-    [TestCase("monthly")]
-    [TestCase("RECURRING")]
-    [TestCase("one-off")]
-    public void Create_InvalidKind_ThrowsArgumentException(string kind)
-    {
-        Assert.That(
-            () => Income.Create(1L, "Salário", kind, 1000m, FixedNow),
+            () => Income.Create(1L, name!, IncomeKind.Recurring, 1000m, FixedNow),
             Throws.InstanceOf<ArgumentException>());
     }
 
@@ -39,7 +27,7 @@ public sealed class IncomeTests
     public void Create_NegativeDefaultAmount_ThrowsArgumentOutOfRangeException()
     {
         Assert.That(
-            () => Income.Create(1L, "Salário", "recurring", -0.01m, FixedNow),
+            () => Income.Create(1L, "Salário", IncomeKind.Recurring, -0.01m, FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
     }
 
@@ -48,22 +36,20 @@ public sealed class IncomeTests
     public void Create_NonPositiveOwnerId_ThrowsArgumentOutOfRangeException(long ownerId)
     {
         Assert.That(
-            () => Income.Create(ownerId, "Salário", "recurring", 1000m, FixedNow),
+            () => Income.Create(ownerId, "Salário", IncomeKind.Recurring, 1000m, FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
     }
 
     [Test]
     public void Create_ValidArgs_ReturnsActiveIncome()
     {
-        // Act
-        var income = Income.Create(1L, "Salário", "recurring", 5000m, FixedNow);
+        var income = Income.Create(1L, "Salário", IncomeKind.Recurring, 5000m, FixedNow);
 
-        // Assert
         Assert.Multiple(() =>
         {
             Assert.That(income.OwnerId, Is.EqualTo(1L));
             Assert.That(income.Name, Is.EqualTo("Salário"));
-            Assert.That(income.Kind, Is.EqualTo("recurring"));
+            Assert.That(income.Kind, Is.EqualTo(IncomeKind.Recurring));
             Assert.That(income.DefaultAmount, Is.EqualTo(5000m));
             Assert.That(income.Active, Is.True);
             Assert.That(income.CreatedAt, Is.EqualTo(FixedNow));
@@ -73,31 +59,25 @@ public sealed class IncomeTests
     [Test]
     public void Create_ZeroDefaultAmount_IsAllowed()
     {
-        // Act
-        var income = Income.Create(1L, "Bônus eventual", "one_off", 0m, FixedNow);
+        var income = Income.Create(1L, "Bônus eventual", IncomeKind.OneOff, 0m, FixedNow);
 
-        // Assert
         Assert.That(income.DefaultAmount, Is.EqualTo(0m));
     }
 
-    [TestCase("recurring")]
-    [TestCase("one_off")]
-    public void Create_ValidKind_SetsKind(string kind)
+    [TestCase(IncomeKind.Recurring)]
+    [TestCase(IncomeKind.OneOff)]
+    public void Create_ValidKind_SetsKind(IncomeKind kind)
     {
-        // Act
         var income = Income.Create(1L, "Renda", kind, 100m, FixedNow);
 
-        // Assert
         Assert.That(income.Kind, Is.EqualTo(kind));
     }
 
     [Test]
     public void Create_NameWithSurroundingWhitespace_TrimsName()
     {
-        // Act
-        var income = Income.Create(1L, "  Salário  ", "recurring", 5000m, FixedNow);
+        var income = Income.Create(1L, "  Salário  ", IncomeKind.Recurring, 5000m, FixedNow);
 
-        // Assert
         Assert.That(income.Name, Is.EqualTo("Salário"));
     }
 
@@ -108,55 +88,34 @@ public sealed class IncomeTests
     [TestCase("   ")]
     public void Update_BlankName_ThrowsArgumentException(string? name)
     {
-        // Arrange
-        var income = Income.Create(1L, "Salário", "recurring", 5000m, FixedNow);
+        var income = Income.Create(1L, "Salário", IncomeKind.Recurring, 5000m, FixedNow);
 
-        // Act / Assert
         Assert.That(
-            () => income.Update(name!, "recurring", 5000m),
-            Throws.InstanceOf<ArgumentException>());
-    }
-
-    [TestCase("salary")]
-    [TestCase("")]
-    [TestCase("one-off")]
-    public void Update_InvalidKind_ThrowsArgumentException(string kind)
-    {
-        // Arrange
-        var income = Income.Create(1L, "Salário", "recurring", 5000m, FixedNow);
-
-        // Act / Assert
-        Assert.That(
-            () => income.Update("Salário", kind, 5000m),
+            () => income.Update(name!, IncomeKind.Recurring, 5000m),
             Throws.InstanceOf<ArgumentException>());
     }
 
     [Test]
     public void Update_NegativeDefaultAmount_ThrowsArgumentOutOfRangeException()
     {
-        // Arrange
-        var income = Income.Create(1L, "Salário", "recurring", 5000m, FixedNow);
+        var income = Income.Create(1L, "Salário", IncomeKind.Recurring, 5000m, FixedNow);
 
-        // Act / Assert
         Assert.That(
-            () => income.Update("Salário", "recurring", -1m),
+            () => income.Update("Salário", IncomeKind.Recurring, -1m),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
     }
 
     [Test]
     public void Update_ChangesFields()
     {
-        // Arrange
-        var income = Income.Create(1L, "Salário", "recurring", 5000m, FixedNow);
+        var income = Income.Create(1L, "Salário", IncomeKind.Recurring, 5000m, FixedNow);
 
-        // Act
-        income.Update("Freelance", "one_off", 2500m);
+        income.Update("Freelance", IncomeKind.OneOff, 2500m);
 
-        // Assert
         Assert.Multiple(() =>
         {
             Assert.That(income.Name, Is.EqualTo("Freelance"));
-            Assert.That(income.Kind, Is.EqualTo("one_off"));
+            Assert.That(income.Kind, Is.EqualTo(IncomeKind.OneOff));
             Assert.That(income.DefaultAmount, Is.EqualTo(2500m));
         });
     }
@@ -164,13 +123,10 @@ public sealed class IncomeTests
     [Test]
     public void Update_NameWithSurroundingWhitespace_TrimsName()
     {
-        // Arrange
-        var income = Income.Create(1L, "Salário", "recurring", 5000m, FixedNow);
+        var income = Income.Create(1L, "Salário", IncomeKind.Recurring, 5000m, FixedNow);
 
-        // Act
-        income.Update("  Freelance  ", "one_off", 2500m);
+        income.Update("  Freelance  ", IncomeKind.OneOff, 2500m);
 
-        // Assert
         Assert.That(income.Name, Is.EqualTo("Freelance"));
     }
 
@@ -179,13 +135,10 @@ public sealed class IncomeTests
     [Test]
     public void Deactivate_SetsActiveFalse()
     {
-        // Arrange
-        var income = Income.Create(1L, "Salário", "recurring", 5000m, FixedNow);
+        var income = Income.Create(1L, "Salário", IncomeKind.Recurring, 5000m, FixedNow);
 
-        // Act
         income.Deactivate();
 
-        // Assert
         Assert.That(income.Active, Is.False);
     }
 }

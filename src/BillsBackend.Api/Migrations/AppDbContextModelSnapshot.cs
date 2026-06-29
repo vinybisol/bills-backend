@@ -115,10 +115,11 @@ namespace BillsBackend.Api.Migrations
                         .HasColumnType("numeric")
                         .HasColumnName("default_amount");
 
-                    b.Property<string>("Kind")
+                    b.Property<int>("Kind")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("kind");
+                        .HasColumnName("kind")
+                        .HasConversion<string>();
 
                     b.Property<string>("Name")
                         .IsRequired()
