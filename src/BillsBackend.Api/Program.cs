@@ -79,8 +79,26 @@ app.MapGet("/health", async (
         return Results.Unauthorized();
     }
 
-    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), cancellationToken);
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), cancellationToken);
     return Results.Ok(new HealthResponse(appUser.Id, "healthy"));
+})
+.RequireAuthorization();
+
+// Returns the logged-in user's internal profile, resolving (and just-in-time provisioning)
+// the app_user from the Firebase token.
+app.MapGet("/me", async (
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    CancellationToken cancellationToken) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+    {
+        return Results.Unauthorized();
+    }
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), cancellationToken);
+    return Results.Ok(new MeResponse(appUser.Id, appUser.Name, appUser.Email));
 })
 .RequireAuthorization();
 
@@ -92,6 +110,14 @@ await app.RunAsync();
 /// <param name="UserId">The internal <c>app_user.id</c> resolved from the token.</param>
 /// <param name="Status">A constant liveness indicator.</param>
 internal sealed record HealthResponse(long UserId, string Status);
+
+/// <summary>
+/// The payload returned by the authenticated <c>GET /me</c> endpoint.
+/// </summary>
+/// <param name="Id">The internal <c>app_user.id</c> resolved from the token.</param>
+/// <param name="Name">The user's display name; <see cref="string.Empty"/> when no name claim was present.</param>
+/// <param name="Email">The user's e-mail address, or <see langword="null"/> when the token carries no e-mail claim.</param>
+internal sealed record MeResponse(long Id, string Name, string? Email);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API

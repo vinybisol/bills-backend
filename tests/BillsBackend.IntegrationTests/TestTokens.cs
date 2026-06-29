@@ -34,8 +34,12 @@ public static class TestTokens
     /// </summary>
     /// <param name="firebaseUid">The Firebase uid to embed.</param>
     /// <param name="email">The e-mail to embed, or <see langword="null"/> to omit it.</param>
+    /// <param name="name">The display name to embed, or <see langword="null"/> to omit it.</param>
     /// <returns>A signed, currently-valid JWT string.</returns>
-    public static string CreateValidToken(string firebaseUid, string? email = "user@example.com")
+    public static string CreateValidToken(
+        string firebaseUid,
+        string? email = "user@example.com",
+        string? name = "Test User")
     {
         var claims = new Dictionary<string, object>
         {
@@ -45,6 +49,10 @@ public static class TestTokens
         if (email is not null)
         {
             claims["email"] = email;
+        }
+        if (name is not null)
+        {
+            claims["name"] = name;
         }
 
         var descriptor = new SecurityTokenDescriptor

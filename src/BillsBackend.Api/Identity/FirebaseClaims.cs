@@ -38,4 +38,21 @@ public static class FirebaseClaims
         return principal.FindFirstValue("email")
             ?? principal.FindFirstValue(ClaimTypes.Email);
     }
+
+    /// <summary>
+    /// Extracts the display name from the supplied principal, when present.
+    /// </summary>
+    /// <param name="principal">The authenticated principal to read.</param>
+    /// <returns>
+    /// The display name from the <c>name</c> claim, or <see langword="null"/> when no name
+    /// claim is present. Firebase places the user's display name in the <c>name</c> claim;
+    /// the JWT handler may also map it to <see cref="ClaimTypes.Name"/>, so both are checked.
+    /// </returns>
+    public static string? GetName(this ClaimsPrincipal principal)
+    {
+        ArgumentNullException.ThrowIfNull(principal);
+
+        return principal.FindFirstValue("name")
+            ?? principal.FindFirstValue(ClaimTypes.Name);
+    }
 }

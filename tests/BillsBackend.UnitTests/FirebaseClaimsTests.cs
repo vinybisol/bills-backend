@@ -80,4 +80,43 @@ public sealed class FirebaseClaimsTests
         // Assert
         Assert.That(email, Is.Null);
     }
+
+    [Test]
+    public void GetName_ReadsNameClaim()
+    {
+        // Arrange
+        var principal = PrincipalWith(new Claim("name", "Alice Example"));
+
+        // Act
+        var name = principal.GetName();
+
+        // Assert
+        Assert.That(name, Is.EqualTo("Alice Example"));
+    }
+
+    [Test]
+    public void GetName_FallsBackToClaimsTypeName()
+    {
+        // Arrange
+        var principal = PrincipalWith(new Claim(ClaimTypes.Name, "Bob Example"));
+
+        // Act
+        var name = principal.GetName();
+
+        // Assert
+        Assert.That(name, Is.EqualTo("Bob Example"));
+    }
+
+    [Test]
+    public void GetName_NoNameClaim_ReturnsNull()
+    {
+        // Arrange
+        var principal = PrincipalWith(new Claim("user_id", "uid-only"));
+
+        // Act
+        var name = principal.GetName();
+
+        // Assert
+        Assert.That(name, Is.Null);
+    }
 }

@@ -13,8 +13,9 @@ public interface IUserProvisioningService
     /// </summary>
     /// <param name="firebaseUid">The Firebase user identifier taken from the validated token.</param>
     /// <param name="email">The e-mail address from the token, or <see langword="null"/> when absent.</param>
+    /// <param name="name">The display name from the token, or <see langword="null"/> when absent; persisted as <see cref="string.Empty"/> when blank.</param>
     /// <param name="cancellationToken">The token to observe for cancellation.</param>
     /// <returns>The existing or newly created <see cref="AppUser"/> mapped to <paramref name="firebaseUid"/>.</returns>
     /// <exception cref="ArgumentException"><paramref name="firebaseUid"/> is <see langword="null"/> or empty.</exception>
-    Task<AppUser> GetOrCreateAsync(string firebaseUid, string? email, CancellationToken cancellationToken = default);
+    Task<AppUser> GetOrCreateAsync(string firebaseUid, string? email, string? name, CancellationToken cancellationToken = default);
 }

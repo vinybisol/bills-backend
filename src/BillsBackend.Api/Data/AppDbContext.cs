@@ -33,8 +33,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
                 .HasColumnName("id")
                 .ValueGeneratedOnAdd();
 
+            entity.Property(u => u.Name)
+                .HasColumnName("name")
+                .IsRequired();
+
             entity.Property(u => u.Email)
                 .HasColumnName("email");
+
+            entity.HasIndex(u => u.Email)
+                .IsUnique();
 
             entity.Property(u => u.FirebaseUid)
                 .HasColumnName("firebase_uid")
