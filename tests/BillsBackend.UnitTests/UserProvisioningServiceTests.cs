@@ -26,7 +26,7 @@ public sealed class UserProvisioningServiceTests
         var service = CreateService(db);
 
         // Act
-        var user = await service.GetOrCreateAsync("firebase-uid-1", "alice@example.com");
+        var user = await service.GetOrCreateAsync("firebase-uid-1", "alice@example.com", "Alice Example");
 
         // Assert
         Assert.That(user.Id, Is.GreaterThan(0));
@@ -45,7 +45,7 @@ public sealed class UserProvisioningServiceTests
         var service = CreateService(db);
 
         // Act
-        var user = await service.GetOrCreateAsync("firebase-uid-2", email: null);
+        var user = await service.GetOrCreateAsync("firebase-uid-2", email: null, name: null);
 
         // Assert
         Assert.That(user.CreatedAt, Is.EqualTo(FixedNow));
@@ -59,12 +59,42 @@ public sealed class UserProvisioningServiceTests
         var service = CreateService(db);
 
         // Act
-        var first = await service.GetOrCreateAsync("firebase-uid-3", "bob@example.com");
-        var second = await service.GetOrCreateAsync("firebase-uid-3", "bob@example.com");
+        var first = await service.GetOrCreateAsync("firebase-uid-3", "bob@example.com", "Bob Example");
+        var second = await service.GetOrCreateAsync("firebase-uid-3", "bob@example.com", "Bob Example");
 
         // Assert
         Assert.That(second.Id, Is.EqualTo(first.Id));
         Assert.That(await db.Users.CountAsync(), Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task GetOrCreateAsync_NewUser_PersistsProvidedName()
+    {
+        // Arrange
+        await using var db = TestSupport.NewInMemoryContext();
+        var service = CreateService(db);
+
+        // Act
+        var user = await service.GetOrCreateAsync("firebase-uid-4", "carol@example.com", "Carol Example");
+
+        // Assert
+        Assert.That(user.Name, Is.EqualTo("Carol Example"));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    public async Task GetOrCreateAsync_NewUserWithBlankOrNullName_PersistsEmptyString(string? name)
+    {
+        // Arrange
+        await using var db = TestSupport.NewInMemoryContext();
+        var service = CreateService(db);
+
+        // Act
+        var user = await service.GetOrCreateAsync("firebase-uid-5", "dave@example.com", name);
+
+        // Assert
+        Assert.That(user.Name, Is.EqualTo(string.Empty));
     }
 
     [TestCase(null)]
@@ -78,7 +108,7 @@ public sealed class UserProvisioningServiceTests
 
         // Act / Assert
         Assert.That(
-            async () => await service.GetOrCreateAsync(firebaseUid!, "x@example.com"),
+            async () => await service.GetOrCreateAsync(firebaseUid!, "x@example.com", name: null),
             Throws.InstanceOf<ArgumentException>());
     }
 }

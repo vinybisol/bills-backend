@@ -19,6 +19,7 @@ public sealed class UserProvisioningService(
     public async Task<AppUser> GetOrCreateAsync(
         string firebaseUid,
         string? email,
+        string? name,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(firebaseUid);
@@ -30,7 +31,7 @@ public sealed class UserProvisioningService(
             return existing;
         }
 
-        var user = AppUser.Provision(firebaseUid, email, timeProvider.GetUtcNow());
+        var user = AppUser.Provision(firebaseUid, email, name, timeProvider.GetUtcNow());
 
         db.Users.Add(user);
 

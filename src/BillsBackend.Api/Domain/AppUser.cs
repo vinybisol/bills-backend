@@ -20,10 +20,11 @@ public sealed class AppUser
     {
     }
 
-    private AppUser(string firebaseUid, string? email, DateTimeOffset createdAt)
+    private AppUser(string firebaseUid, string? email, string name, DateTimeOffset createdAt)
     {
         FirebaseUid = firebaseUid;
         Email = email;
+        Name = name;
         CreatedAt = createdAt;
     }
 
@@ -32,6 +33,15 @@ public sealed class AppUser
     /// </summary>
     /// <value>The database-generated surrogate key used as the owner reference across the domain.</value>
     public long Id { get; private set; }
+
+    /// <summary>
+    /// Gets the display name of the user, as provided by the identity token.
+    /// </summary>
+    /// <value>
+    /// The user's display name; <see cref="string.Empty"/> when the token carries no name claim.
+    /// Never <see langword="null"/>.
+    /// </value>
+    public string Name { get; private set; } = null!;
 
     /// <summary>
     /// Gets the e-mail address associated with the user, when the identity provider supplies one.
@@ -56,13 +66,14 @@ public sealed class AppUser
     /// </summary>
     /// <param name="firebaseUid">The Firebase user identifier; must be non-empty.</param>
     /// <param name="email">The e-mail address from the token, or <see langword="null"/> when absent.</param>
+    /// <param name="name">The display name from the token, or <see langword="null"/> when absent; stored as <see cref="string.Empty"/> when blank.</param>
     /// <param name="createdAt">The instant the user is provisioned, in UTC.</param>
     /// <returns>A new <see cref="AppUser"/> instance.</returns>
     /// <exception cref="ArgumentException"><paramref name="firebaseUid"/> is <see langword="null"/>, empty, or whitespace.</exception>
-    public static AppUser Provision(string firebaseUid, string? email, DateTimeOffset createdAt)
+    public static AppUser Provision(string firebaseUid, string? email, string? name, DateTimeOffset createdAt)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(firebaseUid);
-        return new AppUser(firebaseUid, email, createdAt);
+        return new AppUser(firebaseUid, email, string.IsNullOrWhiteSpace(name) ? string.Empty : name, createdAt);
     }
 
     /// <summary>
@@ -70,4 +81,10 @@ public sealed class AppUser
     /// </summary>
     /// <param name="email">The e-mail address, or <see langword="null"/> to clear it.</param>
     public void UpdateEmail(string? email) => Email = email;
+
+    /// <summary>
+    /// Updates the user's display name to the latest value seen on the token.
+    /// </summary>
+    /// <param name="name">The display name, or <see langword="null"/> to reset it to <see cref="string.Empty"/>.</param>
+    public void UpdateName(string? name) => Name = name ?? string.Empty;
 }
