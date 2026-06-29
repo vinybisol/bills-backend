@@ -11,53 +11,47 @@ using Microsoft.IdentityModel.Tokens;
 namespace BillsBackend.IntegrationTests;
 
 /// <summary>
-/// Hosts the API in-memory for integration tests, swapping PostgreSQL for the EF Core
-/// in-memory provider and validating tokens against the local test signing key.
+/// Hosts the API in-memory for integration tests, connecting to a real PostgreSQL database
+/// (Neon, bills_test) and validating tokens against the local test signing key.
 /// </summary>
 public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
-    private readonly string _databaseName = $"integration-{Guid.NewGuid()}";
+    private string _testConnectionString = null!;
+
+    /// <summary>Resolved Npgsql connection string for the test database.</summary>
+    public string TestConnectionString => _testConnectionString;
 
     /// <inheritdoc/>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
 
-        builder.ConfigureAppConfiguration((_, config) =>
+        builder.ConfigureAppConfiguration((_, cfg) =>
         {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
+            cfg.AddUserSecrets<CustomWebApplicationFactory>();
+            cfg.AddEnvironmentVariables();
+            var built = cfg.Build();
+            _testConnectionString = NeonConnectionString.Normalize(
+                built.GetConnectionString("NeonTest")
+                ?? throw new InvalidOperationException(
+                    "ConnectionStrings:NeonTest não configurada. Configure via dotnet user-secrets ou a env var ConnectionStrings__NeonTest."))!;
+
+            // Firebase:ProjectId must be non-empty to satisfy ValidateOnStart; the actual
+            // value is overridden in SetupJwt so Firebase is never contacted during tests.
+            cfg.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Firebase:ProjectId"] = TestTokens.ProjectId,
-                ["ConnectionStrings:Neon"] = "Host=unused;Database=unused;Username=unused;Password=unused",
             });
         });
 
         builder.ConfigureTestServices(services =>
         {
-            ReplaceDatabaseWithInMemory(services);
-
-            // Validate against the local test key instead of fetching Firebase metadata.
-            services.PostConfigure<JwtBearerOptions>(
-                JwtBearerDefaults.AuthenticationScheme,
-                options =>
-                {
-                    options.Authority = null;
-                    options.RequireHttpsMetadata = false;
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidIssuer = TestTokens.Issuer,
-                        ValidateAudience = true,
-                        ValidAudience = TestTokens.ProjectId,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = TestTokens.SigningKey,
-                    };
-                });
+            ReplaceDatabase(services);
+            SetupJwt(services);
         });
     }
 
-    private void ReplaceDatabaseWithInMemory(IServiceCollection services)
+    private void ReplaceDatabase(IServiceCollection services)
     {
         var descriptors = services
             .Where(d =>
@@ -74,6 +68,28 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
         }
 
         services.AddDbContext<AppDbContext>(options =>
-            options.UseInMemoryDatabase(_databaseName));
+            options.UseNpgsql(_testConnectionString));
+    }
+
+    private static void SetupJwt(IServiceCollection services)
+    {
+        // Validate against the local test key instead of fetching Firebase metadata.
+        services.PostConfigure<JwtBearerOptions>(
+            JwtBearerDefaults.AuthenticationScheme,
+            options =>
+            {
+                options.Authority = null;
+                options.RequireHttpsMetadata = false;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = TestTokens.Issuer,
+                    ValidateAudience = true,
+                    ValidAudience = TestTokens.ProjectId,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = TestTokens.SigningKey,
+                };
+            });
     }
 }
