@@ -76,12 +76,18 @@ Cada teste usa um `firebase_uid` (e portanto um `owner_id`) **distinto**; o filt
 
 ## Setup local de testes
 
-Os testes de integração apontam para um banco PostgreSQL real no Neon (banco `bills_test`).
+Os testes de integração precisam de um PostgreSQL (banco `bills_test`). A connection string vem de `ConnectionStrings:NeonTest` (user-secrets local ou a env var `ConnectionStrings__NeonTest`).
 
-Configure a connection string antes de rodar `dotnet test`:
+**Recomendado — Postgres local via Docker** (rápido, sem depender do Neon):
 ```bash
-dotnet user-secrets set "ConnectionStrings:NeonTest" "<connection-string-do-neon-test>" \
+docker compose up -d
+dotnet user-secrets set "ConnectionStrings:NeonTest" \
+  "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres" \
   --project tests/BillsBackend.IntegrationTests
+dotnet test
 ```
+> Use o formato **key-value** (acima), não a URI `postgresql://...`: assim `NeonConnectionString.Normalize` devolve a string intacta e não força `SSL Mode=Require`, que o Postgres local não tem.
 
-No CI, a connection string vem do GitHub Secret `NEON_TEST_CONNECTION_STRING`.
+**Alternativa — Neon:** aponte `ConnectionStrings:NeonTest` para um banco de teste no Neon (formato URI, com SSL).
+
+No **CI**, os testes rodam contra um **service container** de PostgreSQL (ver `.github/workflows/ci.yml`) — sem segredo externo nem custo adicional.
