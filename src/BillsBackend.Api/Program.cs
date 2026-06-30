@@ -678,6 +678,137 @@ app.MapPost("/api/projection/{year:int}", async (
 })
 .RequireAuthorization();
 
+// --- Entries endpoint ---
+
+// Returns all bill and income entries for the requested year/month,
+// enriched with bill/category/person names and derived calculated amounts.
+// Reference tables (bill, category, person) are fetched with IgnoreQueryFilters so
+// entries that were linked to now-inactive templates still resolve their names.
+app.MapGet("/api/entries", async (
+    int? year,
+    int? month,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    if (year is null || month is null || month < 1 || month > 12)
+        return Results.BadRequest("year and month are required; month must be between 1 and 12.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    // Fetch entries for the requested month. The global query filter already scopes
+    // BillEntries and IncomeEntries to the current owner (owner_id only, no active flag).
+    var billEntries = await db.BillEntries
+        .Where(e => e.RefYear == year.Value && e.RefMonth == month.Value)
+        .ToListAsync(ct);
+
+    var incomeEntries = await db.IncomeEntries
+        .Where(e => e.RefYear == year.Value && e.RefMonth == month.Value)
+        .ToListAsync(ct);
+
+    // Fetch reference data with IgnoreQueryFilters so inactive bills/categories/persons
+    // that were snapshotted at projection time still resolve. Filter by OwnerId manually.
+    var billIds = billEntries.Select(e => e.BillId).ToHashSet();
+    var billsById = billIds.Count > 0
+        ? await db.Bills
+            .IgnoreQueryFilters()
+            .Where(b => b.OwnerId == appUser.Id && billIds.Contains(b.Id))
+            .ToDictionaryAsync(b => b.Id, ct)
+        : new Dictionary<long, Bill>();
+
+    var categoryIds = billsById.Values.Select(b => b.CategoryId).ToHashSet();
+    var categoriesById = categoryIds.Count > 0
+        ? await db.Categories
+            .IgnoreQueryFilters()
+            .Where(c => c.OwnerId == appUser.Id && categoryIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, ct)
+        : new Dictionary<long, Category>();
+
+    // PersonId on the BillEntry is the snapshotted value at projection time.
+    var personIds = billEntries
+        .Where(e => e.PersonId.HasValue)
+        .Select(e => e.PersonId!.Value)
+        .ToHashSet();
+    var personsById = personIds.Count > 0
+        ? await db.Persons
+            .IgnoreQueryFilters()
+            .Where(p => p.OwnerId == appUser.Id && personIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, ct)
+        : new Dictionary<long, Person>();
+
+    var incomeIds = incomeEntries.Select(e => e.IncomeId).ToHashSet();
+    var incomesById = incomeIds.Count > 0
+        ? await db.Incomes
+            .IgnoreQueryFilters()
+            .Where(i => i.OwnerId == appUser.Id && incomeIds.Contains(i.Id))
+            .ToDictionaryAsync(i => i.Id, ct)
+        : new Dictionary<long, Income>();
+
+    // Build bill DTOs with derived values; sort by category then name in-memory.
+    var billDtos = billEntries
+        .Select(e =>
+        {
+            var bill = billsById[e.BillId];
+            var category = categoriesById[bill.CategoryId];
+            var personName = e.PersonId.HasValue && personsById.TryGetValue(e.PersonId.Value, out var p)
+                ? p.Name
+                : null;
+            var effective = EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount);
+            return new BillEntryDto(
+                e.Id, e.BillId, bill.Name, category.Name,
+                e.PlannedAmount, e.ActualAmount, e.SplitRatioSnapshot, personName,
+                effective,
+                EntryCalculations.MyShare(effective, e.SplitRatioSnapshot),
+                EntryCalculations.Receivable(effective, e.SplitRatioSnapshot),
+                e.Paid, e.PaidDate, e.Received, e.ReceivedDate);
+        })
+        .OrderBy(d => d.Category)
+        .ThenBy(d => d.Name)
+        .ToList();
+
+    // Build income DTOs with derived values.
+    var incomeDtos = incomeEntries
+        .Select(e =>
+        {
+            var income = incomesById[e.IncomeId];
+            var effective = EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount);
+            return new IncomeEntryDto(
+                e.Id, e.IncomeId, income.Name,
+                e.PlannedAmount, e.ActualAmount,
+                effective, e.Received, e.ReceivedDate);
+        })
+        .ToList();
+
+    // --- Totals ---
+    var billsPlanned = billDtos.Sum(d => d.PlannedAmount);
+    var billsEffective = billDtos.Sum(d => d.EffectiveAmount);
+    var totalMyShare = billDtos.Sum(d => d.MyShare);
+    var totalReceivable = billDtos.Sum(d => d.Receivable);
+    var incomesPlanned = incomeDtos.Sum(d => d.PlannedAmount);
+    var incomesEffective = incomeDtos.Sum(d => d.EffectiveAmount);
+
+    // saldoPrevisto: how much I expect to net — planned income minus my planned share of each bill.
+    var saldoPrevisto = incomesPlanned - billDtos.Sum(d => d.PlannedAmount * d.SplitRatio);
+
+    // saldoReal: received income minus my share of already-paid bills.
+    var saldoReal = incomeDtos.Where(d => d.Received).Sum(d => d.EffectiveAmount)
+        - billDtos.Where(d => d.Paid).Sum(d => d.MyShare);
+
+    var totals = new MonthTotalsDto(
+        billsPlanned, billsEffective, totalMyShare, totalReceivable,
+        incomesPlanned, incomesEffective, saldoPrevisto, saldoReal);
+
+    return Results.Ok(new MonthEntriesDto(year.Value, month.Value, billDtos, incomeDtos, totals));
+})
+.RequireAuthorization();
+
 await app.RunAsync();
 
 /// <summary>The payload returned by the authenticated <c>GET /health</c> endpoint.</summary>
@@ -770,6 +901,68 @@ internal sealed record UpdateBillRequest(string Name, long CategoryId, BillKind 
 /// <param name="IncomeEntriesCreated">The number of new income entries created.</param>
 /// <param name="Skipped">The number of entries that already existed and were skipped.</param>
 internal sealed record ProjectionResult(int Year, int BillEntriesCreated, int IncomeEntriesCreated, int Skipped);
+
+/// <summary>The payload for a single bill entry returned by <c>GET /api/entries</c>.</summary>
+/// <param name="Id">The bill entry id.</param>
+/// <param name="BillId">The source bill template id.</param>
+/// <param name="Name">The bill name (from the template at projection time).</param>
+/// <param name="Category">The category name (from the template at projection time).</param>
+/// <param name="PlannedAmount">The snapshotted planned amount.</param>
+/// <param name="ActualAmount">The confirmed actual amount, or <see langword="null"/> when not yet set.</param>
+/// <param name="SplitRatio">The snapshotted owner split ratio.</param>
+/// <param name="Person">The name of the person who owes the remaining fraction, or <see langword="null"/> when SplitRatio is 1.</param>
+/// <param name="EffectiveAmount">Actual when present; otherwise planned.</param>
+/// <param name="MyShare">Effective amount multiplied by the split ratio.</param>
+/// <param name="Receivable">Effective amount multiplied by (1 − split ratio).</param>
+/// <param name="Paid">Whether the owner has paid this bill.</param>
+/// <param name="PaidDate">The UTC instant of payment, or <see langword="null"/>.</param>
+/// <param name="Received">Whether the split portion has been received from the other person.</param>
+/// <param name="ReceivedDate">The UTC instant the split was received, or <see langword="null"/>.</param>
+internal sealed record BillEntryDto(long Id, long BillId, string Name, string Category,
+    decimal PlannedAmount, decimal? ActualAmount, decimal SplitRatio, string? Person,
+    decimal EffectiveAmount, decimal MyShare, decimal Receivable,
+    bool Paid, DateTimeOffset? PaidDate, bool Received, DateTimeOffset? ReceivedDate);
+
+/// <summary>The payload for a single income entry returned by <c>GET /api/entries</c>.</summary>
+/// <param name="Id">The income entry id.</param>
+/// <param name="IncomeId">The source income template id.</param>
+/// <param name="Name">The income name (from the template at projection time).</param>
+/// <param name="PlannedAmount">The snapshotted planned amount.</param>
+/// <param name="ActualAmount">The confirmed actual amount, or <see langword="null"/> when not yet set.</param>
+/// <param name="EffectiveAmount">Actual when present; otherwise planned.</param>
+/// <param name="Received">Whether this income has been received.</param>
+/// <param name="ReceivedDate">The UTC instant the income was received, or <see langword="null"/>.</param>
+internal sealed record IncomeEntryDto(long Id, long IncomeId, string Name,
+    decimal PlannedAmount, decimal? ActualAmount,
+    decimal EffectiveAmount, bool Received, DateTimeOffset? ReceivedDate);
+
+/// <summary>Aggregated totals for the requested month, returned by <c>GET /api/entries</c>.</summary>
+/// <param name="BillsPlanned">Sum of all bill entry planned amounts.</param>
+/// <param name="BillsEffective">Sum of all bill entry effective amounts.</param>
+/// <param name="MyShare">Sum of the owner's share across all bill entries.</param>
+/// <param name="Receivable">Sum of the other person's share across all bill entries.</param>
+/// <param name="IncomesPlanned">Sum of all income entry planned amounts.</param>
+/// <param name="IncomesEffective">Sum of all income entry effective amounts.</param>
+/// <param name="SaldoPrevisto">
+/// Planned net balance: Σ(income planned) − Σ(bill planned × split ratio).
+/// </param>
+/// <param name="SaldoReal">
+/// Realised net balance: Σ(effective amount for received incomes) − Σ(my share for paid bills).
+/// </param>
+internal sealed record MonthTotalsDto(decimal BillsPlanned, decimal BillsEffective,
+    decimal MyShare, decimal Receivable,
+    decimal IncomesPlanned, decimal IncomesEffective,
+    decimal SaldoPrevisto, decimal SaldoReal);
+
+/// <summary>The complete response returned by <c>GET /api/entries</c>.</summary>
+/// <param name="Year">The requested year.</param>
+/// <param name="Month">The requested month (1–12).</param>
+/// <param name="Bills">Bill entries for the month, sorted by category then name.</param>
+/// <param name="Incomes">Income entries for the month.</param>
+/// <param name="Totals">Aggregated totals for the month.</param>
+internal sealed record MonthEntriesDto(int Year, int Month,
+    IReadOnlyList<BillEntryDto> Bills, IReadOnlyList<IncomeEntryDto> Incomes,
+    MonthTotalsDto Totals);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API
