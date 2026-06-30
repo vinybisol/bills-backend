@@ -169,6 +169,15 @@ public sealed class Bill
         PersonId = personId;
     }
 
+    /// <summary>Updates the default amount for recalculation propagation.</summary>
+    /// <param name="newAmount">The new default planned amount; must be zero or greater.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="newAmount"/> is negative.</exception>
+    public void Recalculate(decimal newAmount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(newAmount);
+        DefaultAmount = newAmount;
+    }
+
     /// <summary>
     /// Soft-deletes this bill template by setting <see cref="Active"/> to <see langword="false"/>.
     /// </summary>

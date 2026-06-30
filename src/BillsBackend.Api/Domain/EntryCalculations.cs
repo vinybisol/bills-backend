@@ -14,4 +14,8 @@ public static class EntryCalculations
     /// <summary>The amount owed to the owner by the other person.</summary>
     public static decimal Receivable(decimal effective, decimal splitRatio) =>
         effective * (1 - splitRatio);
+
+    /// <summary>Returns true when the given period is at or after the specified start month.</summary>
+    public static bool IsInForwardRange(int entryYear, int entryMonth, int fromYear, int fromMonth) =>
+        entryYear > fromYear || (entryYear == fromYear && entryMonth >= fromMonth);
 }

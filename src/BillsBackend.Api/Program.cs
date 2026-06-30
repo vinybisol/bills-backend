@@ -593,6 +593,66 @@ app.MapDelete("/bills/{id:long}", async (
 })
 .RequireAuthorization();
 
+// Recalculates bill default amount and propagates to unpaid future entries.
+// Paid entries in range are skipped (immutability); entries before fromMonth are untouched.
+app.MapPost("/api/bills/{billId:long}/recalculate", async (
+    long billId,
+    RecalculateRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    if (req.FromMonth < 1 || req.FromMonth > 12)
+        return Results.BadRequest("FromMonth must be between 1 and 12.");
+
+    if (req.NewAmount < 0)
+        return Results.BadRequest("NewAmount must be zero or greater.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var bill = await db.Bills.FirstOrDefaultAsync(b => b.Id == billId, ct);
+    if (bill is null)
+        return Results.NotFound();
+
+    // Capture locals so EF Core can translate the predicate to SQL.
+    var fromYear = req.FromYear;
+    var fromMonth = req.FromMonth;
+
+    var entriesInRange = await db.BillEntries
+        .Where(e => e.BillId == billId &&
+                    (e.RefYear > fromYear || (e.RefYear == fromYear && e.RefMonth >= fromMonth)))
+        .ToListAsync(ct);
+
+    await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+    bill.Recalculate(req.NewAmount);
+
+    int updatedEntries = 0, skippedPaid = 0;
+    foreach (var entry in entriesInRange)
+    {
+        if (entry.Paid)
+        {
+            skippedPaid++;
+            continue;
+        }
+        entry.UpdatePlanned(req.NewAmount);
+        updatedEntries++;
+    }
+
+    await db.SaveChangesAsync(ct);
+    await tx.CommitAsync(ct);
+
+    return Results.Ok(new RecalculateResponse(billId, updatedEntries, skippedPaid, req.NewAmount));
+})
+.RequireAuthorization();
+
 // --- Projection endpoint ---
 
 // Generates annual projected entries for every active recurring bill and income template
@@ -1378,6 +1438,19 @@ internal sealed record IncomeEntryCreatedDto(
     long Id, long IncomeId, int RefYear, int RefMonth,
     decimal PlannedAmount, decimal? ActualAmount,
     bool Received, DateTimeOffset? ReceivedDate);
+
+/// <summary>The request body for <c>POST /api/bills/{billId}/recalculate</c>.</summary>
+/// <param name="FromYear">The reference year from which to start recalculation (inclusive).</param>
+/// <param name="FromMonth">The reference month from which to start recalculation (1–12, inclusive).</param>
+/// <param name="NewAmount">The new planned amount to apply; must be zero or greater.</param>
+internal sealed record RecalculateRequest(int FromYear, int FromMonth, decimal NewAmount);
+
+/// <summary>The response returned by <c>POST /api/bills/{billId}/recalculate</c>.</summary>
+/// <param name="BillId">The recalculated bill's id.</param>
+/// <param name="UpdatedEntries">The number of unpaid entries whose planned amount was updated.</param>
+/// <param name="SkippedPaid">The number of paid entries in range that were left untouched.</param>
+/// <param name="NewDefaultAmount">The new default amount now set on the bill template.</param>
+internal sealed record RecalculateResponse(long BillId, int UpdatedEntries, int SkippedPaid, decimal NewDefaultAmount);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API
