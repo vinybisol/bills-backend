@@ -977,7 +977,214 @@ app.MapDelete("/api/entries/income/{id:long}", async (
 })
 .RequireAuthorization();
 
+// --- Pay / unpay / patch endpoints ---
+
+// Updates plannedAmount and/or actualAmount on an unfrozen bill entry.
+// Returns 409 if the entry is paid (frozen).
+app.MapMethods("/api/entries/bill/{id:long}", ["PATCH"], async (
+    long id,
+    PatchBillEntryRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
+    if (entry is null)
+        return Results.NotFound();
+
+    if (entry.Paid)
+        return Results.Conflict("Cannot edit a frozen (paid) bill entry. Unpay it first.");
+
+    try
+    {
+        entry.UpdateAmounts(req.PlannedAmount, req.ActualAmount);
+    }
+    catch (ArgumentOutOfRangeException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(ToBillEntryDto(entry));
+})
+.RequireAuthorization();
+
+// Marks a bill entry as paid. Freezes it and records the actual amount (defaults to planned).
+app.MapPost("/api/entries/bill/{id:long}/pay", async (
+    long id,
+    PayBillEntryRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
+    if (entry is null)
+        return Results.NotFound();
+
+    var paidAt = req.PaidDate.HasValue
+        ? new DateTimeOffset(req.PaidDate.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
+        : timeProvider.GetUtcNow();
+
+    entry.MarkPaid(paidAt, req.ActualAmount);
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(ToBillEntryDto(entry));
+})
+.RequireAuthorization();
+
+// Unfreezes a paid bill entry so it can be edited again.
+app.MapPost("/api/entries/bill/{id:long}/unpay", async (
+    long id,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
+    if (entry is null)
+        return Results.NotFound();
+
+    entry.Unfreeze();
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(ToBillEntryDto(entry));
+})
+.RequireAuthorization();
+
+// Updates plannedAmount and/or actualAmount on an unfrozen income entry.
+// Returns 409 if the entry is received (frozen).
+app.MapMethods("/api/entries/income/{id:long}", ["PATCH"], async (
+    long id,
+    PatchIncomeEntryRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entry = await db.IncomeEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
+    if (entry is null)
+        return Results.NotFound();
+
+    if (entry.Received)
+        return Results.Conflict("Cannot edit a frozen (received) income entry. Unreceive it first.");
+
+    try
+    {
+        entry.UpdateAmounts(req.PlannedAmount, req.ActualAmount);
+    }
+    catch (ArgumentOutOfRangeException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(ToIncomeEntryDto(entry));
+})
+.RequireAuthorization();
+
+// Marks an income entry as received. Freezes it and records the actual amount (defaults to planned).
+app.MapPost("/api/entries/income/{id:long}/receive", async (
+    long id,
+    ReceiveIncomeEntryRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entry = await db.IncomeEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
+    if (entry is null)
+        return Results.NotFound();
+
+    var receivedAt = req.ReceivedDate.HasValue
+        ? new DateTimeOffset(req.ReceivedDate.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
+        : timeProvider.GetUtcNow();
+
+    entry.MarkReceived(receivedAt, req.ActualAmount);
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(ToIncomeEntryDto(entry));
+})
+.RequireAuthorization();
+
+// Unfreezes a received income entry so it can be edited again.
+app.MapPost("/api/entries/income/{id:long}/unreceive", async (
+    long id,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entry = await db.IncomeEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
+    if (entry is null)
+        return Results.NotFound();
+
+    entry.Unfreeze();
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(ToIncomeEntryDto(entry));
+})
+.RequireAuthorization();
+
 await app.RunAsync();
+
+// Maps a BillEntry domain object to the shared entry DTO used by pay/unpay/patch endpoints.
+static BillEntryCreatedDto ToBillEntryDto(BillEntry e) => new(
+    e.Id, e.BillId, e.RefYear, e.RefMonth,
+    e.PlannedAmount, e.ActualAmount, e.SplitRatioSnapshot, e.PersonId,
+    e.Paid, e.PaidDate, e.Received, e.ReceivedDate);
+
+// Maps an IncomeEntry domain object to the shared entry DTO used by receive/unreceive/patch endpoints.
+static IncomeEntryCreatedDto ToIncomeEntryDto(IncomeEntry e) => new(
+    e.Id, e.IncomeId, e.RefYear, e.RefMonth,
+    e.PlannedAmount, e.ActualAmount, e.Received, e.ReceivedDate);
 
 /// <summary>The payload returned by the authenticated <c>GET /health</c> endpoint.</summary>
 /// <param name="UserId">The internal <c>app_user.id</c> resolved from the token.</param>
@@ -1131,6 +1338,18 @@ internal sealed record MonthTotalsDto(decimal BillsPlanned, decimal BillsEffecti
 internal sealed record MonthEntriesDto(int Year, int Month,
     IReadOnlyList<BillEntryDto> Bills, IReadOnlyList<IncomeEntryDto> Incomes,
     MonthTotalsDto Totals);
+
+/// <summary>The request body for <c>PATCH /api/entries/bill/{id}</c>.</summary>
+internal sealed record PatchBillEntryRequest(decimal? PlannedAmount, decimal? ActualAmount);
+
+/// <summary>The request body for <c>POST /api/entries/bill/{id}/pay</c>.</summary>
+internal sealed record PayBillEntryRequest(decimal? ActualAmount, DateOnly? PaidDate);
+
+/// <summary>The request body for <c>PATCH /api/entries/income/{id}</c>.</summary>
+internal sealed record PatchIncomeEntryRequest(decimal? PlannedAmount, decimal? ActualAmount);
+
+/// <summary>The request body for <c>POST /api/entries/income/{id}/receive</c>.</summary>
+internal sealed record ReceiveIncomeEntryRequest(decimal? ActualAmount, DateOnly? ReceivedDate);
 
 /// <summary>The request body for <c>POST /api/entries/bill</c>.</summary>
 /// <param name="BillId">The one_off bill template to create an entry from.</param>

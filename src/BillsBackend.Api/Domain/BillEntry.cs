@@ -130,13 +130,45 @@ public sealed class BillEntry
     }
 
     /// <summary>
-    /// Records that the owner has paid this expense.
+    /// Records that the owner has paid this expense, optionally recording the actual amount paid.
+    /// If <paramref name="actualAmount"/> is <see langword="null"/>, <see cref="PlannedAmount"/> is used as the actual amount.
     /// </summary>
     /// <param name="paidAt">The UTC instant at which the payment was made.</param>
-    public void MarkPaid(DateTimeOffset paidAt)
+    /// <param name="actualAmount">The actual amount paid, or <see langword="null"/> to default to the planned amount.</param>
+    public void MarkPaid(DateTimeOffset paidAt, decimal? actualAmount = null)
     {
+        ActualAmount = actualAmount ?? PlannedAmount;
         Paid = true;
         PaidDate = paidAt;
+    }
+
+    /// <summary>
+    /// Reverses a prior <see cref="MarkPaid"/> call, unfreezing this entry for editing.
+    /// </summary>
+    public void Unfreeze()
+    {
+        Paid = false;
+        PaidDate = null;
+    }
+
+    /// <summary>
+    /// Updates the planned and/or actual amounts for this entry.
+    /// </summary>
+    /// <param name="plannedAmount">New planned amount, or <see langword="null"/> to leave unchanged.</param>
+    /// <param name="actualAmount">New actual amount, or <see langword="null"/> to leave unchanged.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Either amount is negative.</exception>
+    public void UpdateAmounts(decimal? plannedAmount, decimal? actualAmount)
+    {
+        if (plannedAmount.HasValue)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(plannedAmount.Value);
+            PlannedAmount = plannedAmount.Value;
+        }
+        if (actualAmount.HasValue)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(actualAmount.Value);
+            ActualAmount = actualAmount.Value;
+        }
     }
 
     /// <summary>

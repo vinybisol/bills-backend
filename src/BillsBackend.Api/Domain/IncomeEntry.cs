@@ -98,12 +98,44 @@ public sealed class IncomeEntry
     }
 
     /// <summary>
-    /// Records that the owner has received this income.
+    /// Records that the owner has received this income, optionally recording the actual amount.
+    /// If <paramref name="actualAmount"/> is <see langword="null"/>, <see cref="PlannedAmount"/> is used as the actual amount.
     /// </summary>
     /// <param name="receivedAt">The UTC instant at which the income was received.</param>
-    public void MarkReceived(DateTimeOffset receivedAt)
+    /// <param name="actualAmount">The actual amount received, or <see langword="null"/> to default to the planned amount.</param>
+    public void MarkReceived(DateTimeOffset receivedAt, decimal? actualAmount = null)
     {
+        ActualAmount = actualAmount ?? PlannedAmount;
         Received = true;
         ReceivedDate = receivedAt;
+    }
+
+    /// <summary>
+    /// Reverses a prior <see cref="MarkReceived"/> call, unfreezing this entry for editing.
+    /// </summary>
+    public void Unfreeze()
+    {
+        Received = false;
+        ReceivedDate = null;
+    }
+
+    /// <summary>
+    /// Updates the planned and/or actual amounts for this entry.
+    /// </summary>
+    /// <param name="plannedAmount">New planned amount, or <see langword="null"/> to leave unchanged.</param>
+    /// <param name="actualAmount">New actual amount, or <see langword="null"/> to leave unchanged.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Either amount is negative.</exception>
+    public void UpdateAmounts(decimal? plannedAmount, decimal? actualAmount)
+    {
+        if (plannedAmount.HasValue)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(plannedAmount.Value);
+            PlannedAmount = plannedAmount.Value;
+        }
+        if (actualAmount.HasValue)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(actualAmount.Value);
+            ActualAmount = actualAmount.Value;
+        }
     }
 }
