@@ -809,6 +809,174 @@ app.MapGet("/api/entries", async (
 })
 .RequireAuthorization();
 
+// --- One-off entry endpoints ---
+
+// Creates a bill_entry for a one_off bill template in the requested month.
+// Snapshots planned_amount, split_ratio and person_id from the template at creation time.
+// Returns 409 if an entry already exists for the same template and month (UNIQUE constraint).
+app.MapPost("/api/entries/bill", async (
+    CreateBillEntryRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    if (req.Month < 1 || req.Month > 12)
+        return Results.BadRequest("Month must be between 1 and 12.");
+
+    if (req.PlannedAmount.HasValue && req.PlannedAmount.Value < 0)
+        return Results.BadRequest("PlannedAmount must be zero or greater.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var bill = await db.Bills.FirstOrDefaultAsync(b => b.Id == req.BillId, ct);
+    if (bill is null)
+        return Results.NotFound("Bill not found.");
+
+    if (bill.Kind != BillKind.OneOff)
+        return Results.BadRequest("Only one_off bill templates can be used to create entries via this endpoint.");
+
+    var plannedAmount = req.PlannedAmount ?? bill.DefaultAmount;
+    var entry = BillEntry.Create(appUser.Id, bill.Id, req.Year, req.Month, plannedAmount, bill.SplitRatio, bill.PersonId, timeProvider.GetUtcNow());
+    db.BillEntries.Add(entry);
+
+    try
+    {
+        await db.SaveChangesAsync(ct);
+    }
+    catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" })
+    {
+        return Results.Conflict("A one-off entry for this bill and month already exists.");
+    }
+
+    return Results.Created($"/api/entries/bill/{entry.Id}", new BillEntryCreatedDto(
+        entry.Id, entry.BillId, entry.RefYear, entry.RefMonth,
+        entry.PlannedAmount, entry.ActualAmount, entry.SplitRatioSnapshot, entry.PersonId,
+        entry.Paid, entry.PaidDate, entry.Received, entry.ReceivedDate));
+})
+.RequireAuthorization();
+
+// Creates an income_entry for a one_off income template in the requested month.
+// Returns 409 if an entry already exists for the same template and month (UNIQUE constraint).
+app.MapPost("/api/entries/income", async (
+    CreateIncomeEntryRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    if (req.Month < 1 || req.Month > 12)
+        return Results.BadRequest("Month must be between 1 and 12.");
+
+    if (req.PlannedAmount.HasValue && req.PlannedAmount.Value < 0)
+        return Results.BadRequest("PlannedAmount must be zero or greater.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var income = await db.Incomes.FirstOrDefaultAsync(i => i.Id == req.IncomeId, ct);
+    if (income is null)
+        return Results.NotFound("Income not found.");
+
+    if (income.Kind != IncomeKind.OneOff)
+        return Results.BadRequest("Only one_off income templates can be used to create entries via this endpoint.");
+
+    var plannedAmount = req.PlannedAmount ?? income.DefaultAmount;
+    var entry = IncomeEntry.Create(appUser.Id, income.Id, req.Year, req.Month, plannedAmount, timeProvider.GetUtcNow());
+    db.IncomeEntries.Add(entry);
+
+    try
+    {
+        await db.SaveChangesAsync(ct);
+    }
+    catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" })
+    {
+        return Results.Conflict("A one-off entry for this income and month already exists.");
+    }
+
+    return Results.Created($"/api/entries/income/{entry.Id}", new IncomeEntryCreatedDto(
+        entry.Id, entry.IncomeId, entry.RefYear, entry.RefMonth,
+        entry.PlannedAmount, entry.ActualAmount, entry.Received, entry.ReceivedDate));
+})
+.RequireAuthorization();
+
+// Deletes an unpaid one-off bill_entry (hard delete — unpaid entries have no history to preserve).
+// Returns 409 if the entry has been paid (immutability: paid entries are frozen).
+app.MapDelete("/api/entries/bill/{id:long}", async (
+    long id,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
+    if (entry is null)
+        return Results.NotFound();
+
+    if (entry.Paid)
+        return Results.Conflict("Cannot delete a paid bill entry.");
+
+    db.BillEntries.Remove(entry);
+    await db.SaveChangesAsync(ct);
+
+    return Results.NoContent();
+})
+.RequireAuthorization();
+
+// Deletes an unreceived one-off income_entry (hard delete — unreceived entries have no history to preserve).
+// Returns 409 if the entry has been received (immutability: received entries are frozen).
+app.MapDelete("/api/entries/income/{id:long}", async (
+    long id,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entry = await db.IncomeEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
+    if (entry is null)
+        return Results.NotFound();
+
+    if (entry.Received)
+        return Results.Conflict("Cannot delete a received income entry.");
+
+    db.IncomeEntries.Remove(entry);
+    await db.SaveChangesAsync(ct);
+
+    return Results.NoContent();
+})
+.RequireAuthorization();
+
 await app.RunAsync();
 
 /// <summary>The payload returned by the authenticated <c>GET /health</c> endpoint.</summary>
@@ -963,6 +1131,34 @@ internal sealed record MonthTotalsDto(decimal BillsPlanned, decimal BillsEffecti
 internal sealed record MonthEntriesDto(int Year, int Month,
     IReadOnlyList<BillEntryDto> Bills, IReadOnlyList<IncomeEntryDto> Incomes,
     MonthTotalsDto Totals);
+
+/// <summary>The request body for <c>POST /api/entries/bill</c>.</summary>
+/// <param name="BillId">The one_off bill template to create an entry from.</param>
+/// <param name="Year">The reference year.</param>
+/// <param name="Month">The reference month (1–12).</param>
+/// <param name="PlannedAmount">The planned amount; falls back to the template's DefaultAmount when null.</param>
+internal sealed record CreateBillEntryRequest(long BillId, int Year, int Month, decimal? PlannedAmount);
+
+/// <summary>The request body for <c>POST /api/entries/income</c>.</summary>
+/// <param name="IncomeId">The one_off income template to create an entry from.</param>
+/// <param name="Year">The reference year.</param>
+/// <param name="Month">The reference month (1–12).</param>
+/// <param name="PlannedAmount">The planned amount; falls back to the template's DefaultAmount when null.</param>
+internal sealed record CreateIncomeEntryRequest(long IncomeId, int Year, int Month, decimal? PlannedAmount);
+
+/// <summary>The payload returned by <c>POST /api/entries/bill</c>.</summary>
+internal sealed record BillEntryCreatedDto(
+    long Id, long BillId, int RefYear, int RefMonth,
+    decimal PlannedAmount, decimal? ActualAmount,
+    decimal SplitRatioSnapshot, long? PersonId,
+    bool Paid, DateTimeOffset? PaidDate,
+    bool Received, DateTimeOffset? ReceivedDate);
+
+/// <summary>The payload returned by <c>POST /api/entries/income</c>.</summary>
+internal sealed record IncomeEntryCreatedDto(
+    long Id, long IncomeId, int RefYear, int RefMonth,
+    decimal PlannedAmount, decimal? ActualAmount,
+    bool Received, DateTimeOffset? ReceivedDate);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API
