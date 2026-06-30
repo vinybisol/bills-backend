@@ -593,6 +593,91 @@ app.MapDelete("/bills/{id:long}", async (
 })
 .RequireAuthorization();
 
+// --- Projection endpoint ---
+
+// Generates annual projected entries for every active recurring bill and income template
+// owned by the authenticated user. Idempotent: existing entries (identified by bill/income
+// id + year + month) are skipped, so calling the endpoint twice for the same year is safe.
+app.MapPost("/api/projection/{year:int}", async (
+    int year,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    if (year < 2000 || year > 2100)
+        return Results.BadRequest("Year must be between 2000 and 2100.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    // Fetch only recurring active bill/income templates (global query filter applies active + owner_id).
+    var recurringBills = await db.Bills
+        .Where(b => b.Kind == BillKind.Recurring)
+        .ToListAsync(ct);
+
+    var recurringIncomes = await db.Incomes
+        .Where(i => i.Kind == IncomeKind.Recurring)
+        .ToListAsync(ct);
+
+    // Fetch already-created entries for this year so subsequent calls are idempotent.
+    var existingBillEntries = await db.BillEntries
+        .Where(e => e.RefYear == year)
+        .Select(e => new { e.BillId, e.RefMonth })
+        .ToListAsync(ct);
+
+    var existingIncomeEntries = await db.IncomeEntries
+        .Where(e => e.RefYear == year)
+        .Select(e => new { e.IncomeId, e.RefMonth })
+        .ToListAsync(ct);
+
+    // ValueTuple has structural equality, so Contains checks are O(1) with HashSet.
+    var existingBillSet = existingBillEntries
+        .Select(e => (e.BillId, e.RefMonth))
+        .ToHashSet();
+
+    var existingIncomeSet = existingIncomeEntries
+        .Select(e => (e.IncomeId, e.RefMonth))
+        .ToHashSet();
+
+    var now = timeProvider.GetUtcNow();
+    int billEntriesCreated = 0, incomeEntriesCreated = 0, skipped = 0;
+
+    await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+    foreach (var bill in recurringBills)
+    {
+        for (int month = 1; month <= 12; month++)
+        {
+            if (existingBillSet.Contains((bill.Id, month))) { skipped++; continue; }
+            db.BillEntries.Add(BillEntry.Create(appUser.Id, bill.Id, year, month, bill.DefaultAmount, bill.SplitRatio, bill.PersonId, now));
+            billEntriesCreated++;
+        }
+    }
+
+    foreach (var income in recurringIncomes)
+    {
+        for (int month = 1; month <= 12; month++)
+        {
+            if (existingIncomeSet.Contains((income.Id, month))) { skipped++; continue; }
+            db.IncomeEntries.Add(IncomeEntry.Create(appUser.Id, income.Id, year, month, income.DefaultAmount, now));
+            incomeEntriesCreated++;
+        }
+    }
+
+    await db.SaveChangesAsync(ct);
+    await tx.CommitAsync(ct);
+
+    return Results.Ok(new ProjectionResult(year, billEntriesCreated, incomeEntriesCreated, skipped));
+})
+.RequireAuthorization();
+
 await app.RunAsync();
 
 /// <summary>The payload returned by the authenticated <c>GET /health</c> endpoint.</summary>
@@ -678,6 +763,13 @@ internal sealed record CreateBillRequest(string Name, long CategoryId, BillKind 
 /// <param name="SplitRatio">The new owner fraction; must be in [0, 1].</param>
 /// <param name="PersonId">Required when SplitRatio is less than 1; must be null when SplitRatio is 1.</param>
 internal sealed record UpdateBillRequest(string Name, long CategoryId, BillKind Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
+
+/// <summary>The payload returned by <c>POST /api/projection/{year}</c>.</summary>
+/// <param name="Year">The year for which the projection was generated.</param>
+/// <param name="BillEntriesCreated">The number of new bill entries created.</param>
+/// <param name="IncomeEntriesCreated">The number of new income entries created.</param>
+/// <param name="Skipped">The number of entries that already existed and were skipped.</param>
+internal sealed record ProjectionResult(int Year, int BillEntriesCreated, int IncomeEntriesCreated, int Skipped);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API

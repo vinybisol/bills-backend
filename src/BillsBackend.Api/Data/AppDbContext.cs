@@ -50,6 +50,18 @@ public sealed class AppDbContext(
     /// </summary>
     public DbSet<Bill> Bills => Set<Bill>();
 
+    /// <summary>
+    /// Gets the pre-filtered set of bill entries for the current owner.
+    /// Only entries belonging to the authenticated owner are visible (no active filter — entries have no active flag).
+    /// </summary>
+    public DbSet<BillEntry> BillEntries => Set<BillEntry>();
+
+    /// <summary>
+    /// Gets the pre-filtered set of income entries for the current owner.
+    /// Only entries belonging to the authenticated owner are visible (no active filter — entries have no active flag).
+    /// </summary>
+    public DbSet<IncomeEntry> IncomeEntries => Set<IncomeEntry>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -243,6 +255,124 @@ public sealed class AppDbContext(
             // Restricts all Bill reads to the current owner's active rows.
             // currentOwner.Id is evaluated at query-execution time from the scoped service.
             entity.HasQueryFilter(b => b.Active && b.OwnerId == currentOwner.Id);
+        });
+
+        modelBuilder.Entity<BillEntry>(entity =>
+        {
+            entity.ToTable("bill_entry");
+
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(e => e.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            entity.Property(e => e.BillId)
+                .HasColumnName("bill_id")
+                .IsRequired();
+
+            entity.Property(e => e.RefYear)
+                .HasColumnName("ref_year")
+                .IsRequired();
+
+            entity.Property(e => e.RefMonth)
+                .HasColumnName("ref_month")
+                .IsRequired();
+
+            entity.Property(e => e.PlannedAmount)
+                .HasColumnName("planned_amount")
+                .IsRequired();
+
+            entity.Property(e => e.ActualAmount)
+                .HasColumnName("actual_amount");
+
+            entity.Property(e => e.SplitRatioSnapshot)
+                .HasColumnName("split_ratio_snapshot")
+                .IsRequired();
+
+            entity.Property(e => e.PersonId)
+                .HasColumnName("person_id");
+
+            entity.Property(e => e.Paid)
+                .HasColumnName("paid")
+                .IsRequired();
+
+            entity.Property(e => e.PaidDate)
+                .HasColumnName("paid_date");
+
+            entity.Property(e => e.Received)
+                .HasColumnName("received")
+                .IsRequired();
+
+            entity.Property(e => e.ReceivedDate)
+                .HasColumnName("received_date");
+
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
+                .IsRequired();
+
+            entity.HasIndex(e => new { e.BillId, e.RefYear, e.RefMonth })
+                .IsUnique();
+
+            // Restricts all BillEntry reads to the current owner's rows.
+            // No active filter — bill entries do not have an active flag.
+            // currentOwner.Id is evaluated at query-execution time from the scoped service.
+            entity.HasQueryFilter(e => e.OwnerId == currentOwner.Id);
+        });
+
+        modelBuilder.Entity<IncomeEntry>(entity =>
+        {
+            entity.ToTable("income_entry");
+
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(e => e.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            entity.Property(e => e.IncomeId)
+                .HasColumnName("income_id")
+                .IsRequired();
+
+            entity.Property(e => e.RefYear)
+                .HasColumnName("ref_year")
+                .IsRequired();
+
+            entity.Property(e => e.RefMonth)
+                .HasColumnName("ref_month")
+                .IsRequired();
+
+            entity.Property(e => e.PlannedAmount)
+                .HasColumnName("planned_amount")
+                .IsRequired();
+
+            entity.Property(e => e.ActualAmount)
+                .HasColumnName("actual_amount");
+
+            entity.Property(e => e.Received)
+                .HasColumnName("received")
+                .IsRequired();
+
+            entity.Property(e => e.ReceivedDate)
+                .HasColumnName("received_date");
+
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
+                .IsRequired();
+
+            entity.HasIndex(e => new { e.IncomeId, e.RefYear, e.RefMonth })
+                .IsUnique();
+
+            // Restricts all IncomeEntry reads to the current owner's rows.
+            // No active filter — income entries do not have an active flag.
+            // currentOwner.Id is evaluated at query-execution time from the scoped service.
+            entity.HasQueryFilter(e => e.OwnerId == currentOwner.Id);
         });
     }
 }
