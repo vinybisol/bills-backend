@@ -14,43 +14,8 @@ namespace BillsBackend.IntegrationTests;
 /// request pipeline: JWT validation, owner isolation, soft delete, and seeding.
 /// </summary>
 [TestFixture]
-public sealed class CategoryEndpointTests
+public sealed class CategoryEndpointTests : IntegrationTestBase
 {
-    private CustomWebApplicationFactory _factory = null!;
-    private HttpClient _client = null!;
-    private Respawner _respawner = null!;
-    private NpgsqlConnection _dbConnection = null!;
-
-    [OneTimeSetUp]
-    public async Task OneTimeSetUp()
-    {
-        _factory = new CustomWebApplicationFactory();
-        _client = _factory.CreateClient();
-
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await db.Database.MigrateAsync();
-
-        _dbConnection = new NpgsqlConnection(_factory.TestConnectionString);
-        await _dbConnection.OpenAsync();
-        _respawner = await Respawner.CreateAsync(_dbConnection, new RespawnerOptions
-        {
-            DbAdapter = DbAdapter.Postgres,
-            TablesToIgnore = ["__EFMigrationsHistory"]
-        });
-    }
-
-    [SetUp]
-    public async Task ResetDatabase() => await _respawner.ResetAsync(_dbConnection);
-
-    [OneTimeTearDown]
-    public async Task OneTimeTearDown()
-    {
-        await _dbConnection.DisposeAsync();
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
     // Each test uses a fresh firebase uid to document the scenario and keep tests independent.
     private static string Uid(string suffix) => $"firebase-cat-{suffix}";
 
@@ -78,7 +43,7 @@ public sealed class CategoryEndpointTests
         using var req = Req(HttpMethod.Get, "/categories", Uid("list-seed"));
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -95,7 +60,7 @@ public sealed class CategoryEndpointTests
         using var req = ReqWithBody(HttpMethod.Post, "/categories", Uid("create-ok"), new { name = "Vestuário" });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -113,7 +78,7 @@ public sealed class CategoryEndpointTests
         using var req = ReqWithBody(HttpMethod.Post, "/categories", Uid($"create-bad-{name.Length}"), new { name });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -125,13 +90,13 @@ public sealed class CategoryEndpointTests
         // Arrange — create a category then try to create another with the same name
         var uid = Uid("create-dup");
         using var req1 = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Duplicada" });
-        using var first = await _client.SendAsync(req1);
+        using var first = await Client.SendAsync(req1);
         Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         using var req2 = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Duplicada" });
 
         // Act
-        using var response = await _client.SendAsync(req2);
+        using var response = await Client.SendAsync(req2);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
@@ -145,7 +110,7 @@ public sealed class CategoryEndpointTests
         req.Content = JsonContent.Create(new { name = "Teste" });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -159,13 +124,13 @@ public sealed class CategoryEndpointTests
         // Arrange — create a custom category for a fresh user
         var uid = Uid("list-after-create");
         using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Beleza" });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         using var listReq = Req(HttpMethod.Get, "/categories", uid);
 
         // Act
-        using var listResp = await _client.SendAsync(listReq);
+        using var listResp = await Client.SendAsync(listReq);
 
         // Assert — 7 defaults + 1 custom
         Assert.That(listResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -177,7 +142,7 @@ public sealed class CategoryEndpointTests
     [Test]
     public async Task ListCategories_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await _client.GetAsync("/categories");
+        using var response = await Client.GetAsync("/categories");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -189,7 +154,7 @@ public sealed class CategoryEndpointTests
         // Arrange — create a category and capture its id
         var uid = Uid("update-ok");
         using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Original" });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
         Assert.That(created, Is.Not.Null);
@@ -197,7 +162,7 @@ public sealed class CategoryEndpointTests
         using var updateReq = ReqWithBody(HttpMethod.Put, $"/categories/{created!.Id}", uid, new { name = "Renomeada" });
 
         // Act
-        using var response = await _client.SendAsync(updateReq);
+        using var response = await Client.SendAsync(updateReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -212,14 +177,14 @@ public sealed class CategoryEndpointTests
         var uid = Uid("update-dup");
         using var r1 = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Alpha" });
         using var r2 = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Beta" });
-        using var resp1 = await _client.SendAsync(r1);
+        using var resp1 = await Client.SendAsync(r1);
         var cat1 = await resp1.Content.ReadFromJsonAsync<CategoryDto>();
-        await _client.SendAsync(r2);
+        await Client.SendAsync(r2);
 
         using var updateReq = ReqWithBody(HttpMethod.Put, $"/categories/{cat1!.Id}", uid, new { name = "Beta" });
 
         // Act
-        using var response = await _client.SendAsync(updateReq);
+        using var response = await Client.SendAsync(updateReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
@@ -230,7 +195,7 @@ public sealed class CategoryEndpointTests
     {
         using var req = new HttpRequestMessage(HttpMethod.Put, "/categories/1");
         req.Content = JsonContent.Create(new { name = "x" });
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -242,13 +207,13 @@ public sealed class CategoryEndpointTests
         // Arrange
         var uid = Uid("delete-ok");
         using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "ARemover" });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
 
         using var deleteReq = Req(HttpMethod.Delete, $"/categories/{created!.Id}", uid);
 
         // Act
-        using var response = await _client.SendAsync(deleteReq);
+        using var response = await Client.SendAsync(deleteReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
@@ -260,17 +225,17 @@ public sealed class CategoryEndpointTests
         // Arrange — create a category, delete it, then list to confirm it's gone
         var uid = Uid("delete-disappears");
         using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Efêmera" });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
 
         using var deleteReq = Req(HttpMethod.Delete, $"/categories/{created!.Id}", uid);
-        using var deleteResp = await _client.SendAsync(deleteReq);
+        using var deleteResp = await Client.SendAsync(deleteReq);
         Assert.That(deleteResp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
 
         using var listReq = Req(HttpMethod.Get, "/categories", uid);
 
         // Act
-        using var listResp = await _client.SendAsync(listReq);
+        using var listResp = await Client.SendAsync(listReq);
 
         // Assert — only the 7 defaults remain (the custom one was deactivated)
         var body = await listResp.Content.ReadFromJsonAsync<CategoryDto[]>();
@@ -280,7 +245,7 @@ public sealed class CategoryEndpointTests
     [Test]
     public async Task DeleteCategory_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await _client.DeleteAsync("/categories/1");
+        using var response = await Client.DeleteAsync("/categories/1");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -293,13 +258,13 @@ public sealed class CategoryEndpointTests
         var uidA = Uid("isolate-list-a");
         var uidB = Uid("isolate-list-b");
         using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uidA, new { name = "SomenteA" });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         using var listReq = Req(HttpMethod.Get, "/categories", uidB);
 
         // Act
-        using var listResp = await _client.SendAsync(listReq);
+        using var listResp = await Client.SendAsync(listReq);
 
         // Assert — user B sees only their own 7 defaults, not user A's "SomenteA"
         Assert.That(listResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -315,13 +280,13 @@ public sealed class CategoryEndpointTests
         var uidA = Uid("isolate-update-a");
         var uidB = Uid("isolate-update-b");
         using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uidA, new { name = "DoA" });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
 
         using var updateReq = ReqWithBody(HttpMethod.Put, $"/categories/{created!.Id}", uidB, new { name = "Hackeada" });
 
         // Act
-        using var response = await _client.SendAsync(updateReq);
+        using var response = await Client.SendAsync(updateReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -334,13 +299,13 @@ public sealed class CategoryEndpointTests
         var uidA = Uid("isolate-delete-a");
         var uidB = Uid("isolate-delete-b");
         using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uidA, new { name = "DoA2" });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
 
         using var deleteReq = Req(HttpMethod.Delete, $"/categories/{created!.Id}", uidB);
 
         // Act
-        using var response = await _client.SendAsync(deleteReq);
+        using var response = await Client.SendAsync(deleteReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));

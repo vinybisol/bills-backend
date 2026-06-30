@@ -14,43 +14,8 @@ namespace BillsBackend.IntegrationTests;
 /// pipeline: JWT validation, just-in-time provisioning and the JSON response shape.
 /// </summary>
 [TestFixture]
-public sealed class MeEndpointTests
+public sealed class MeEndpointTests : IntegrationTestBase
 {
-    private CustomWebApplicationFactory _factory = null!;
-    private HttpClient _client = null!;
-    private Respawner _respawner = null!;
-    private NpgsqlConnection _dbConnection = null!;
-
-    [OneTimeSetUp]
-    public async Task OneTimeSetUp()
-    {
-        _factory = new CustomWebApplicationFactory();
-        _client = _factory.CreateClient();
-
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await db.Database.MigrateAsync();
-
-        _dbConnection = new NpgsqlConnection(_factory.TestConnectionString);
-        await _dbConnection.OpenAsync();
-        _respawner = await Respawner.CreateAsync(_dbConnection, new RespawnerOptions
-        {
-            DbAdapter = DbAdapter.Postgres,
-            TablesToIgnore = ["__EFMigrationsHistory"]
-        });
-    }
-
-    [SetUp]
-    public async Task ResetDatabase() => await _respawner.ResetAsync(_dbConnection);
-
-    [OneTimeTearDown]
-    public async Task OneTimeTearDown()
-    {
-        await _dbConnection.DisposeAsync();
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
     [Test]
     public async Task GetMe_WithValidToken_ReturnsOkWithIdNameAndEmail()
     {
@@ -60,7 +25,7 @@ public sealed class MeEndpointTests
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateValidToken("firebase-me-1", "me@example.com", "Me User"));
 
         // Act
-        using var response = await _client.SendAsync(request);
+        using var response = await Client.SendAsync(request);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -81,7 +46,7 @@ public sealed class MeEndpointTests
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateValidToken("firebase-me-2", "noname@example.com", name: null));
 
         // Act
-        using var response = await _client.SendAsync(request);
+        using var response = await Client.SendAsync(request);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -100,7 +65,7 @@ public sealed class MeEndpointTests
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateTokenWithUntrustedSignature());
 
         // Act
-        using var response = await _client.SendAsync(request);
+        using var response = await Client.SendAsync(request);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -110,7 +75,7 @@ public sealed class MeEndpointTests
     public async Task GetMe_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange / Act
-        using var response = await _client.GetAsync("/me");
+        using var response = await Client.GetAsync("/me");
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));

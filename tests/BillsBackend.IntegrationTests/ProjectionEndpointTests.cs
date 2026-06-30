@@ -15,43 +15,8 @@ namespace BillsBackend.IntegrationTests;
 /// idempotency, owner isolation, and year-range validation.
 /// </summary>
 [TestFixture]
-public sealed class ProjectionEndpointTests
+public sealed class ProjectionEndpointTests : IntegrationTestBase
 {
-    private CustomWebApplicationFactory _factory = null!;
-    private HttpClient _client = null!;
-    private Respawner _respawner = null!;
-    private NpgsqlConnection _dbConnection = null!;
-
-    [OneTimeSetUp]
-    public async Task OneTimeSetUp()
-    {
-        _factory = new CustomWebApplicationFactory();
-        _client = _factory.CreateClient();
-
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await db.Database.MigrateAsync();
-
-        _dbConnection = new NpgsqlConnection(_factory.TestConnectionString);
-        await _dbConnection.OpenAsync();
-        _respawner = await Respawner.CreateAsync(_dbConnection, new RespawnerOptions
-        {
-            DbAdapter = DbAdapter.Postgres,
-            TablesToIgnore = ["__EFMigrationsHistory"]
-        });
-    }
-
-    [SetUp]
-    public async Task ResetDatabase() => await _respawner.ResetAsync(_dbConnection);
-
-    [OneTimeTearDown]
-    public async Task OneTimeTearDown()
-    {
-        await _dbConnection.DisposeAsync();
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
     private static string Uid(string suffix) => $"firebase-projection-{suffix}";
 
     private HttpRequestMessage Req(HttpMethod method, string url, string uid) =>
@@ -72,7 +37,7 @@ public sealed class ProjectionEndpointTests
     private async Task<long[]> GetDefaultCategoryIdsAsync(string uid)
     {
         using var req = Req(HttpMethod.Get, "/categories", uid);
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
         Assert.That(dtos, Is.Not.Empty, "Expected seeded default categories.");
@@ -84,7 +49,7 @@ public sealed class ProjectionEndpointTests
     {
         using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
             new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio = 1m, personId = (long?)null });
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return (await resp.Content.ReadFromJsonAsync<BillDto>())!;
     }
@@ -94,7 +59,7 @@ public sealed class ProjectionEndpointTests
     {
         using var req = ReqWithBody(HttpMethod.Post, "/incomes", uid,
             new { name, kind = "recurring", defaultAmount = amount });
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return (await resp.Content.ReadFromJsonAsync<IncomeDto>())!;
     }
@@ -103,7 +68,7 @@ public sealed class ProjectionEndpointTests
     private async Task<ProjectionResultDto?> PostProjectionAsync(string uid, int year)
     {
         using var req = Req(HttpMethod.Post, $"/api/projection/{year}", uid);
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         return await resp.Content.ReadFromJsonAsync<ProjectionResultDto>();
     }
@@ -112,7 +77,7 @@ public sealed class ProjectionEndpointTests
     private async Task<long> GetOwnerIdAsync(string uid)
     {
         using var req = Req(HttpMethod.Get, "/me", uid);
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var me = await resp.Content.ReadFromJsonAsync<MeDto>();
         return me!.Id;
@@ -213,7 +178,7 @@ public sealed class ProjectionEndpointTests
         // Mark the first entry as paid directly via the DbContext
         long entryId;
         {
-            using var scope = _factory.Services.CreateScope();
+            using var scope = Factory.Services.CreateScope();
             var co = scope.ServiceProvider.GetRequiredService<ICurrentOwner>();
             co.Id = ownerId;
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -228,7 +193,7 @@ public sealed class ProjectionEndpointTests
 
         // Assert — the paid entry must still be paid after the second projection
         {
-            using var scope = _factory.Services.CreateScope();
+            using var scope = Factory.Services.CreateScope();
             var co = scope.ServiceProvider.GetRequiredService<ICurrentOwner>();
             co.Id = ownerId;
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -244,7 +209,7 @@ public sealed class ProjectionEndpointTests
         using var req = new HttpRequestMessage(HttpMethod.Post, "/api/projection/2025");
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -259,7 +224,7 @@ public sealed class ProjectionEndpointTests
         using var req = Req(HttpMethod.Post, $"/api/projection/{year}", uid);
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));

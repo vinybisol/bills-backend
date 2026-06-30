@@ -14,43 +14,8 @@ namespace BillsBackend.IntegrationTests;
 /// derived value calculations, owner isolation, authentication, and month validation.
 /// </summary>
 [TestFixture]
-public sealed class EntriesEndpointTests
+public sealed class EntriesEndpointTests : IntegrationTestBase
 {
-    private CustomWebApplicationFactory _factory = null!;
-    private HttpClient _client = null!;
-    private Respawner _respawner = null!;
-    private NpgsqlConnection _dbConnection = null!;
-
-    [OneTimeSetUp]
-    public async Task OneTimeSetUp()
-    {
-        _factory = new CustomWebApplicationFactory();
-        _client = _factory.CreateClient();
-
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await db.Database.MigrateAsync();
-
-        _dbConnection = new NpgsqlConnection(_factory.TestConnectionString);
-        await _dbConnection.OpenAsync();
-        _respawner = await Respawner.CreateAsync(_dbConnection, new RespawnerOptions
-        {
-            DbAdapter = DbAdapter.Postgres,
-            TablesToIgnore = ["__EFMigrationsHistory"]
-        });
-    }
-
-    [SetUp]
-    public async Task ResetDatabase() => await _respawner.ResetAsync(_dbConnection);
-
-    [OneTimeTearDown]
-    public async Task OneTimeTearDown()
-    {
-        await _dbConnection.DisposeAsync();
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
     private static string Uid(string suffix) => $"firebase-entries-{suffix}";
 
     private HttpRequestMessage Req(HttpMethod method, string url, string uid) =>
@@ -70,7 +35,7 @@ public sealed class EntriesEndpointTests
     private async Task<CategoryDto[]> GetDefaultCategoriesAsync(string uid)
     {
         using var req = Req(HttpMethod.Get, "/categories", uid);
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
         Assert.That(dtos, Is.Not.Empty, "Expected seeded default categories.");
@@ -81,7 +46,7 @@ public sealed class EntriesEndpointTests
     private async Task<long> CreatePersonAsync(string uid, string name = "Parceiro")
     {
         using var req = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name });
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return (await resp.Content.ReadFromJsonAsync<PersonDto>())!.Id;
     }
@@ -92,7 +57,7 @@ public sealed class EntriesEndpointTests
     {
         using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
             new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio = 1m, personId = (long?)null });
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return (await resp.Content.ReadFromJsonAsync<BillDto>())!;
     }
@@ -104,7 +69,7 @@ public sealed class EntriesEndpointTests
     {
         using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
             new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio = 0.5m, personId = (long?)personId });
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return (await resp.Content.ReadFromJsonAsync<BillDto>())!;
     }
@@ -114,7 +79,7 @@ public sealed class EntriesEndpointTests
     {
         using var req = ReqWithBody(HttpMethod.Post, "/incomes", uid,
             new { name, kind = "recurring", defaultAmount = amount });
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return (await resp.Content.ReadFromJsonAsync<IncomeDto>())!;
     }
@@ -123,7 +88,7 @@ public sealed class EntriesEndpointTests
     private async Task PostProjectionAsync(string uid, int year)
     {
         using var req = Req(HttpMethod.Post, $"/api/projection/{year}", uid);
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
@@ -132,7 +97,7 @@ public sealed class EntriesEndpointTests
         string uid, int year, int month)
     {
         using var req = Req(HttpMethod.Get, $"/api/entries?year={year}&month={month}", uid);
-        var resp = await _client.SendAsync(req);
+        var resp = await Client.SendAsync(req);
         if (!resp.IsSuccessStatusCode)
             return (resp, null);
         var body = await resp.Content.ReadFromJsonAsync<MonthEntriesResponse>();
@@ -260,7 +225,7 @@ public sealed class EntriesEndpointTests
         using var req = new HttpRequestMessage(HttpMethod.Get, "/api/entries?year=2025&month=1");
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -275,7 +240,7 @@ public sealed class EntriesEndpointTests
         using var req = Req(HttpMethod.Get, $"/api/entries?year=2025&month={invalidMonth}", uid);
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));

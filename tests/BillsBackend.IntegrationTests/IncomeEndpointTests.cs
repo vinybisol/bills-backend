@@ -14,43 +14,8 @@ namespace BillsBackend.IntegrationTests;
 /// request pipeline: JWT validation, owner isolation, and soft delete.
 /// </summary>
 [TestFixture]
-public sealed class IncomeEndpointTests
+public sealed class IncomeEndpointTests : IntegrationTestBase
 {
-    private CustomWebApplicationFactory _factory = null!;
-    private HttpClient _client = null!;
-    private Respawner _respawner = null!;
-    private NpgsqlConnection _dbConnection = null!;
-
-    [OneTimeSetUp]
-    public async Task OneTimeSetUp()
-    {
-        _factory = new CustomWebApplicationFactory();
-        _client = _factory.CreateClient();
-
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await db.Database.MigrateAsync();
-
-        _dbConnection = new NpgsqlConnection(_factory.TestConnectionString);
-        await _dbConnection.OpenAsync();
-        _respawner = await Respawner.CreateAsync(_dbConnection, new RespawnerOptions
-        {
-            DbAdapter = DbAdapter.Postgres,
-            TablesToIgnore = ["__EFMigrationsHistory"]
-        });
-    }
-
-    [SetUp]
-    public async Task ResetDatabase() => await _respawner.ResetAsync(_dbConnection);
-
-    [OneTimeTearDown]
-    public async Task OneTimeTearDown()
-    {
-        await _dbConnection.DisposeAsync();
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
     private static string Uid(string suffix) => $"firebase-income-{suffix}";
 
     private HttpRequestMessage Req(HttpMethod method, string url, string uid) =>
@@ -76,7 +41,7 @@ public sealed class IncomeEndpointTests
             new { name = "Salário", kind = "recurring", defaultAmount = 5000m });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -100,7 +65,7 @@ public sealed class IncomeEndpointTests
             new { name, kind = "recurring", defaultAmount = 1000m });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -116,7 +81,7 @@ public sealed class IncomeEndpointTests
             new { name = "Renda", kind, defaultAmount = 1000m });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -130,7 +95,7 @@ public sealed class IncomeEndpointTests
             new { name = "Renda", kind = "recurring", defaultAmount = -1m });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -144,7 +109,7 @@ public sealed class IncomeEndpointTests
         req.Content = JsonContent.Create(new { name = "Salário", kind = "recurring", defaultAmount = 5000m });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -159,7 +124,7 @@ public sealed class IncomeEndpointTests
         using var req = Req(HttpMethod.Get, "/incomes", Uid("list-empty"));
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -174,13 +139,13 @@ public sealed class IncomeEndpointTests
         var uid = Uid("list-after-create");
         using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uid,
             new { name = "Salário", kind = "recurring", defaultAmount = 5000m });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         using var listReq = Req(HttpMethod.Get, "/incomes", uid);
 
         // Act
-        using var listResp = await _client.SendAsync(listReq);
+        using var listResp = await Client.SendAsync(listReq);
 
         // Assert
         Assert.That(listResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -192,7 +157,7 @@ public sealed class IncomeEndpointTests
     [Test]
     public async Task ListIncomes_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await _client.GetAsync("/incomes");
+        using var response = await Client.GetAsync("/incomes");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -205,7 +170,7 @@ public sealed class IncomeEndpointTests
         var uid = Uid("update-ok");
         using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uid,
             new { name = "Salário", kind = "recurring", defaultAmount = 5000m });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var created = await createResp.Content.ReadFromJsonAsync<IncomeDto>();
         Assert.That(created, Is.Not.Null);
@@ -214,7 +179,7 @@ public sealed class IncomeEndpointTests
             new { name = "Freelance", kind = "one_off", defaultAmount = 2500m });
 
         // Act
-        using var response = await _client.SendAsync(updateReq);
+        using var response = await Client.SendAsync(updateReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -235,7 +200,7 @@ public sealed class IncomeEndpointTests
             new { name = "Inexistente", kind = "recurring", defaultAmount = 0m });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -246,7 +211,7 @@ public sealed class IncomeEndpointTests
     {
         using var req = new HttpRequestMessage(HttpMethod.Put, "/incomes/1");
         req.Content = JsonContent.Create(new { name = "x", kind = "recurring", defaultAmount = 0m });
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -259,13 +224,13 @@ public sealed class IncomeEndpointTests
         var uid = Uid("delete-ok");
         using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uid,
             new { name = "ARemover", kind = "one_off", defaultAmount = 100m });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<IncomeDto>();
 
         using var deleteReq = Req(HttpMethod.Delete, $"/incomes/{created!.Id}", uid);
 
         // Act
-        using var response = await _client.SendAsync(deleteReq);
+        using var response = await Client.SendAsync(deleteReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
@@ -278,17 +243,17 @@ public sealed class IncomeEndpointTests
         var uid = Uid("delete-disappears");
         using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uid,
             new { name = "Efêmera", kind = "recurring", defaultAmount = 500m });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<IncomeDto>();
 
         using var deleteReq = Req(HttpMethod.Delete, $"/incomes/{created!.Id}", uid);
-        using var deleteResp = await _client.SendAsync(deleteReq);
+        using var deleteResp = await Client.SendAsync(deleteReq);
         Assert.That(deleteResp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
 
         using var listReq = Req(HttpMethod.Get, "/incomes", uid);
 
         // Act
-        using var listResp = await _client.SendAsync(listReq);
+        using var listResp = await Client.SendAsync(listReq);
 
         // Assert
         var body = await listResp.Content.ReadFromJsonAsync<IncomeDto[]>();
@@ -298,7 +263,7 @@ public sealed class IncomeEndpointTests
     [Test]
     public async Task DeleteIncome_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await _client.DeleteAsync("/incomes/1");
+        using var response = await Client.DeleteAsync("/incomes/1");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -312,13 +277,13 @@ public sealed class IncomeEndpointTests
         var uidB = Uid("isolate-list-b");
         using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uidA,
             new { name = "SomenteA", kind = "recurring", defaultAmount = 3000m });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         using var listReq = Req(HttpMethod.Get, "/incomes", uidB);
 
         // Act
-        using var listResp = await _client.SendAsync(listReq);
+        using var listResp = await Client.SendAsync(listReq);
 
         // Assert
         Assert.That(listResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -335,14 +300,14 @@ public sealed class IncomeEndpointTests
         var uidB = Uid("isolate-update-b");
         using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uidA,
             new { name = "DoA", kind = "recurring", defaultAmount = 1000m });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<IncomeDto>();
 
         using var updateReq = ReqWithBody(HttpMethod.Put, $"/incomes/{created!.Id}", uidB,
             new { name = "Hackeada", kind = "one_off", defaultAmount = 999m });
 
         // Act
-        using var response = await _client.SendAsync(updateReq);
+        using var response = await Client.SendAsync(updateReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -356,13 +321,13 @@ public sealed class IncomeEndpointTests
         var uidB = Uid("isolate-delete-b");
         using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uidA,
             new { name = "DoA2", kind = "one_off", defaultAmount = 500m });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<IncomeDto>();
 
         using var deleteReq = Req(HttpMethod.Delete, $"/incomes/{created!.Id}", uidB);
 
         // Act
-        using var response = await _client.SendAsync(deleteReq);
+        using var response = await Client.SendAsync(deleteReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));

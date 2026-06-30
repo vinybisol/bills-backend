@@ -14,53 +14,18 @@ namespace BillsBackend.IntegrationTests;
 /// full pipeline: JWT validation, just-in-time provisioning and the JSON response.
 /// </summary>
 [TestFixture]
-public sealed class HealthEndpointTests
+public sealed class HealthEndpointTests : IntegrationTestBase
 {
-    private CustomWebApplicationFactory _factory = null!;
-    private HttpClient _client = null!;
-    private Respawner _respawner = null!;
-    private NpgsqlConnection _dbConnection = null!;
-
-    [OneTimeSetUp]
-    public async Task OneTimeSetUp()
-    {
-        _factory = new CustomWebApplicationFactory();
-        _client = _factory.CreateClient();
-
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await db.Database.MigrateAsync();
-
-        _dbConnection = new NpgsqlConnection(_factory.TestConnectionString);
-        await _dbConnection.OpenAsync();
-        _respawner = await Respawner.CreateAsync(_dbConnection, new RespawnerOptions
-        {
-            DbAdapter = DbAdapter.Postgres,
-            TablesToIgnore = ["__EFMigrationsHistory"]
-        });
-    }
-
-    [SetUp]
-    public async Task ResetDatabase() => await _respawner.ResetAsync(_dbConnection);
-
-    [OneTimeTearDown]
-    public async Task OneTimeTearDown()
-    {
-        await _dbConnection.DisposeAsync();
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
     [Test]
     public async Task GetHealth_WithValidToken_ReturnsOkAndInternalUserId()
     {
         // Arrange
         using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
         request.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", TestTokens.CreateValidToken("firebase-alice"));
+            new AuthenticationHeaderValue("Bearer", TestTokens.CreateValidToken("firebase-alice", "alice@example.com"));
 
         // Act
-        using var response = await _client.SendAsync(request);
+        using var response = await Client.SendAsync(request);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -75,7 +40,7 @@ public sealed class HealthEndpointTests
     public async Task GetHealth_WithSameTokenTwice_ProvisionsUserOnceAndReturnsSameId()
     {
         // Arrange
-        var token = TestTokens.CreateValidToken("firebase-repeat");
+        var token = TestTokens.CreateValidToken("firebase-repeat", "repeat@example.com");
 
         // Act
         var firstId = await GetUserIdAsync(token);
@@ -94,7 +59,7 @@ public sealed class HealthEndpointTests
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateTokenWithUntrustedSignature());
 
         // Act
-        using var response = await _client.SendAsync(request);
+        using var response = await Client.SendAsync(request);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -104,7 +69,7 @@ public sealed class HealthEndpointTests
     public async Task GetHealth_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange / Act
-        using var response = await _client.GetAsync("/health");
+        using var response = await Client.GetAsync("/health");
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -115,7 +80,7 @@ public sealed class HealthEndpointTests
         using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        using var response = await _client.SendAsync(request);
+        using var response = await Client.SendAsync(request);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         var body = await response.Content.ReadFromJsonAsync<HealthDto>();
