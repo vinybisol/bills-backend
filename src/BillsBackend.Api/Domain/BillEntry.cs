@@ -172,6 +172,17 @@ public sealed class BillEntry
     }
 
     /// <summary>
+    /// Updates the planned amount for recalculation. Only call on unpaid entries.
+    /// </summary>
+    /// <param name="newAmount">The new planned amount; must be zero or greater.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="newAmount"/> is negative.</exception>
+    public void UpdatePlanned(decimal newAmount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(newAmount);
+        PlannedAmount = newAmount;
+    }
+
+    /// <summary>
     /// Records that the split portion has been received from the other person.
     /// </summary>
     /// <param name="receivedAt">The UTC instant at which the portion was received.</param>
