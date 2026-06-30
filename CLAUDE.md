@@ -33,15 +33,17 @@ API do sistema de orçamento pessoal. Este arquivo define como os agentes devem 
 
 ## Ciclo de trabalho por issue
 
-1. Selecione a issue atribuída (ou a próxima da fila de onboarding).
-2. Crie a branch `claude/feat/[nome]` a partir de `develop`.
-3. Implemente, com testes unitários **e** de integração.
-4. Rode `dotnet test` — só prossiga se tudo passar.
-5. Faça commit e push da branch.
-6. Abra o PR para `develop`, referenciando a issue (`Closes #<n>`).
-7. **Pare e aguarde a aprovação humana do PR.** Não faça merge sozinho.
-8. Após o PR ser aprovado e mergeado, a issue é fechada.
-9. Pegue a próxima issue e repita.
+1. Sempre use a branch 'develop' como base
+2. Baixe ou atualize ela localmente
+3. Selecione a issue atribuída (ou a próxima da fila de onboarding).
+4. Crie a branch `claude/feat/[nome]` a partir de `develop`.
+5. Implemente, com testes unitários **e** de integração.
+6. Rode `dotnet test` — só prossiga se tudo passar.
+7. Faça commit e push da branch.
+8. Abra o PR para `develop`, referenciando a issue (`Closes #<n>`).
+9. **Pare e aguarde a aprovação humana do PR.** Não faça merge sozinho.
+10. Após o PR ser aprovado e mergeado, a issue é fechada.
+11. Pegue a próxima issue e repita.
 
 ## Regras de domínio (resumo — ver escopo e schema completos)
 
