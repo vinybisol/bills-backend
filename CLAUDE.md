@@ -21,7 +21,20 @@ API do sistema de orçamento pessoal. Este arquivo define como os agentes devem 
   - **Testes unitários** da lógica (regras de negócio, cálculos de split, projeção, recálculo).
   - **Testes de integração** dos endpoints (incluindo autenticação e acesso ao banco).
 - **Nunca** abra um PR com testes falhando ou sem cobertura para o que foi implementado.
-- Rode toda a suíte (`dotnet test`) **antes** de abrir qualquer PR. PR só é aberto com a suíte verde.
+
+### Ciclo de teste rápido (iteração)
+
+Os testes de integração rodam contra um Postgres real — a suíte completa é lenta. **Durante o desenvolvimento, não rode `dotnet test` cheio a cada mudança.** Rode só o subconjunto relevante para encurtar o feedback:
+
+- Só os unitários (sem banco, segundos): `dotnet test tests/BillsBackend.UnitTests`
+- Só a fixture da feature: `dotnet test --filter FullyQualifiedName~ProjectionEndpointTests`
+- Por nome de teste: `dotnet test --filter Name~Idempot`
+
+**Só antes de abrir o PR** rode a suíte completa (`dotnet test`) **uma vez**. PR só é aberto com a suíte inteira verde.
+
+### Isolamento dos testes de integração
+
+Cada teste usa um `firebase_uid` (e portanto um `owner_id`) **distinto**; o filtro global por owner isola os dados sem precisar limpar o banco entre testes. Por isso o reset do banco (Respawn) roda **uma vez por fixture** (no `[OneTimeSetUp]`), não por teste. Ao criar uma nova fixture de integração, herde de `IntegrationTestBase` ou siga esse mesmo padrão — **nunca** adicione um `[SetUp]` que reseta o banco a cada teste.
 
 ## Git flow
 

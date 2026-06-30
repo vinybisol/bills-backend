@@ -14,43 +14,8 @@ namespace BillsBackend.IntegrationTests;
 /// request pipeline: JWT validation, owner isolation, split/person validation, and soft delete.
 /// </summary>
 [TestFixture]
-public sealed class BillEndpointTests
+public sealed class BillEndpointTests : IntegrationTestBase
 {
-    private CustomWebApplicationFactory _factory = null!;
-    private HttpClient _client = null!;
-    private Respawner _respawner = null!;
-    private NpgsqlConnection _dbConnection = null!;
-
-    [OneTimeSetUp]
-    public async Task OneTimeSetUp()
-    {
-        _factory = new CustomWebApplicationFactory();
-        _client = _factory.CreateClient();
-
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await db.Database.MigrateAsync();
-
-        _dbConnection = new NpgsqlConnection(_factory.TestConnectionString);
-        await _dbConnection.OpenAsync();
-        _respawner = await Respawner.CreateAsync(_dbConnection, new RespawnerOptions
-        {
-            DbAdapter = DbAdapter.Postgres,
-            TablesToIgnore = ["__EFMigrationsHistory"]
-        });
-    }
-
-    [SetUp]
-    public async Task ResetDatabase() => await _respawner.ResetAsync(_dbConnection);
-
-    [OneTimeTearDown]
-    public async Task OneTimeTearDown()
-    {
-        await _dbConnection.DisposeAsync();
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
     private static string Uid(string suffix) => $"firebase-bill-{suffix}";
 
     private HttpRequestMessage Req(HttpMethod method, string url, string uid) =>
@@ -71,7 +36,7 @@ public sealed class BillEndpointTests
     private async Task<long[]> GetDefaultCategoryIdsAsync(string uid)
     {
         using var req = Req(HttpMethod.Get, "/categories", uid);
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
         Assert.That(dtos, Is.Not.Empty, "Expected seeded default categories.");
@@ -82,7 +47,7 @@ public sealed class BillEndpointTests
     private async Task<long> CreatePersonAsync(string uid, string name = "Parceiro")
     {
         using var req = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name });
-        using var resp = await _client.SendAsync(req);
+        using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var dto = await resp.Content.ReadFromJsonAsync<PersonDto>();
         return dto!.Id;
@@ -100,7 +65,7 @@ public sealed class BillEndpointTests
             new { name = "Aluguel", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 1500m, splitRatio = 1m, personId = (long?)null });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -128,7 +93,7 @@ public sealed class BillEndpointTests
             new { name, categoryId = 1L, kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -143,7 +108,7 @@ public sealed class BillEndpointTests
             new { name = "Aluguel", categoryId = 1L, kind = "recurring", defaultAmount = 500m, splitRatio = 1.5m, personId = (long?)null });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -158,7 +123,7 @@ public sealed class BillEndpointTests
             new { name = "Aluguel", categoryId = 1L, kind = "recurring", defaultAmount = 500m, splitRatio = 0.5m, personId = (long?)null });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -173,7 +138,7 @@ public sealed class BillEndpointTests
             new { name = "Aluguel", categoryId = 1L, kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)2L });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
@@ -187,7 +152,7 @@ public sealed class BillEndpointTests
         req.Content = JsonContent.Create(new { name = "Aluguel", categoryId = 1L, kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -202,7 +167,7 @@ public sealed class BillEndpointTests
             new { name = "Aluguel", categoryId = 999999L, kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -218,7 +183,7 @@ public sealed class BillEndpointTests
             new { name = "Aluguel", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 500m, splitRatio = 0.5m, personId = (long?)999999L });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -233,7 +198,7 @@ public sealed class BillEndpointTests
         using var req = Req(HttpMethod.Get, "/bills", Uid("list-empty"));
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -249,13 +214,13 @@ public sealed class BillEndpointTests
         var categoryIds = await GetDefaultCategoryIdsAsync(uid);
         using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uid,
             new { name = "Aluguel", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 1500m, splitRatio = 1m, personId = (long?)null });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         using var listReq = Req(HttpMethod.Get, "/bills", uid);
 
         // Act
-        using var listResp = await _client.SendAsync(listReq);
+        using var listResp = await Client.SendAsync(listReq);
 
         // Assert
         Assert.That(listResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -267,7 +232,7 @@ public sealed class BillEndpointTests
     [Test]
     public async Task ListBills_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await _client.GetAsync("/bills");
+        using var response = await Client.GetAsync("/bills");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -283,7 +248,7 @@ public sealed class BillEndpointTests
 
         using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uid,
             new { name = "Aluguel", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 1500m, splitRatio = 1m, personId = (long?)null });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var created = await createResp.Content.ReadFromJsonAsync<BillDto>();
         Assert.That(created, Is.Not.Null);
@@ -293,7 +258,7 @@ public sealed class BillEndpointTests
             new { name = "Carro", categoryId = categoryIds[1], kind = "one_off", defaultAmount = 800m, splitRatio = 0.5m, personId = (long?)personId });
 
         // Act
-        using var response = await _client.SendAsync(updateReq);
+        using var response = await Client.SendAsync(updateReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -317,7 +282,7 @@ public sealed class BillEndpointTests
             new { name = "Inexistente", categoryId = 1L, kind = "recurring", defaultAmount = 0m, splitRatio = 1m, personId = (long?)null });
 
         // Act
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -328,7 +293,7 @@ public sealed class BillEndpointTests
     {
         using var req = new HttpRequestMessage(HttpMethod.Put, "/bills/1");
         req.Content = JsonContent.Create(new { name = "x", categoryId = 1L, kind = "recurring", defaultAmount = 0m, splitRatio = 1m, personId = (long?)null });
-        using var response = await _client.SendAsync(req);
+        using var response = await Client.SendAsync(req);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -342,13 +307,13 @@ public sealed class BillEndpointTests
         var categoryIds = await GetDefaultCategoryIdsAsync(uid);
         using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uid,
             new { name = "ARemover", categoryId = categoryIds[0], kind = "one_off", defaultAmount = 100m, splitRatio = 1m, personId = (long?)null });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<BillDto>();
 
         using var deleteReq = Req(HttpMethod.Delete, $"/bills/{created!.Id}", uid);
 
         // Act
-        using var response = await _client.SendAsync(deleteReq);
+        using var response = await Client.SendAsync(deleteReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
@@ -362,17 +327,17 @@ public sealed class BillEndpointTests
         var categoryIds = await GetDefaultCategoryIdsAsync(uid);
         using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uid,
             new { name = "Efemera", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<BillDto>();
 
         using var deleteReq = Req(HttpMethod.Delete, $"/bills/{created!.Id}", uid);
-        using var deleteResp = await _client.SendAsync(deleteReq);
+        using var deleteResp = await Client.SendAsync(deleteReq);
         Assert.That(deleteResp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
 
         using var listReq = Req(HttpMethod.Get, "/bills", uid);
 
         // Act
-        using var listResp = await _client.SendAsync(listReq);
+        using var listResp = await Client.SendAsync(listReq);
 
         // Assert
         var body = await listResp.Content.ReadFromJsonAsync<BillDto[]>();
@@ -382,7 +347,7 @@ public sealed class BillEndpointTests
     [Test]
     public async Task DeleteBill_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await _client.DeleteAsync("/bills/1");
+        using var response = await Client.DeleteAsync("/bills/1");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -397,13 +362,13 @@ public sealed class BillEndpointTests
         var categoryIds = await GetDefaultCategoryIdsAsync(uidA);
         using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uidA,
             new { name = "SomenteA", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         using var listReq = Req(HttpMethod.Get, "/bills", uidB);
 
         // Act
-        using var listResp = await _client.SendAsync(listReq);
+        using var listResp = await Client.SendAsync(listReq);
 
         // Assert
         Assert.That(listResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -422,7 +387,7 @@ public sealed class BillEndpointTests
         var categoryIdsA = await GetDefaultCategoryIdsAsync(uidA);
         using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uidA,
             new { name = "DoA", categoryId = categoryIdsA[0], kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<BillDto>();
 
         // Provision user B (triggering their own default categories) and attempt update on A's bill
@@ -431,7 +396,7 @@ public sealed class BillEndpointTests
             new { name = "Hackeada", categoryId = categoryIdsB[0], kind = "recurring", defaultAmount = 999m, splitRatio = 1m, personId = (long?)null });
 
         // Act
-        using var response = await _client.SendAsync(updateReq);
+        using var response = await Client.SendAsync(updateReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -446,13 +411,13 @@ public sealed class BillEndpointTests
         var categoryIds = await GetDefaultCategoryIdsAsync(uidA);
         using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uidA,
             new { name = "DoA2", categoryId = categoryIds[0], kind = "one_off", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
-        using var createResp = await _client.SendAsync(createReq);
+        using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<BillDto>();
 
         using var deleteReq = Req(HttpMethod.Delete, $"/bills/{created!.Id}", uidB);
 
         // Act
-        using var response = await _client.SendAsync(deleteReq);
+        using var response = await Client.SendAsync(deleteReq);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
