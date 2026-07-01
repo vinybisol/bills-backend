@@ -104,6 +104,14 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
         return (resp, body);
     }
 
+    // Marks a bill entry's split as received via POST /api/receivables/{entryId}/mark.
+    private async Task MarkReceivedAsync(string uid, long entryId)
+    {
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/receivables/{entryId}/mark", uid, new { receivedDate = (DateOnly?)null });
+        using var resp = await Client.SendAsync(req);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
     // --- Tests ---
 
     [Test]
@@ -192,6 +200,35 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     }
 
     [Test]
+    public async Task Get_Totals_SplitsReceivableIntoPendingAndReceived()
+    {
+        // Arrange — two split bills; only one entry is marked as received
+        const int year = 2025;
+        const int month = 1;
+        var uid = Uid("totals-split");
+        var categories = await GetDefaultCategoriesAsync(uid);
+        var personId = await CreatePersonAsync(uid, name: "Esposa");
+        await CreateSplitBillAsync(uid, categories[0].Id, personId, name: "Internet", amount: 200m); // receivable 100
+        await CreateSplitBillAsync(uid, categories[0].Id, personId, name: "Streaming", amount: 100m); // receivable 50
+        await PostProjectionAsync(uid, year);
+
+        var (_, before) = await GetEntriesAsync(uid, year, month);
+        var streamingEntry = before!.Bills.Single(b => b.Name == "Streaming");
+        await MarkReceivedAsync(uid, streamingEntry.Id);
+
+        // Act
+        var (resp, body) = await GetEntriesAsync(uid, year, month);
+
+        // Assert — 50 already received (Streaming), 100 still pending (Internet); sum stays 150
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.Totals.Received, Is.EqualTo(50m));
+            Assert.That(body.Totals.Receivable, Is.EqualTo(100m));
+        });
+    }
+
+    [Test]
     public async Task Get_OwnerIsolation_DoesNotSeeOtherUsersEntries()
     {
         // Arrange — user A creates bill + income and generates a projection
@@ -267,7 +304,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
 
     private sealed record MonthTotalsResponse(
         decimal BillsPlanned, decimal BillsEffective,
-        decimal MyShare, decimal Receivable,
+        decimal MyShare, decimal Receivable, decimal Received,
         decimal IncomesPlanned, decimal IncomesEffective,
         decimal SaldoPrevisto, decimal SaldoReal);
 

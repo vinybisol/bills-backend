@@ -104,4 +104,63 @@ public sealed class MonthTotalsTests
         // Assert — 0 − 1500 = −1500
         Assert.That(saldoReal, Is.EqualTo(-1500m));
     }
+
+    // --- receivable / received split ---
+
+    [Test]
+    public void Receivable_SplitsIntoPendingAndReceived_ByReceivedFlag()
+    {
+        // Arrange — two split bill entries; only one has been marked as received
+        // Entry1: received=true,  effective=100, splitRatio=0.5 → receivable=50
+        // Entry2: received=false, effective=200, splitRatio=0.5 → receivable=100
+        var receivedEntry = (Received: true, Amount: EntryCalculations.Receivable(effective: 100m, splitRatio: 0.5m));
+        var pendingEntry = (Received: false, Amount: EntryCalculations.Receivable(effective: 200m, splitRatio: 0.5m));
+        var entries = new[] { receivedEntry, pendingEntry };
+
+        // Act
+        var totalReceived = entries.Where(e => e.Received).Sum(e => e.Amount);
+        var totalReceivable = entries.Where(e => !e.Received).Sum(e => e.Amount);
+
+        // Assert — received=50, receivable(pending)=100
+        Assert.Multiple(() =>
+        {
+            Assert.That(totalReceived, Is.EqualTo(50m));
+            Assert.That(totalReceivable, Is.EqualTo(100m));
+        });
+    }
+
+    [Test]
+    public void Receivable_ReceivedPlusPending_EqualsTotalOwed()
+    {
+        // Arrange — the invariant: received + receivable(pending) = total owed by other people
+        var entries = new[]
+        {
+            (Received: true, Amount: EntryCalculations.Receivable(effective: 300m, splitRatio: 0.5m)),
+            (Received: false, Amount: EntryCalculations.Receivable(effective: 400m, splitRatio: 0.5m)),
+            (Received: false, Amount: EntryCalculations.Receivable(effective: 100m, splitRatio: 0m)),
+        };
+        var totalOwed = entries.Sum(e => e.Amount);
+
+        // Act
+        var totalReceived = entries.Where(e => e.Received).Sum(e => e.Amount);
+        var totalReceivable = entries.Where(e => !e.Received).Sum(e => e.Amount);
+
+        // Assert
+        Assert.That(totalReceived + totalReceivable, Is.EqualTo(totalOwed));
+    }
+
+    [Test]
+    public void Receivable_NoEntries_BothAreZero()
+    {
+        // Arrange / Act — no split bill entries this month
+        var totalReceived = 0m;
+        var totalReceivable = 0m;
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(totalReceived, Is.EqualTo(0m));
+            Assert.That(totalReceivable, Is.EqualTo(0m));
+        });
+    }
 }

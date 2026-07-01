@@ -18,7 +18,7 @@ Todos exigem `Authorization: Bearer <firebase-jwt>`, exceto onde indicado. `owne
 - `POST /api/projection/{year}` → gera 12 entries por molde recorrente ativo. Idempotente. Resp: {billEntriesCreated, incomeEntriesCreated, skipped}.
 
 ## Lançamentos
-- `GET /api/entries?year=&month=` → bills[], incomes[], totals (com derivados).
+- `GET /api/entries?year=&month=` → bills[], incomes[], totals (com derivados). `totals.receivable` = a receber **pendente** (bill entries com `received=false`); `totals.received` = já recebido no mês. `received + receivable` = total a receber do mês.
 - `POST /api/entries/bill` {billId,year,month,plannedAmount} → 201 / 409 (duplicado).
 - `POST /api/entries/income` {incomeId,year,month,plannedAmount}.
 - `DELETE /api/entries/bill/{id}` → 204 se não pago; 409 se pago. `DELETE /api/entries/income/{id}` idem (received).
