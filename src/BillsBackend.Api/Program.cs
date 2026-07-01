@@ -1702,6 +1702,91 @@ app.MapGet("/api/receivables/history", async (
 })
 .RequireAuthorization();
 
+app.MapGet("/api/bills/{billId:long}/history", async (
+    long billId,
+    int? fromYear,
+    int? fromMonth,
+    int? toYear,
+    int? toMonth,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    // IgnoreQueryFilters + manual OwnerId check: the bill template may have been deactivated
+    // since some of its entries were created, but its history must still resolve.
+    var bill = await db.Bills
+        .IgnoreQueryFilters()
+        .FirstOrDefaultAsync(b => b.Id == billId && b.OwnerId == appUser.Id, ct);
+    if (bill is null)
+        return Results.NotFound();
+
+    var category = await db.Categories
+        .IgnoreQueryFilters()
+        .FirstAsync(c => c.Id == bill.CategoryId && c.OwnerId == appUser.Id, ct);
+
+    var person = bill.PersonId.HasValue
+        ? await db.Persons
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.Id == bill.PersonId.Value && p.OwnerId == appUser.Id, ct)
+        : null;
+
+    var entries = await db.BillEntries
+        .Where(e => e.BillId == billId)
+        .ToListAsync(ct);
+
+    if (fromYear.HasValue && fromMonth.HasValue)
+    {
+        entries = entries
+            .Where(e => EntryCalculations.IsInForwardRange(e.RefYear, e.RefMonth, fromYear.Value, fromMonth.Value))
+            .ToList();
+    }
+
+    if (toYear.HasValue && toMonth.HasValue)
+    {
+        // Reuses IsInForwardRange the other way round: "entry at or before (toYear, toMonth)".
+        entries = entries
+            .Where(e => EntryCalculations.IsInForwardRange(toYear.Value, toMonth.Value, e.RefYear, e.RefMonth))
+            .ToList();
+    }
+
+    var ordered = entries.OrderBy(e => e.RefYear).ThenBy(e => e.RefMonth).ToList();
+
+    var items = new List<BillHistoryItemDto>(ordered.Count);
+    decimal? previousEffective = null;
+    foreach (var e in ordered)
+    {
+        var effective = EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount);
+        var myShare = EntryCalculations.MyShare(effective, e.SplitRatioSnapshot);
+        var variation = EntryCalculations.ComputeVariation(effective, previousEffective);
+
+        items.Add(new BillHistoryItemDto(
+            e.RefYear, e.RefMonth, e.PlannedAmount, e.ActualAmount, effective, myShare,
+            e.Paid, e.PaidDate,
+            variation is null ? null : new BillHistoryVariationDto(variation.Value.Abs, variation.Value.Pct)));
+
+        previousEffective = effective;
+    }
+
+    var summary = new BillHistorySummaryDto(
+        items.Count > 0 ? items.Average(i => i.Effective) : 0m,
+        items.Count > 0 ? items.Min(i => i.Effective) : 0m,
+        items.Count > 0 ? items.Max(i => i.Effective) : 0m,
+        items.Where(i => i.Paid).Sum(i => i.MyShare));
+
+    return Results.Ok(new BillHistoryDto(
+        bill.Id, bill.Name, category.Name, bill.SplitRatio, person?.Name, summary, items));
+})
+.RequireAuthorization();
+
 await app.RunAsync();
 
 // Maps a BillEntry domain object to the shared entry DTO used by pay/unpay/patch endpoints.
@@ -2061,6 +2146,48 @@ internal sealed record ReceivablesHistoryTotalsDto(decimal TotalDevido, decimal 
 /// <param name="Items">Item-level rows, ordered by year then month descending (most recent first).</param>
 internal sealed record ReceivablesHistoryDto(
     long PersonId, string Name, ReceivablesHistoryTotalsDto Totals, IReadOnlyList<ReceivablesHistoryItemDto> Items);
+
+/// <summary>The period-over-period variation for a single item in <c>GET /api/bills/{billId}/history</c>.</summary>
+/// <param name="Abs">Absolute change in <see cref="BillHistoryItemDto.Effective"/> vs. the previous item.</param>
+/// <param name="Pct">
+/// Percentage change vs. the previous item, or <see langword="null"/> when the previous
+/// effective amount was zero.
+/// </param>
+internal sealed record BillHistoryVariationDto(decimal Abs, decimal? Pct);
+
+/// <summary>A single monthly item returned by <c>GET /api/bills/{billId}/history</c>.</summary>
+/// <param name="Year">The entry's reference year.</param>
+/// <param name="Month">The entry's reference month (1–12).</param>
+/// <param name="PlannedAmount">The planned amount snapshotted for this month.</param>
+/// <param name="ActualAmount">The actual amount, or <see langword="null"/> if not yet confirmed.</param>
+/// <param name="Effective">Actual amount when present, otherwise planned.</param>
+/// <param name="MyShare">The owner's share of <see cref="Effective"/>, using the split ratio snapshotted at projection time.</param>
+/// <param name="Paid">Whether the owner has paid this expense.</param>
+/// <param name="PaidDate">The UTC instant the expense was paid, or <see langword="null"/>.</param>
+/// <param name="Variation">The change vs. the previous item in chronological order, or <see langword="null"/> for the first item.</param>
+internal sealed record BillHistoryItemDto(
+    int Year, int Month, decimal PlannedAmount, decimal? ActualAmount, decimal Effective, decimal MyShare,
+    bool Paid, DateTimeOffset? PaidDate, BillHistoryVariationDto? Variation);
+
+/// <summary>Aggregated totals returned by <c>GET /api/bills/{billId}/history</c>, computed over the filtered slice.</summary>
+/// <param name="AvgEffective">The average <see cref="BillHistoryItemDto.Effective"/> across items; zero when there are none.</param>
+/// <param name="MinEffective">The minimum <see cref="BillHistoryItemDto.Effective"/> across items; zero when there are none.</param>
+/// <param name="MaxEffective">The maximum <see cref="BillHistoryItemDto.Effective"/> across items; zero when there are none.</param>
+/// <param name="TotalPaidMyShare">The sum of <see cref="BillHistoryItemDto.MyShare"/> across paid items only.</param>
+internal sealed record BillHistorySummaryDto(
+    decimal AvgEffective, decimal MinEffective, decimal MaxEffective, decimal TotalPaidMyShare);
+
+/// <summary>The complete response returned by <c>GET /api/bills/{billId}/history</c>.</summary>
+/// <param name="BillId">The requested bill template's id.</param>
+/// <param name="Name">The bill template's display name.</param>
+/// <param name="Category">The bill's category display name.</param>
+/// <param name="SplitRatio">The bill template's current split ratio (not a per-entry snapshot).</param>
+/// <param name="Person">The name of the person who owes the split, or <see langword="null"/> when the bill is not shared.</param>
+/// <param name="Summary">Aggregates computed over whatever period filter was applied.</param>
+/// <param name="Items">Item-level rows, ordered by year then month ascending (chronological).</param>
+internal sealed record BillHistoryDto(
+    long BillId, string Name, string Category, decimal SplitRatio, string? Person,
+    BillHistorySummaryDto Summary, IReadOnlyList<BillHistoryItemDto> Items);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API
