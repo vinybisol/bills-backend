@@ -191,4 +191,16 @@ public sealed class BillEntry
         Received = true;
         ReceivedDate = receivedAt;
     }
+
+    /// <summary>
+    /// Reverses a prior <see cref="MarkReceived"/> call, clearing <see cref="Received"/> and
+    /// <see cref="ReceivedDate"/>. Does not touch <see cref="Paid"/> or <see cref="PaidDate"/>:
+    /// those track the independent fact that the owner paid the bill, whereas
+    /// <see cref="Received"/> tracks whether the other person paid back their split.
+    /// </summary>
+    public void UnmarkReceived()
+    {
+        Received = false;
+        ReceivedDate = null;
+    }
 }
