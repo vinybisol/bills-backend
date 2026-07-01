@@ -58,15 +58,18 @@ Cada teste usa um `firebase_uid` (e portanto um `owner_id`) **distinto**; o filt
 10. Após o PR ser aprovado e mergeado, a issue é fechada.
 11. Pegue a próxima issue e repita.
 
-## Regras de domínio (resumo — ver escopo e schema completos)
+## Invariantes de domínio (NUNCA violar)
 
-- `owner_id` em todo o domínio é FK para `app_user.id` (BIGINT interno), **nunca** o uid do Firebase.
+- `owner_id` em todo o domínio é FK para `app_user.id` (BIGINT interno), **nunca** o uid do Firebase. Filtro global por `owner_id` nas queries; nunca cruzar dados entre usuários.
 - `firebase_uid` fica isolado em `app_user`; nunca vaza para o domínio.
 - `app_user` é provisionado just-in-time no primeiro login, não por CRUD.
-- Lançamentos (`bill_entry`/`income_entry`) carregam **snapshot** de `planned_amount` e `split_ratio` — nunca FK para o valor do molde. Isso garante a imutabilidade.
-- Recálculo de reajuste só afeta meses **não pagos** a partir do mês informado; passado pago é congelado.
+- Lançamentos (`bill_entry`/`income_entry`) carregam **snapshot** de `planned_amount` e `split_ratio_snapshot` — nunca FK para o valor do molde. Isso garante a imutabilidade.
+- Lançamento **pago/recebido é congelado**: não editar `planned_amount`/`actual_amount`/`split_ratio_snapshot`. Só a ação dedicada unpay/unreceive descongela. Editar congelado → 409.
+- Recálculo de reajuste só afeta lançamentos **não pagos** do mês informado em diante; passado pago é congelado.
 - "A receber" vive dentro do `bill_entry` (campos `person_id`, `received`, `received_date`), sem entidade separada.
-- `split_ratio` é a fração que é **minha**: 1.0 = só minha, 0.5 = dividida, 0.0 = passa por mim.
+- `bill_entry.paid` (eu paguei) ≠ `bill_entry.received` (a pessoa me pagou de volta). Independentes.
+- `split_ratio` é a fração que é **minha**: 1.0 = só minha, 0.5 = dividida, 0.0 = passa por mim. `split < 1` exige `person_id`; `= 1` proíbe.
+- Moldes usam **soft delete** (`active=false`), nunca exclusão física.
 
 ## Convenções
 
@@ -91,3 +94,10 @@ dotnet test
 **Alternativa — Neon:** aponte `ConnectionStrings:NeonTest` para um banco de teste no Neon (formato URI, com SSL).
 
 No **CI**, os testes rodam contra um **service container** de PostgreSQL (ver `.github/workflows/ci.yml`) — sem segredo externo nem custo adicional.
+
+## Documentação (ler sob demanda)
+
+- `docs/dominio.md` — conceitos, regras e fluxos completos.
+- `docs/schema.md` — tabelas, colunas, constraints (SQL completo em `docs/schema.sql`).
+- `docs/api.md` — endpoints e contratos.
+- `docs/decisoes.md` — por que cada decisão de arquitetura.
