@@ -850,7 +850,10 @@ app.MapGet("/api/entries", async (
     var billsPlanned = billDtos.Sum(d => d.PlannedAmount);
     var billsEffective = billDtos.Sum(d => d.EffectiveAmount);
     var totalMyShare = billDtos.Sum(d => d.MyShare);
-    var totalReceivable = billDtos.Sum(d => d.Receivable);
+    // Receivable is split between what's still pending and what has already been received;
+    // pending + received always equals the total split amount owed by other people.
+    var totalReceivable = billDtos.Where(d => !d.Received).Sum(d => d.Receivable);
+    var totalReceived = billDtos.Where(d => d.Received).Sum(d => d.Receivable);
     var incomesPlanned = incomeDtos.Sum(d => d.PlannedAmount);
     var incomesEffective = incomeDtos.Sum(d => d.EffectiveAmount);
 
@@ -862,7 +865,7 @@ app.MapGet("/api/entries", async (
         - billDtos.Where(d => d.Paid).Sum(d => d.MyShare);
 
     var totals = new MonthTotalsDto(
-        billsPlanned, billsEffective, totalMyShare, totalReceivable,
+        billsPlanned, billsEffective, totalMyShare, totalReceivable, totalReceived,
         incomesPlanned, incomesEffective, saldoPrevisto, saldoReal);
 
     return Results.Ok(new MonthEntriesDto(year.Value, month.Value, billDtos, incomeDtos, totals));
@@ -1929,7 +1932,13 @@ internal sealed record IncomeEntryDto(long Id, long IncomeId, string Name,
 /// <param name="BillsPlanned">Sum of all bill entry planned amounts.</param>
 /// <param name="BillsEffective">Sum of all bill entry effective amounts.</param>
 /// <param name="MyShare">Sum of the owner's share across all bill entries.</param>
-/// <param name="Receivable">Sum of the other person's share across all bill entries.</param>
+/// <param name="Receivable">
+/// Sum of the other person's share across bill entries not yet marked as received (pending only).
+/// </param>
+/// <param name="Received">
+/// Sum of the other person's share across bill entries already marked as received.
+/// <c>Received + Receivable</c> equals the total split amount owed by other people this month.
+/// </param>
 /// <param name="IncomesPlanned">Sum of all income entry planned amounts.</param>
 /// <param name="IncomesEffective">Sum of all income entry effective amounts.</param>
 /// <param name="SaldoPrevisto">
@@ -1939,7 +1948,7 @@ internal sealed record IncomeEntryDto(long Id, long IncomeId, string Name,
 /// Realised net balance: Σ(effective amount for received incomes) − Σ(my share for paid bills).
 /// </param>
 internal sealed record MonthTotalsDto(decimal BillsPlanned, decimal BillsEffective,
-    decimal MyShare, decimal Receivable,
+    decimal MyShare, decimal Receivable, decimal Received,
     decimal IncomesPlanned, decimal IncomesEffective,
     decimal SaldoPrevisto, decimal SaldoReal);
 
