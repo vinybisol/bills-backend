@@ -1325,6 +1325,383 @@ app.MapGet("/api/dashboard/month", async (
 })
 .RequireAuthorization();
 
+// --- Dashboard year endpoint ---
+
+// Returns a year-level dashboard: 12 always-present month summaries, a whole-year per-category
+// breakdown of the owner's share, and grand totals. Mirrors GET /api/dashboard/month's
+// enrichment approach (IgnoreQueryFilters scoped by OwnerId), but fetches the whole year once
+// and aggregates per month and per category from the same in-memory sets.
+app.MapGet("/api/dashboard/year", async (
+    int? year,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    if (year is null || year < 2000 || year > 2100)
+        return Results.BadRequest("year is required and must be between 2000 and 2100.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    // Fetch the whole year once; the global query filter already scopes BillEntries/IncomeEntries
+    // to the current owner.
+    var billEntries = await db.BillEntries
+        .Where(e => e.RefYear == year.Value)
+        .ToListAsync(ct);
+
+    var incomeEntries = await db.IncomeEntries
+        .Where(e => e.RefYear == year.Value)
+        .ToListAsync(ct);
+
+    // Resolve bill -> category via IgnoreQueryFilters lookups, scoped manually by OwnerId,
+    // since a bill/category template referenced by an entry may since have been deactivated.
+    var billIds = billEntries.Select(e => e.BillId).ToHashSet();
+    var billsById = billIds.Count > 0
+        ? await db.Bills
+            .IgnoreQueryFilters()
+            .Where(b => b.OwnerId == appUser.Id && billIds.Contains(b.Id))
+            .ToDictionaryAsync(b => b.Id, ct)
+        : new Dictionary<long, Bill>();
+
+    var categoryIds = billsById.Values.Select(b => b.CategoryId).ToHashSet();
+    var categoriesById = categoryIds.Count > 0
+        ? await db.Categories
+            .IgnoreQueryFilters()
+            .Where(c => c.OwnerId == appUser.Id && categoryIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, ct)
+        : new Dictionary<long, Category>();
+
+    // Build the 12 always-present month summaries (month 1..12, zeroed when no data).
+    var billEntriesByMonth = billEntries.ToLookup(e => e.RefMonth);
+    var incomeEntriesByMonth = incomeEntries.ToLookup(e => e.RefMonth);
+
+    var months = Enumerable.Range(1, 12)
+        .Select(m =>
+        {
+            var monthBills = billEntriesByMonth[m];
+            var monthIncomes = incomeEntriesByMonth[m];
+
+            var plannedExpense = monthBills.Sum(e => EntryCalculations.MyShare(e.PlannedAmount, e.SplitRatioSnapshot));
+            var actualExpense = monthBills
+                .Where(e => e.Paid)
+                .Sum(e => EntryCalculations.MyShare(
+                    EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount),
+                    e.SplitRatioSnapshot));
+
+            var plannedIncome = monthIncomes.Sum(e => e.PlannedAmount);
+            var actualIncome = monthIncomes
+                .Where(e => e.Received)
+                .Sum(e => EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount));
+
+            return new DashboardMonthSummaryDto(
+                m, plannedExpense, actualExpense, plannedIncome, actualIncome,
+                plannedIncome - plannedExpense, actualIncome - actualExpense);
+        })
+        .ToList();
+
+    // Per-category totals across the whole year; categories with no bill entries are omitted.
+    var byCategory = billEntries
+        .GroupBy(e => billsById[e.BillId].CategoryId)
+        .Select(g =>
+        {
+            var plannedMyShare = g.Sum(e => EntryCalculations.MyShare(e.PlannedAmount, e.SplitRatioSnapshot));
+            var actualMyShare = g
+                .Where(e => e.Paid)
+                .Sum(e => EntryCalculations.MyShare(
+                    EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount),
+                    e.SplitRatioSnapshot));
+
+            return new DashboardCategoryYearDto(g.Key, categoriesById[g.Key].Name, plannedMyShare, actualMyShare);
+        })
+        .OrderByDescending(d => d.PlannedMyShare)
+        .ToList();
+
+    var totals = new DashboardYearTotalsDto(
+        months.Sum(m => m.PlannedExpense), months.Sum(m => m.ActualExpense),
+        months.Sum(m => m.PlannedIncome), months.Sum(m => m.ActualIncome),
+        months.Sum(m => m.SaldoPrevisto), months.Sum(m => m.SaldoReal));
+
+    return Results.Ok(new DashboardYearDto(year.Value, months, byCategory, totals));
+})
+.RequireAuthorization();
+
+// --- Receivables month endpoint ---
+
+// Returns a per-person panel of "a receber" (receivable) amounts for the given month: only
+// BillEntry rows with a split (SplitRatioSnapshot < 1) and an assigned person are relevant.
+// Mirrors GET /api/entries's enrichment approach for bill/person name resolution.
+app.MapGet("/api/receivables/month", async (
+    int? year,
+    int? month,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    if (year is null || month is null || month < 1 || month > 12)
+        return Results.BadRequest("year and month are required; month must be between 1 and 12.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entries = await db.BillEntries
+        .Where(e => e.RefYear == year.Value && e.RefMonth == month.Value &&
+                    e.SplitRatioSnapshot < 1 && e.PersonId != null)
+        .ToListAsync(ct);
+
+    var billIds = entries.Select(e => e.BillId).ToHashSet();
+    var billsById = billIds.Count > 0
+        ? await db.Bills
+            .IgnoreQueryFilters()
+            .Where(b => b.OwnerId == appUser.Id && billIds.Contains(b.Id))
+            .ToDictionaryAsync(b => b.Id, ct)
+        : new Dictionary<long, Bill>();
+
+    var personIds = entries.Select(e => e.PersonId!.Value).ToHashSet();
+    var personsById = personIds.Count > 0
+        ? await db.Persons
+            .IgnoreQueryFilters()
+            .Where(p => p.OwnerId == appUser.Id && personIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, ct)
+        : new Dictionary<long, Person>();
+
+    var byPerson = entries
+        .GroupBy(e => e.PersonId!.Value)
+        .Select(g =>
+        {
+            var items = g
+                .OrderBy(e => e.Id)
+                .Select(e => new ReceivableItemDto(
+                    e.Id, billsById[e.BillId].Name,
+                    EntryCalculations.Receivable(
+                        EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot),
+                    e.Received))
+                .ToList();
+
+            var totalDevido = items.Sum(i => i.Receivable);
+            var jaRecebido = items.Where(i => i.Received).Sum(i => i.Receivable);
+            var pendente = items.Where(i => !i.Received).Sum(i => i.Receivable);
+
+            return new PersonReceivablesDto(g.Key, personsById[g.Key].Name, totalDevido, jaRecebido, pendente, items);
+        })
+        .OrderBy(p => p.Name)
+        .ToList();
+
+    var totalPendenteGeral = byPerson.Sum(p => p.Pendente);
+
+    return Results.Ok(new ReceivablesMonthDto(year.Value, month.Value, byPerson, totalPendenteGeral));
+})
+.RequireAuthorization();
+
+// Marks the split portion of a bill entry as received from the other person. Idempotent —
+// marking an already-received entry again simply re-applies the same received date. Never
+// touches Paid/PaidDate, which track the independent fact that the owner paid the bill.
+app.MapPost("/api/receivables/{entryId:long}/mark", async (
+    long entryId,
+    MarkReceivableRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == entryId, ct);
+    if (entry is null)
+        return Results.NotFound();
+
+    if (entry.SplitRatioSnapshot == 1)
+        return Results.BadRequest("This entry has no split; it is not a receivable.");
+
+    var receivedAt = req.ReceivedDate.HasValue
+        ? new DateTimeOffset(req.ReceivedDate.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
+        : timeProvider.GetUtcNow();
+
+    entry.MarkReceived(receivedAt);
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(ToBillEntryDto(entry));
+})
+.RequireAuthorization();
+
+// Reverses a prior mark-as-received. Never touches Paid/PaidDate.
+app.MapPost("/api/receivables/{entryId:long}/unmark", async (
+    long entryId,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == entryId, ct);
+    if (entry is null)
+        return Results.NotFound();
+
+    entry.UnmarkReceived();
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(ToBillEntryDto(entry));
+})
+.RequireAuthorization();
+
+// Marks several bill entries as received in one transaction. All-or-nothing: every id must
+// exist, belong to the caller (the BillEntries query filter already scopes reads to the
+// current owner, so a foreign/unknown id is simply absent from the fetched set), and be an
+// actual receivable (SplitRatioSnapshot < 1). If any id fails these checks, nothing is marked.
+app.MapPost("/api/receivables/mark-batch", async (
+    MarkBatchRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    TimeProvider timeProvider,
+    CancellationToken ct) =>
+{
+    if (req.EntryIds is null || req.EntryIds.Count == 0)
+        return Results.BadRequest("EntryIds must contain at least one id.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var entryIds = req.EntryIds.ToHashSet();
+    var entries = await db.BillEntries
+        .Where(e => entryIds.Contains(e.Id))
+        .ToListAsync(ct);
+
+    if (entries.Count != entryIds.Count || entries.Any(e => e.SplitRatioSnapshot == 1))
+        return Results.BadRequest("One or more entries are invalid, not owned by you, or not a receivable.");
+
+    var receivedAt = req.ReceivedDate.HasValue
+        ? new DateTimeOffset(req.ReceivedDate.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
+        : timeProvider.GetUtcNow();
+
+    await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+    foreach (var entry in entries)
+        entry.MarkReceived(receivedAt);
+
+    await db.SaveChangesAsync(ct);
+    await tx.CommitAsync(ct);
+
+    return Results.Ok(new MarkBatchResponse(entries.Count));
+})
+.RequireAuthorization();
+
+// --- Receivables history endpoint ---
+
+// Returns the receivable history for a single person: item-level rows plus aggregates computed
+// over whatever period/status filter was applied. personId must belong to the caller — Persons
+// is already owner-filtered, so a null lookup naturally covers "not found" and "not yours" alike.
+app.MapGet("/api/receivables/history", async (
+    long? personId,
+    int? fromYear,
+    int? fromMonth,
+    int? toYear,
+    int? toMonth,
+    string? status,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    if (personId is null)
+        return Results.BadRequest("personId is required.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    var person = await db.Persons.FirstOrDefaultAsync(p => p.Id == personId.Value, ct);
+    if (person is null)
+        return Results.NotFound();
+
+    var entries = await db.BillEntries
+        .Where(e => e.PersonId == personId.Value && e.SplitRatioSnapshot < 1)
+        .ToListAsync(ct);
+
+    if (fromYear.HasValue && fromMonth.HasValue)
+    {
+        entries = entries
+            .Where(e => EntryCalculations.IsInForwardRange(e.RefYear, e.RefMonth, fromYear.Value, fromMonth.Value))
+            .ToList();
+    }
+
+    if (toYear.HasValue && toMonth.HasValue)
+    {
+        // Reuses IsInForwardRange the other way round: "entry is at or before (toYear, toMonth)".
+        entries = entries
+            .Where(e => EntryCalculations.IsInForwardRange(toYear.Value, toMonth.Value, e.RefYear, e.RefMonth))
+            .ToList();
+    }
+
+    // Anything other than "received"/"pending" (including a missing or unrecognized value) is
+    // treated as "all" — the simplest, most defensive default that never rejects a valid request.
+    entries = status switch
+    {
+        "received" => entries.Where(e => e.Received).ToList(),
+        "pending" => entries.Where(e => !e.Received).ToList(),
+        _ => entries,
+    };
+
+    var billIds = entries.Select(e => e.BillId).ToHashSet();
+    var billsById = billIds.Count > 0
+        ? await db.Bills
+            .IgnoreQueryFilters()
+            .Where(b => b.OwnerId == appUser.Id && billIds.Contains(b.Id))
+            .ToDictionaryAsync(b => b.Id, ct)
+        : new Dictionary<long, Bill>();
+
+    var items = entries
+        .Select(e => new ReceivablesHistoryItemDto(
+            e.Id, billsById[e.BillId].Name, e.RefYear, e.RefMonth,
+            EntryCalculations.Receivable(
+                EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot),
+            e.Received, e.ReceivedDate))
+        .OrderByDescending(i => i.Year)
+        .ThenByDescending(i => i.Month)
+        .ToList();
+
+    var totalDevido = items.Sum(i => i.Receivable);
+    var totalRecebido = items.Where(i => i.Received).Sum(i => i.Receivable);
+    var totalPendente = items.Where(i => !i.Received).Sum(i => i.Receivable);
+
+    var totals = new ReceivablesHistoryTotalsDto(totalDevido, totalRecebido, totalPendente);
+
+    return Results.Ok(new ReceivablesHistoryDto(person.Id, person.Name, totals, items));
+})
+.RequireAuthorization();
+
 await app.RunAsync();
 
 // Maps a BillEntry domain object to the shared entry DTO used by pay/unpay/patch endpoints.
@@ -1578,6 +1955,112 @@ internal sealed record DashboardSummaryDto(
 /// <param name="Summary">Aggregated totals for the month.</param>
 /// <param name="ByCategory">Per-category breakdown, ordered by <see cref="DashboardCategoryDto.PlannedMyShare"/> descending. Categories with no bill entries in the month are omitted.</param>
 internal sealed record DashboardMonthDto(int Year, int Month, DashboardSummaryDto Summary, IReadOnlyList<DashboardCategoryDto> ByCategory);
+
+/// <summary>A single month's summary row within <c>GET /api/dashboard/year</c>.</summary>
+/// <param name="Month">The month (1–12).</param>
+/// <param name="PlannedExpense">Sum of the owner's share of planned amounts across all bill entries in the month.</param>
+/// <param name="ActualExpense">Sum of the owner's share of effective amounts across paid bill entries only.</param>
+/// <param name="PlannedIncome">Sum of planned amounts across all income entries in the month.</param>
+/// <param name="ActualIncome">Sum of effective amounts across received income entries only.</param>
+/// <param name="SaldoPrevisto"><see cref="PlannedIncome"/> minus <see cref="PlannedExpense"/>.</param>
+/// <param name="SaldoReal"><see cref="ActualIncome"/> minus <see cref="ActualExpense"/>.</param>
+internal sealed record DashboardMonthSummaryDto(
+    int Month, decimal PlannedExpense, decimal ActualExpense,
+    decimal PlannedIncome, decimal ActualIncome, decimal SaldoPrevisto, decimal SaldoReal);
+
+/// <summary>The per-category breakdown row returned by <c>GET /api/dashboard/year</c>, totalled over the whole year.</summary>
+/// <param name="CategoryId">The category id.</param>
+/// <param name="Category">The category display name.</param>
+/// <param name="PlannedMyShare">Sum of (planned amount × split ratio) over the whole year, regardless of paid status.</param>
+/// <param name="ActualMyShare">Sum of (effective amount × split ratio) over only the paid bill entries in the year.</param>
+internal sealed record DashboardCategoryYearDto(long CategoryId, string Category, decimal PlannedMyShare, decimal ActualMyShare);
+
+/// <summary>Aggregated year-level totals returned by <c>GET /api/dashboard/year</c> — the sum of the 12 months.</summary>
+/// <param name="PlannedExpense">Sum of <see cref="DashboardMonthSummaryDto.PlannedExpense"/> across the 12 months.</param>
+/// <param name="ActualExpense">Sum of <see cref="DashboardMonthSummaryDto.ActualExpense"/> across the 12 months.</param>
+/// <param name="PlannedIncome">Sum of <see cref="DashboardMonthSummaryDto.PlannedIncome"/> across the 12 months.</param>
+/// <param name="ActualIncome">Sum of <see cref="DashboardMonthSummaryDto.ActualIncome"/> across the 12 months.</param>
+/// <param name="SaldoPrevisto"><see cref="PlannedIncome"/> minus <see cref="PlannedExpense"/>.</param>
+/// <param name="SaldoReal"><see cref="ActualIncome"/> minus <see cref="ActualExpense"/>.</param>
+internal sealed record DashboardYearTotalsDto(
+    decimal PlannedExpense, decimal ActualExpense,
+    decimal PlannedIncome, decimal ActualIncome, decimal SaldoPrevisto, decimal SaldoReal);
+
+/// <summary>The complete response returned by <c>GET /api/dashboard/year</c>.</summary>
+/// <param name="Year">The requested year.</param>
+/// <param name="Months">Always exactly 12 entries (month 1–12); months with no data are zeroed rather than omitted.</param>
+/// <param name="ByCategory">
+/// Whole-year per-category totals, ordered by <see cref="DashboardCategoryYearDto.PlannedMyShare"/> descending.
+/// Categories with no bill entries in the year are omitted.
+/// </param>
+/// <param name="Totals">Grand totals for the year — the sum of the 12 months.</param>
+internal sealed record DashboardYearDto(
+    int Year, IReadOnlyList<DashboardMonthSummaryDto> Months,
+    IReadOnlyList<DashboardCategoryYearDto> ByCategory, DashboardYearTotalsDto Totals);
+
+/// <summary>A single bill entry row within a person's panel in <c>GET /api/receivables/month</c>.</summary>
+/// <param name="EntryId">The bill entry id.</param>
+/// <param name="Bill">The bill's display name (resolved even if the bill template was since deactivated).</param>
+/// <param name="Receivable">The amount owed to the owner: effective amount × (1 − split ratio).</param>
+/// <param name="Received">Whether this split portion has already been received.</param>
+internal sealed record ReceivableItemDto(long EntryId, string Bill, decimal Receivable, bool Received);
+
+/// <summary>A single person's row in the <c>GET /api/receivables/month</c> panel.</summary>
+/// <param name="PersonId">The person id.</param>
+/// <param name="Name">The person's display name.</param>
+/// <param name="TotalDevido">Sum of <see cref="Receivable"/> across all of this person's entries in the month.</param>
+/// <param name="JaRecebido">Sum of <see cref="Receivable"/> across entries already marked received.</param>
+/// <param name="Pendente">Sum of <see cref="Receivable"/> across entries not yet received.</param>
+/// <param name="Items">The individual bill entries owed by this person.</param>
+internal sealed record PersonReceivablesDto(
+    long PersonId, string Name, decimal TotalDevido, decimal JaRecebido, decimal Pendente,
+    IReadOnlyList<ReceivableItemDto> Items);
+
+/// <summary>The complete response returned by <c>GET /api/receivables/month</c>.</summary>
+/// <param name="Year">The requested year.</param>
+/// <param name="Month">The requested month (1–12).</param>
+/// <param name="ByPerson">One row per person with at least one receivable entry in the month, ordered by name.</param>
+/// <param name="TotalPendenteGeral">Sum of <see cref="PersonReceivablesDto.Pendente"/> across all people.</param>
+internal sealed record ReceivablesMonthDto(
+    int Year, int Month, IReadOnlyList<PersonReceivablesDto> ByPerson, decimal TotalPendenteGeral);
+
+/// <summary>The request body for <c>POST /api/receivables/{entryId}/mark</c>.</summary>
+/// <param name="ReceivedDate">The date the split was received, or <see langword="null"/> to use the current instant.</param>
+internal sealed record MarkReceivableRequest(DateOnly? ReceivedDate);
+
+/// <summary>The request body for <c>POST /api/receivables/mark-batch</c>.</summary>
+/// <param name="EntryIds">The bill entry ids to mark as received; must all be valid receivables owned by the caller.</param>
+/// <param name="ReceivedDate">The date the split was received, or <see langword="null"/> to use the current instant.</param>
+internal sealed record MarkBatchRequest(IReadOnlyList<long> EntryIds, DateOnly? ReceivedDate);
+
+/// <summary>The response returned by <c>POST /api/receivables/mark-batch</c>.</summary>
+/// <param name="Marked">The number of entries marked as received.</param>
+internal sealed record MarkBatchResponse(int Marked);
+
+/// <summary>A single item row returned by <c>GET /api/receivables/history</c>.</summary>
+/// <param name="EntryId">The bill entry id.</param>
+/// <param name="Bill">The bill's display name (resolved even if the bill template was since deactivated).</param>
+/// <param name="Year">The entry's reference year.</param>
+/// <param name="Month">The entry's reference month (1–12).</param>
+/// <param name="Receivable">The amount owed to the owner: effective amount × (1 − split ratio).</param>
+/// <param name="Received">Whether this split portion has already been received.</param>
+/// <param name="ReceivedDate">The UTC instant the split was received, or <see langword="null"/>.</param>
+internal sealed record ReceivablesHistoryItemDto(
+    long EntryId, string Bill, int Year, int Month, decimal Receivable, bool Received, DateTimeOffset? ReceivedDate);
+
+/// <summary>Aggregated totals returned by <c>GET /api/receivables/history</c>, computed over the filtered slice.</summary>
+/// <param name="TotalDevido">Sum of <see cref="ReceivablesHistoryItemDto.Receivable"/> across the filtered items.</param>
+/// <param name="TotalRecebido">Sum of <see cref="ReceivablesHistoryItemDto.Receivable"/> across received items only.</param>
+/// <param name="TotalPendente">Sum of <see cref="ReceivablesHistoryItemDto.Receivable"/> across pending items only.</param>
+internal sealed record ReceivablesHistoryTotalsDto(decimal TotalDevido, decimal TotalRecebido, decimal TotalPendente);
+
+/// <summary>The complete response returned by <c>GET /api/receivables/history</c>.</summary>
+/// <param name="PersonId">The requested person's id.</param>
+/// <param name="Name">The person's display name.</param>
+/// <param name="Totals">Aggregates computed over whatever period/status filter was applied.</param>
+/// <param name="Items">Item-level rows, ordered by year then month descending (most recent first).</param>
+internal sealed record ReceivablesHistoryDto(
+    long PersonId, string Name, ReceivablesHistoryTotalsDto Totals, IReadOnlyList<ReceivablesHistoryItemDto> Items);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API
