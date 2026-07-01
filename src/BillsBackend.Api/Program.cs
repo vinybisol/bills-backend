@@ -1233,6 +1233,98 @@ app.MapPost("/api/entries/income/{id:long}/unreceive", async (
 })
 .RequireAuthorization();
 
+// --- Dashboard endpoints ---
+
+// Returns a month-level dashboard: aggregated summary totals plus a per-category breakdown of
+// the owner's share. Mirrors GET /api/entries's enrichment approach — bill/category lookups use
+// IgnoreQueryFilters (scoped manually by OwnerId) so entries whose bill/category template has
+// since been deactivated still resolve.
+app.MapGet("/api/dashboard/month", async (
+    int? year,
+    int? month,
+    System.Security.Claims.ClaimsPrincipal user,
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner,
+    AppDbContext db,
+    CancellationToken ct) =>
+{
+    if (year is null || month is null || month < 1 || month > 12)
+        return Results.BadRequest("year and month are required; month must be between 1 and 12.");
+
+    var firebaseUid = user.GetFirebaseUid();
+    if (string.IsNullOrWhiteSpace(firebaseUid))
+        return Results.Unauthorized();
+
+    var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
+    currentOwner.Id = appUser.Id;
+
+    // Fetch entries for the requested month. The global query filter already scopes
+    // BillEntries/IncomeEntries to the current owner.
+    var billEntries = await db.BillEntries
+        .Where(e => e.RefYear == year.Value && e.RefMonth == month.Value)
+        .ToListAsync(ct);
+
+    var incomeEntries = await db.IncomeEntries
+        .Where(e => e.RefYear == year.Value && e.RefMonth == month.Value)
+        .ToListAsync(ct);
+
+    // Resolve bill -> category via IgnoreQueryFilters lookups, scoped manually by OwnerId,
+    // since a bill/category template referenced by an entry may since have been deactivated.
+    var billIds = billEntries.Select(e => e.BillId).ToHashSet();
+    var billsById = billIds.Count > 0
+        ? await db.Bills
+            .IgnoreQueryFilters()
+            .Where(b => b.OwnerId == appUser.Id && billIds.Contains(b.Id))
+            .ToDictionaryAsync(b => b.Id, ct)
+        : new Dictionary<long, Bill>();
+
+    var categoryIds = billsById.Values.Select(b => b.CategoryId).ToHashSet();
+    var categoriesById = categoryIds.Count > 0
+        ? await db.Categories
+            .IgnoreQueryFilters()
+            .Where(c => c.OwnerId == appUser.Id && categoryIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, ct)
+        : new Dictionary<long, Category>();
+
+    // Group bill entries by category: plannedMyShare over all entries, actualMyShare over paid
+    // entries only. Ordered by plannedMyShare descending; categories with no entries are absent.
+    var byCategory = billEntries
+        .GroupBy(e => billsById[e.BillId].CategoryId)
+        .Select(g =>
+        {
+            var plannedMyShare = g.Sum(e => EntryCalculations.MyShare(e.PlannedAmount, e.SplitRatioSnapshot));
+            var actualMyShare = g
+                .Where(e => e.Paid)
+                .Sum(e => EntryCalculations.MyShare(
+                    EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount),
+                    e.SplitRatioSnapshot));
+
+            return new DashboardCategoryDto(
+                g.Key, categoriesById[g.Key].Name,
+                plannedMyShare, actualMyShare, actualMyShare - plannedMyShare);
+        })
+        .OrderByDescending(d => d.PlannedMyShare)
+        .ToList();
+
+    var plannedExpense = byCategory.Sum(d => d.PlannedMyShare);
+    var actualExpense = byCategory.Sum(d => d.ActualMyShare);
+
+    var plannedIncome = incomeEntries.Sum(e => e.PlannedAmount);
+    var actualIncome = incomeEntries
+        .Where(e => e.Received)
+        .Sum(e => EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount));
+
+    var summary = new DashboardSummaryDto(
+        plannedExpense, actualExpense,
+        plannedIncome, actualIncome,
+        plannedIncome - plannedExpense, actualIncome - actualExpense,
+        billEntries.Count(e => e.Paid), billEntries.Count,
+        incomeEntries.Count(e => e.Received), incomeEntries.Count);
+
+    return Results.Ok(new DashboardMonthDto(year.Value, month.Value, summary, byCategory));
+})
+.RequireAuthorization();
+
 await app.RunAsync();
 
 // Maps a BillEntry domain object to the shared entry DTO used by pay/unpay/patch endpoints.
@@ -1451,6 +1543,41 @@ internal sealed record RecalculateRequest(int FromYear, int FromMonth, decimal N
 /// <param name="SkippedPaid">The number of paid entries in range that were left untouched.</param>
 /// <param name="NewDefaultAmount">The new default amount now set on the bill template.</param>
 internal sealed record RecalculateResponse(long BillId, int UpdatedEntries, int SkippedPaid, decimal NewDefaultAmount);
+
+/// <summary>The per-category breakdown row returned by <c>GET /api/dashboard/month</c>.</summary>
+/// <param name="CategoryId">The category id.</param>
+/// <param name="Category">The category display name.</param>
+/// <param name="PlannedMyShare">Sum of (planned amount × split ratio) over all bill entries in the category, regardless of paid status.</param>
+/// <param name="ActualMyShare">Sum of (effective amount × split ratio) over only the paid bill entries in the category.</param>
+/// <param name="Diff">
+/// <see cref="ActualMyShare"/> minus <see cref="PlannedMyShare"/>. Positive means the category overspent relative to plan.
+/// </param>
+internal sealed record DashboardCategoryDto(long CategoryId, string Category, decimal PlannedMyShare, decimal ActualMyShare, decimal Diff);
+
+/// <summary>Aggregated month-level totals returned by <c>GET /api/dashboard/month</c>.</summary>
+/// <param name="PlannedExpense">Sum of the owner's share of planned amounts across all bill entries.</param>
+/// <param name="ActualExpense">Sum of the owner's share of effective amounts across paid bill entries only.</param>
+/// <param name="PlannedIncome">Sum of planned amounts across all income entries.</param>
+/// <param name="ActualIncome">Sum of effective amounts across received income entries only.</param>
+/// <param name="SaldoPrevisto"><see cref="PlannedIncome"/> minus <see cref="PlannedExpense"/>.</param>
+/// <param name="SaldoReal"><see cref="ActualIncome"/> minus <see cref="ActualExpense"/>.</param>
+/// <param name="BillsPaid">The number of bill entries in the month with <c>Paid</c> set to <see langword="true"/>.</param>
+/// <param name="BillsTotal">The total number of bill entries in the month.</param>
+/// <param name="IncomesReceived">The number of income entries in the month with <c>Received</c> set to <see langword="true"/>.</param>
+/// <param name="IncomesTotal">The total number of income entries in the month.</param>
+internal sealed record DashboardSummaryDto(
+    decimal PlannedExpense, decimal ActualExpense,
+    decimal PlannedIncome, decimal ActualIncome,
+    decimal SaldoPrevisto, decimal SaldoReal,
+    int BillsPaid, int BillsTotal,
+    int IncomesReceived, int IncomesTotal);
+
+/// <summary>The complete response returned by <c>GET /api/dashboard/month</c>.</summary>
+/// <param name="Year">The requested year.</param>
+/// <param name="Month">The requested month (1–12).</param>
+/// <param name="Summary">Aggregated totals for the month.</param>
+/// <param name="ByCategory">Per-category breakdown, ordered by <see cref="DashboardCategoryDto.PlannedMyShare"/> descending. Categories with no bill entries in the month are omitted.</param>
+internal sealed record DashboardMonthDto(int Year, int Month, DashboardSummaryDto Summary, IReadOnlyList<DashboardCategoryDto> ByCategory);
 
 /// <summary>
 /// Program entry-point marker, made discoverable so integration tests can host the API
