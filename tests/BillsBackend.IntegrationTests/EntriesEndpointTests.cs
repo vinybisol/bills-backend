@@ -297,6 +297,8 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
             Assert.That(body.Totals.SaldoPrevistoOtimista, Is.EqualTo(4600m)); // 6000 - (1000 + 400 + 0)
             Assert.That(body.Totals.SaldoPrevistoPiorCaso, Is.EqualTo(4100m)); // 4600 - 500
             Assert.That(body.Totals.SaldoRealizado, Is.EqualTo(3800m)); // (5200 + 400) - 1800
+            Assert.That(body.Totals.IncomesEffective, Is.EqualTo(6200m)); // 5200 (Salario) + 1000 (Freela, not received)
+            Assert.That(body.Totals.IncomesReceived, Is.EqualTo(5200m)); // only Salario is received
             Assert.That(body.Totals.SaldoPrevisto, Is.EqualTo(body.Totals.SaldoPrevistoOtimista));
             Assert.That(body.Totals.SaldoReal, Is.EqualTo(body.Totals.SaldoRealizado));
             Assert.That(
@@ -383,7 +385,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
         decimal BillsPlanned, decimal BillsEffective,
         decimal MyShare, decimal Receivable, decimal Received,
         decimal ReceivablePending, decimal ReceivableReceived, decimal PaidFull,
-        decimal IncomesPlanned, decimal IncomesEffective,
+        decimal IncomesPlanned, decimal IncomesEffective, decimal IncomesReceived,
         decimal SaldoPrevisto, decimal SaldoReal,
         decimal SaldoPrevistoOtimista, decimal SaldoPrevistoPiorCaso, decimal SaldoRealizado);
 

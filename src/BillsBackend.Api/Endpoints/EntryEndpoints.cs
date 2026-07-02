@@ -137,6 +137,9 @@ internal static class EntryEndpoints
         var paidFull = billDtos.Where(d => d.Paid).Sum(d => d.EffectiveAmount);
         var incomesPlanned = incomeDtos.Sum(d => d.PlannedAmount);
         var incomesEffective = incomeDtos.Sum(d => d.EffectiveAmount);
+        // incomesReceived: effective amount of only the incomes actually marked as received — unlike
+        // incomesEffective, this does not fall back to the planned amount for entries not yet received.
+        var incomesReceived = incomeDtos.Where(d => d.Received).Sum(d => d.EffectiveAmount);
 
         // saldoPrevistoOtimista: how much I expect to net if everyone pays what they owe — planned
         // income minus my planned share of each bill.
@@ -147,13 +150,12 @@ internal static class EntryEndpoints
 
         // saldoRealizado: actual cash — received income plus received reimbursements, minus the full
         // (not myShare) amount actually paid for bills.
-        var saldoRealizado = incomeDtos.Where(d => d.Received).Sum(d => d.EffectiveAmount)
-            + receivableReceived - paidFull;
+        var saldoRealizado = incomesReceived + receivableReceived - paidFull;
 
         var totals = new MonthTotalsDto(
             billsPlanned, billsEffective, totalMyShare, receivablePending, receivableReceived,
             receivablePending, receivableReceived, paidFull,
-            incomesPlanned, incomesEffective,
+            incomesPlanned, incomesEffective, incomesReceived,
             saldoPrevistoOtimista, saldoRealizado,
             saldoPrevistoOtimista, saldoPrevistoPiorCaso, saldoRealizado);
 

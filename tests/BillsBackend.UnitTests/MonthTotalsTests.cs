@@ -198,6 +198,7 @@ public sealed class MonthTotalsTests
             .Sum(b => EntryCalculations.Receivable(b.Effective, b.Split));
         var paidFull = bills.Where(b => b.Paid).Sum(b => b.Effective);
         var incomesPlanned = incomes.Sum(i => i.Planned);
+        var incomesEffective = incomes.Sum(i => i.Effective);
         var incomesReceivedTotal = incomes.Where(i => i.Received).Sum(i => i.Effective);
 
         var saldoPrevistoOtimista = incomesPlanned - bills.Sum(b => b.Planned * b.Split);
@@ -219,6 +220,13 @@ public sealed class MonthTotalsTests
             Assert.That(saldoPrevistoPiorCaso, Is.EqualTo(4100m));
             // saldoRealizado = (5200 received income + 400 received reimbursement) - 1800 paid full = 3800.
             Assert.That(saldoRealizado, Is.EqualTo(3800m));
+            // incomesEffective falls back to planned for the unreceived Income2, so it counts money
+            // that has not actually come in yet (5200 + 1000 = 6200).
+            Assert.That(incomesEffective, Is.EqualTo(6200m));
+            // incomesReceived only counts Income1, which is actually marked received — this is what
+            // "Receitas recebidas" (issue #41) must reflect, not incomesEffective.
+            Assert.That(incomesReceivedTotal, Is.EqualTo(5200m));
+            Assert.That(incomesReceivedTotal, Is.Not.EqualTo(incomesEffective));
             // Gap invariant: the difference between the two planned balances is exactly the pending receivable.
             Assert.That(saldoPrevistoOtimista - saldoPrevistoPiorCaso, Is.EqualTo(receivablePending));
         });

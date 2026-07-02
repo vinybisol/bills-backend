@@ -60,7 +60,15 @@ internal sealed record IncomeEntryDto(long Id, long IncomeId, string Name,
 /// cash that left the owner's account, including the portion owed back by another person.
 /// </param>
 /// <param name="IncomesPlanned">Sum of all income entry planned amounts.</param>
-/// <param name="IncomesEffective">Sum of all income entry effective amounts.</param>
+/// <param name="IncomesEffective">
+/// Sum of all income entry effective amounts, regardless of <see cref="IncomeEntryDto.Received"/>. Not
+/// received income falls back to its planned amount, so this represents the full projected income for
+/// the month rather than what has actually come in — prefer <see cref="IncomesReceived"/> for that.
+/// </param>
+/// <param name="IncomesReceived">
+/// Sum of effective amounts across only the income entries already marked as
+/// <see cref="IncomeEntryDto.Received"/> — the amount actually received this month.
+/// </param>
 /// <param name="SaldoPrevisto">
 /// Alias of <see cref="SaldoPrevistoOtimista"/>, kept for backward compatibility.
 /// </param>
@@ -86,7 +94,7 @@ internal sealed record IncomeEntryDto(long Id, long IncomeId, string Name,
 internal sealed record MonthTotalsDto(decimal BillsPlanned, decimal BillsEffective,
     decimal MyShare, decimal Receivable, decimal Received,
     decimal ReceivablePending, decimal ReceivableReceived, decimal PaidFull,
-    decimal IncomesPlanned, decimal IncomesEffective,
+    decimal IncomesPlanned, decimal IncomesEffective, decimal IncomesReceived,
     decimal SaldoPrevisto, decimal SaldoReal,
     decimal SaldoPrevistoOtimista, decimal SaldoPrevistoPiorCaso, decimal SaldoRealizado);
 
