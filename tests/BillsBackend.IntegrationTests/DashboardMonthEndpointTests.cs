@@ -30,7 +30,7 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
 
     private async Task<CategoryDto[]> GetCategoriesAsync(string uid)
     {
-        using var req = Req(HttpMethod.Get, "/categories", uid);
+        using var req = Req(HttpMethod.Get, "/api/v1/categories", uid);
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
@@ -41,7 +41,7 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
     private async Task<BillDto> CreateOneOffBillAsync(
         string uid, long categoryId, string name, decimal amount, decimal splitRatio = 1m, long? personId = null)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name, categoryId, kind = "one_off", defaultAmount = amount, splitRatio, personId });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -50,7 +50,7 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
 
     private async Task<IncomeDto> CreateOneOffIncomeAsync(string uid, string name, decimal amount)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/incomes", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uid,
             new { name, kind = "one_off", defaultAmount = amount });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -59,7 +59,7 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
 
     private async Task<long> CreateBillEntryAsync(string uid, long billId, int year, int month, decimal plannedAmount)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/api/entries/bill", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/entries/bill", uid,
             new { billId, year, month, plannedAmount });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -68,7 +68,7 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
 
     private async Task<long> CreateIncomeEntryAsync(string uid, long incomeId, int year, int month, decimal plannedAmount)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/api/entries/income", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/entries/income", uid,
             new { incomeId, year, month, plannedAmount });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -77,14 +77,14 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
 
     private async Task PayBillEntryAsync(string uid, long entryId, decimal? actualAmount = null)
     {
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/entries/bill/{entryId}/pay", uid, new { actualAmount });
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uid, new { actualAmount });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
     private async Task ReceiveIncomeEntryAsync(string uid, long entryId, decimal? actualAmount = null)
     {
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/entries/income/{entryId}/receive", uid, new { actualAmount });
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/income/{entryId}/receive", uid, new { actualAmount });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
@@ -92,7 +92,7 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
     private async Task<(HttpStatusCode Status, DashboardMonthResponse? Body)> GetDashboardAsync(string uid, int? year, int? month)
     {
         var query = $"?{(year.HasValue ? $"year={year}" : "")}{(month.HasValue ? $"&month={month}" : "")}";
-        using var req = Req(HttpMethod.Get, $"/api/dashboard/month{query}", uid);
+        using var req = Req(HttpMethod.Get, $"/api/v1/dashboard/month{query}", uid);
         using var resp = await Client.SendAsync(req);
         var body = resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<DashboardMonthResponse>() : null;
         return (resp.StatusCode, body);
@@ -265,7 +265,7 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
     public async Task Get_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/dashboard/month?year=2026&month=1");
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/dashboard/month?year=2026&month=1");
 
         // Act
         using var resp = await Client.SendAsync(req);
@@ -278,7 +278,7 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
 
     private async Task<long> CreatePersonAsync(string uid, string name = "Esposa")
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return (await resp.Content.ReadFromJsonAsync<PersonDto>())!.Id;

@@ -37,7 +37,7 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     public async Task CreateIncome_WithValidToken_ReturnsCreatedWithDto()
     {
         // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/incomes", Uid("create-ok"),
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", Uid("create-ok"),
             new { name = "Salário", kind = "recurring", defaultAmount = 5000m });
 
         // Act
@@ -61,7 +61,7 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     public async Task CreateIncome_BlankName_ReturnsBadRequest(string name)
     {
         // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/incomes", Uid($"create-bad-name-{name.Length}"),
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", Uid($"create-bad-name-{name.Length}"),
             new { name, kind = "recurring", defaultAmount = 1000m });
 
         // Act
@@ -77,7 +77,7 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     public async Task CreateIncome_InvalidKind_ReturnsBadRequest(string kind)
     {
         // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/incomes", Uid($"create-bad-kind-{kind.Length}"),
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", Uid($"create-bad-kind-{kind.Length}"),
             new { name = "Renda", kind, defaultAmount = 1000m });
 
         // Act
@@ -91,7 +91,7 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     public async Task CreateIncome_NegativeDefaultAmount_ReturnsBadRequest()
     {
         // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/incomes", Uid("create-bad-amount"),
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", Uid("create-bad-amount"),
             new { name = "Renda", kind = "recurring", defaultAmount = -1m });
 
         // Act
@@ -105,7 +105,7 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     public async Task CreateIncome_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/incomes");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/incomes");
         req.Content = JsonContent.Create(new { name = "Salário", kind = "recurring", defaultAmount = 5000m });
 
         // Act
@@ -121,7 +121,7 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     public async Task ListIncomes_NewUser_ReturnsEmptyList()
     {
         // Arrange
-        using var req = Req(HttpMethod.Get, "/incomes", Uid("list-empty"));
+        using var req = Req(HttpMethod.Get, "/api/v1/incomes", Uid("list-empty"));
 
         // Act
         using var response = await Client.SendAsync(req);
@@ -137,12 +137,12 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     {
         // Arrange
         var uid = Uid("list-after-create");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uid,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uid,
             new { name = "Salário", kind = "recurring", defaultAmount = 5000m });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        using var listReq = Req(HttpMethod.Get, "/incomes", uid);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/incomes", uid);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -157,7 +157,7 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     [Test]
     public async Task ListIncomes_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await Client.GetAsync("/incomes");
+        using var response = await Client.GetAsync("/api/v1/incomes");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -168,14 +168,14 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     {
         // Arrange
         var uid = Uid("update-ok");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uid,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uid,
             new { name = "Salário", kind = "recurring", defaultAmount = 5000m });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var created = await createResp.Content.ReadFromJsonAsync<IncomeDto>();
         Assert.That(created, Is.Not.Null);
 
-        using var updateReq = ReqWithBody(HttpMethod.Put, $"/incomes/{created!.Id}", uid,
+        using var updateReq = ReqWithBody(HttpMethod.Put, $"/api/v1/incomes/{created!.Id}", uid,
             new { name = "Freelance", kind = "one_off", defaultAmount = 2500m });
 
         // Act
@@ -196,7 +196,7 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     public async Task UpdateIncome_NotFound_ReturnsNotFound()
     {
         // Arrange
-        using var req = ReqWithBody(HttpMethod.Put, "/incomes/999999", Uid("update-notfound"),
+        using var req = ReqWithBody(HttpMethod.Put, "/api/v1/incomes/999999", Uid("update-notfound"),
             new { name = "Inexistente", kind = "recurring", defaultAmount = 0m });
 
         // Act
@@ -209,7 +209,7 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     [Test]
     public async Task UpdateIncome_WithoutToken_ReturnsUnauthorized()
     {
-        using var req = new HttpRequestMessage(HttpMethod.Put, "/incomes/1");
+        using var req = new HttpRequestMessage(HttpMethod.Put, "/api/v1/incomes/1");
         req.Content = JsonContent.Create(new { name = "x", kind = "recurring", defaultAmount = 0m });
         using var response = await Client.SendAsync(req);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -222,12 +222,12 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     {
         // Arrange
         var uid = Uid("delete-ok");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uid,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uid,
             new { name = "ARemover", kind = "one_off", defaultAmount = 100m });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<IncomeDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/incomes/{created!.Id}", uid);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/incomes/{created!.Id}", uid);
 
         // Act
         using var response = await Client.SendAsync(deleteReq);
@@ -241,16 +241,16 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     {
         // Arrange
         var uid = Uid("delete-disappears");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uid,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uid,
             new { name = "Efêmera", kind = "recurring", defaultAmount = 500m });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<IncomeDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/incomes/{created!.Id}", uid);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/incomes/{created!.Id}", uid);
         using var deleteResp = await Client.SendAsync(deleteReq);
         Assert.That(deleteResp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
 
-        using var listReq = Req(HttpMethod.Get, "/incomes", uid);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/incomes", uid);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -263,7 +263,7 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
     [Test]
     public async Task DeleteIncome_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await Client.DeleteAsync("/incomes/1");
+        using var response = await Client.DeleteAsync("/api/v1/incomes/1");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -275,12 +275,12 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
         // Arrange — user A creates an income; user B must not see it
         var uidA = Uid("isolate-list-a");
         var uidB = Uid("isolate-list-b");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uidA,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uidA,
             new { name = "SomenteA", kind = "recurring", defaultAmount = 3000m });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        using var listReq = Req(HttpMethod.Get, "/incomes", uidB);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/incomes", uidB);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -298,12 +298,12 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
         // Arrange — user A creates an income; user B tries to update it
         var uidA = Uid("isolate-update-a");
         var uidB = Uid("isolate-update-b");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uidA,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uidA,
             new { name = "DoA", kind = "recurring", defaultAmount = 1000m });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<IncomeDto>();
 
-        using var updateReq = ReqWithBody(HttpMethod.Put, $"/incomes/{created!.Id}", uidB,
+        using var updateReq = ReqWithBody(HttpMethod.Put, $"/api/v1/incomes/{created!.Id}", uidB,
             new { name = "Hackeada", kind = "one_off", defaultAmount = 999m });
 
         // Act
@@ -319,12 +319,12 @@ public sealed class IncomeEndpointTests : IntegrationTestBase
         // Arrange — user A creates an income; user B tries to deactivate it
         var uidA = Uid("isolate-delete-a");
         var uidB = Uid("isolate-delete-b");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/incomes", uidA,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uidA,
             new { name = "DoA2", kind = "one_off", defaultAmount = 500m });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<IncomeDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/incomes/{created!.Id}", uidB);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/incomes/{created!.Id}", uidB);
 
         // Act
         using var response = await Client.SendAsync(deleteReq);

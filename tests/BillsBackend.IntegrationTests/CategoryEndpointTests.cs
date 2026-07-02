@@ -40,7 +40,7 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     public async Task ListCategories_NewUser_ReturnsSevenDefaultCategories()
     {
         // Arrange
-        using var req = Req(HttpMethod.Get, "/categories", Uid("list-seed"));
+        using var req = Req(HttpMethod.Get, "/api/v1/categories", Uid("list-seed"));
 
         // Act
         using var response = await Client.SendAsync(req);
@@ -57,7 +57,7 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     public async Task CreateCategory_WithValidToken_ReturnsCreatedWithDto()
     {
         // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/categories", Uid("create-ok"), new { name = "Vestuário" });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/categories", Uid("create-ok"), new { name = "Vestuário" });
 
         // Act
         using var response = await Client.SendAsync(req);
@@ -75,7 +75,7 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     public async Task CreateCategory_BlankName_ReturnsBadRequest(string name)
     {
         // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/categories", Uid($"create-bad-{name.Length}"), new { name });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/categories", Uid($"create-bad-{name.Length}"), new { name });
 
         // Act
         using var response = await Client.SendAsync(req);
@@ -89,11 +89,11 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     {
         // Arrange — create a category then try to create another with the same name
         var uid = Uid("create-dup");
-        using var req1 = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Duplicada" });
+        using var req1 = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uid, new { name = "Duplicada" });
         using var first = await Client.SendAsync(req1);
         Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        using var req2 = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Duplicada" });
+        using var req2 = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uid, new { name = "Duplicada" });
 
         // Act
         using var response = await Client.SendAsync(req2);
@@ -106,7 +106,7 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     public async Task CreateCategory_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/categories");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/categories");
         req.Content = JsonContent.Create(new { name = "Teste" });
 
         // Act
@@ -123,11 +123,11 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     {
         // Arrange — create a custom category for a fresh user
         var uid = Uid("list-after-create");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Beleza" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uid, new { name = "Beleza" });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        using var listReq = Req(HttpMethod.Get, "/categories", uid);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/categories", uid);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -142,7 +142,7 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     [Test]
     public async Task ListCategories_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await Client.GetAsync("/categories");
+        using var response = await Client.GetAsync("/api/v1/categories");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -153,13 +153,13 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     {
         // Arrange — create a category and capture its id
         var uid = Uid("update-ok");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Original" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uid, new { name = "Original" });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
         Assert.That(created, Is.Not.Null);
 
-        using var updateReq = ReqWithBody(HttpMethod.Put, $"/categories/{created!.Id}", uid, new { name = "Renomeada" });
+        using var updateReq = ReqWithBody(HttpMethod.Put, $"/api/v1/categories/{created!.Id}", uid, new { name = "Renomeada" });
 
         // Act
         using var response = await Client.SendAsync(updateReq);
@@ -175,13 +175,13 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     {
         // Arrange — create two categories then try to rename one to the other's name
         var uid = Uid("update-dup");
-        using var r1 = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Alpha" });
-        using var r2 = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Beta" });
+        using var r1 = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uid, new { name = "Alpha" });
+        using var r2 = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uid, new { name = "Beta" });
         using var resp1 = await Client.SendAsync(r1);
         var cat1 = await resp1.Content.ReadFromJsonAsync<CategoryDto>();
         await Client.SendAsync(r2);
 
-        using var updateReq = ReqWithBody(HttpMethod.Put, $"/categories/{cat1!.Id}", uid, new { name = "Beta" });
+        using var updateReq = ReqWithBody(HttpMethod.Put, $"/api/v1/categories/{cat1!.Id}", uid, new { name = "Beta" });
 
         // Act
         using var response = await Client.SendAsync(updateReq);
@@ -193,7 +193,7 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     [Test]
     public async Task UpdateCategory_WithoutToken_ReturnsUnauthorized()
     {
-        using var req = new HttpRequestMessage(HttpMethod.Put, "/categories/1");
+        using var req = new HttpRequestMessage(HttpMethod.Put, "/api/v1/categories/1");
         req.Content = JsonContent.Create(new { name = "x" });
         using var response = await Client.SendAsync(req);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -206,11 +206,11 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     {
         // Arrange
         var uid = Uid("delete-ok");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "ARemover" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uid, new { name = "ARemover" });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/categories/{created!.Id}", uid);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/categories/{created!.Id}", uid);
 
         // Act
         using var response = await Client.SendAsync(deleteReq);
@@ -224,15 +224,15 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     {
         // Arrange — create a category, delete it, then list to confirm it's gone
         var uid = Uid("delete-disappears");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uid, new { name = "Efêmera" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uid, new { name = "Efêmera" });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/categories/{created!.Id}", uid);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/categories/{created!.Id}", uid);
         using var deleteResp = await Client.SendAsync(deleteReq);
         Assert.That(deleteResp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
 
-        using var listReq = Req(HttpMethod.Get, "/categories", uid);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/categories", uid);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -245,7 +245,7 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
     [Test]
     public async Task DeleteCategory_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await Client.DeleteAsync("/categories/1");
+        using var response = await Client.DeleteAsync("/api/v1/categories/1");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -257,11 +257,11 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
         // Arrange — user A creates a category, user B should not see it
         var uidA = Uid("isolate-list-a");
         var uidB = Uid("isolate-list-b");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uidA, new { name = "SomenteA" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uidA, new { name = "SomenteA" });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        using var listReq = Req(HttpMethod.Get, "/categories", uidB);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/categories", uidB);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -279,11 +279,11 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
         // Arrange — user A creates a category, user B tries to rename it
         var uidA = Uid("isolate-update-a");
         var uidB = Uid("isolate-update-b");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uidA, new { name = "DoA" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uidA, new { name = "DoA" });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
 
-        using var updateReq = ReqWithBody(HttpMethod.Put, $"/categories/{created!.Id}", uidB, new { name = "Hackeada" });
+        using var updateReq = ReqWithBody(HttpMethod.Put, $"/api/v1/categories/{created!.Id}", uidB, new { name = "Hackeada" });
 
         // Act
         using var response = await Client.SendAsync(updateReq);
@@ -298,11 +298,11 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
         // Arrange — user A creates a category, user B tries to deactivate it
         var uidA = Uid("isolate-delete-a");
         var uidB = Uid("isolate-delete-b");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/categories", uidA, new { name = "DoA2" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uidA, new { name = "DoA2" });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/categories/{created!.Id}", uidB);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/categories/{created!.Id}", uidB);
 
         // Act
         using var response = await Client.SendAsync(deleteReq);

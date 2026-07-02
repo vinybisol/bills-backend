@@ -20,7 +20,7 @@ public sealed class HealthEndpointTests : IntegrationTestBase
     public async Task GetHealth_WithValidToken_ReturnsOkAndInternalUserId()
     {
         // Arrange
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/health");
         request.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateValidToken("firebase-alice", "alice@example.com"));
 
@@ -54,7 +54,7 @@ public sealed class HealthEndpointTests : IntegrationTestBase
     public async Task GetHealth_WithUntrustedSignature_ReturnsUnauthorized()
     {
         // Arrange
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/health");
         request.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateTokenWithUntrustedSignature());
 
@@ -69,7 +69,7 @@ public sealed class HealthEndpointTests : IntegrationTestBase
     public async Task GetHealth_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange / Act
-        using var response = await Client.GetAsync("/health");
+        using var response = await Client.GetAsync("/api/v1/health");
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -77,7 +77,7 @@ public sealed class HealthEndpointTests : IntegrationTestBase
 
     private async Task<long> GetUserIdAsync(string token)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/health");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var response = await Client.SendAsync(request);

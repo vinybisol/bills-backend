@@ -29,7 +29,7 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
 
     private async Task<long> GetFirstCategoryIdAsync(string uid)
     {
-        using var req = Req(HttpMethod.Get, "/categories", uid);
+        using var req = Req(HttpMethod.Get, "/api/v1/categories", uid);
         using var resp = await Client.SendAsync(req);
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
         return dtos![0].Id;
@@ -37,7 +37,7 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
 
     private async Task<long> CreateRecurringBillAsync(string uid, long categoryId, decimal defaultAmount = 100m)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Energia", categoryId, kind = "recurring", defaultAmount, splitRatio = 1m, personId = (long?)null });
         using var resp = await Client.SendAsync(req);
         return (await resp.Content.ReadFromJsonAsync<BillDto>())!.Id;
@@ -45,13 +45,13 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
 
     private async Task PostProjectionAsync(string uid, int year)
     {
-        using var req = Req(HttpMethod.Post, $"/api/projection/{year}", uid);
+        using var req = Req(HttpMethod.Post, $"/api/v1/projection/{year}", uid);
         await Client.SendAsync(req);
     }
 
     private async Task<decimal> GetPlannedAmountAsync(string uid, int year, int month)
     {
-        using var req = Req(HttpMethod.Get, $"/api/entries?year={year}&month={month}", uid);
+        using var req = Req(HttpMethod.Get, $"/api/v1/entries?year={year}&month={month}", uid);
         using var resp = await Client.SendAsync(req);
         var body = await resp.Content.ReadFromJsonAsync<MonthEntriesResponse>();
         return body!.Bills[0].PlannedAmount;
@@ -59,7 +59,7 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
 
     private async Task<long> GetBillEntryIdAsync(string uid, int year, int month)
     {
-        using var req = Req(HttpMethod.Get, $"/api/entries?year={year}&month={month}", uid);
+        using var req = Req(HttpMethod.Get, $"/api/v1/entries?year={year}&month={month}", uid);
         using var resp = await Client.SendAsync(req);
         var body = await resp.Content.ReadFromJsonAsync<MonthEntriesResponse>();
         return body!.Bills[0].Id;
@@ -77,7 +77,7 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
         await PostProjectionAsync(uid, 2026);
 
         // Act
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/bills/{billId}/recalculate", uid,
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/bills/{billId}/recalculate", uid,
             new { fromYear = 2026, fromMonth = 7, newAmount = 175m });
         using var resp = await Client.SendAsync(req);
 
@@ -111,11 +111,11 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
 
         // Pay month 8
         var entryId = await GetBillEntryIdAsync(uid, 2026, 8);
-        using var payReq = ReqWithBody(HttpMethod.Post, $"/api/entries/bill/{entryId}/pay", uid, new { });
+        using var payReq = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uid, new { });
         await Client.SendAsync(payReq);
 
         // Act — recalculate from July
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/bills/{billId}/recalculate", uid,
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/bills/{billId}/recalculate", uid,
             new { fromYear = 2026, fromMonth = 7, newAmount = 200m });
         using var resp = await Client.SendAsync(req);
 
@@ -144,12 +144,12 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
         await PostProjectionAsync(uid, 2026);
 
         // Act
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/bills/{billId}/recalculate", uid,
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/bills/{billId}/recalculate", uid,
             new { fromYear = 2026, fromMonth = 1, newAmount = 150m });
         await Client.SendAsync(req);
 
         // Assert — GET /bills reflects the new DefaultAmount
-        using var billReq = Req(HttpMethod.Get, "/bills", uid);
+        using var billReq = Req(HttpMethod.Get, "/api/v1/bills", uid);
         using var billResp = await Client.SendAsync(billReq);
         var bills = await billResp.Content.ReadFromJsonAsync<BillSummaryDto[]>();
         Assert.That(bills![0].DefaultAmount, Is.EqualTo(150m));
@@ -169,7 +169,7 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
         _ = await GetFirstCategoryIdAsync(uidB); // provision B
 
         // Act
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/bills/{billId}/recalculate", uidB,
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/bills/{billId}/recalculate", uidB,
             new { fromYear = 2026, fromMonth = 7, newAmount = 175m });
         using var resp = await Client.SendAsync(req);
 
@@ -182,7 +182,7 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
     [Test]
     public async Task Recalculate_WithoutToken_Returns401()
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/bills/1/recalculate");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/bills/1/recalculate");
         req.Content = JsonContent.Create(new { fromYear = 2026, fromMonth = 7, newAmount = 100m });
         using var resp = await Client.SendAsync(req);
 
@@ -202,7 +202,7 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
         var billId = await CreateRecurringBillAsync(uid, catId);
 
         // Act
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/bills/{billId}/recalculate", uid,
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/bills/{billId}/recalculate", uid,
             new { fromYear = 2026, fromMonth = month, newAmount = 100m });
         using var resp = await Client.SendAsync(req);
 
@@ -219,7 +219,7 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
         var billId = await CreateRecurringBillAsync(uid, catId);
 
         // Act
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/bills/{billId}/recalculate", uid,
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/bills/{billId}/recalculate", uid,
             new { fromYear = 2026, fromMonth = 7, newAmount = -1m });
         using var resp = await Client.SendAsync(req);
 
@@ -235,7 +235,7 @@ public sealed class RecalculateEndpointTests : IntegrationTestBase
         _ = await GetFirstCategoryIdAsync(uid);
 
         // Act
-        using var req = ReqWithBody(HttpMethod.Post, "/api/bills/999999/recalculate", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills/999999/recalculate", uid,
             new { fromYear = 2026, fromMonth = 7, newAmount = 100m });
         using var resp = await Client.SendAsync(req);
 

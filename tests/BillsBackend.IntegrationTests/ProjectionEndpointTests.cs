@@ -36,7 +36,7 @@ public sealed class ProjectionEndpointTests : IntegrationTestBase
     // Fetching them avoids name conflicts with those seeded defaults.
     private async Task<long[]> GetDefaultCategoryIdsAsync(string uid)
     {
-        using var req = Req(HttpMethod.Get, "/categories", uid);
+        using var req = Req(HttpMethod.Get, "/api/v1/categories", uid);
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
@@ -47,7 +47,7 @@ public sealed class ProjectionEndpointTests : IntegrationTestBase
     // Creates a recurring bill for the given uid and returns the created BillDto.
     private async Task<BillDto> CreateRecurringBillAsync(string uid, long categoryId, string name = "Aluguel", decimal amount = 1000m)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio = 1m, personId = (long?)null });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -57,7 +57,7 @@ public sealed class ProjectionEndpointTests : IntegrationTestBase
     // Creates a recurring income for the given uid and returns the created IncomeDto.
     private async Task<IncomeDto> CreateRecurringIncomeAsync(string uid, string name = "Salario", decimal amount = 5000m)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/incomes", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uid,
             new { name, kind = "recurring", defaultAmount = amount });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -67,7 +67,7 @@ public sealed class ProjectionEndpointTests : IntegrationTestBase
     // Calls POST /api/projection/{year} and returns the deserialized result.
     private async Task<ProjectionResultDto?> PostProjectionAsync(string uid, int year)
     {
-        using var req = Req(HttpMethod.Post, $"/api/projection/{year}", uid);
+        using var req = Req(HttpMethod.Post, $"/api/v1/projection/{year}", uid);
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         return await resp.Content.ReadFromJsonAsync<ProjectionResultDto>();
@@ -76,7 +76,7 @@ public sealed class ProjectionEndpointTests : IntegrationTestBase
     // Gets the internal app_user.id for the given Firebase uid by calling GET /me.
     private async Task<long> GetOwnerIdAsync(string uid)
     {
-        using var req = Req(HttpMethod.Get, "/me", uid);
+        using var req = Req(HttpMethod.Get, "/api/v1/me", uid);
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var me = await resp.Content.ReadFromJsonAsync<MeDto>();
@@ -206,7 +206,7 @@ public sealed class ProjectionEndpointTests : IntegrationTestBase
     public async Task Post_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/projection/2025");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/projection/2025");
 
         // Act
         using var response = await Client.SendAsync(req);
@@ -221,7 +221,7 @@ public sealed class ProjectionEndpointTests : IntegrationTestBase
     {
         // Arrange — must include a valid token since auth middleware runs before the handler
         var uid = Uid($"bad-year-{year}");
-        using var req = Req(HttpMethod.Post, $"/api/projection/{year}", uid);
+        using var req = Req(HttpMethod.Post, $"/api/v1/projection/{year}", uid);
 
         // Act
         using var response = await Client.SendAsync(req);
