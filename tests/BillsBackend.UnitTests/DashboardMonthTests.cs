@@ -244,4 +244,109 @@ public sealed class DashboardMonthTests
         // Assert — both entries count regardless of received status
         Assert.That(plannedIncome, Is.EqualTo(5000m));
     }
+
+    // --- three balances (saldoPrevistoOtimista / saldoPrevistoPiorCaso / saldoRealizado) ---
+
+    // Mirrors the inline receivable/paidFull computation added to DashboardEndpoints.GetDashboardMonth
+    // (there is no per-entry Receivable DTO in this endpoint, unlike GET /api/entries).
+    private static (decimal ReceivablePending, decimal ReceivableReceived, decimal PaidFull) ComputeReceivables(
+        IReadOnlyList<BillEntry> billEntries)
+    {
+        var receivablePending = billEntries
+            .Where(e => !e.Received)
+            .Sum(e => EntryCalculations.Receivable(
+                EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot));
+        var receivableReceived = billEntries
+            .Where(e => e.Received)
+            .Sum(e => EntryCalculations.Receivable(
+                EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot));
+        var paidFull = billEntries
+            .Where(e => e.Paid)
+            .Sum(e => EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount));
+        return (receivablePending, receivableReceived, paidFull);
+    }
+
+    [Test]
+    public void ThreeBalances_MixedScenario_ComputeCorrectlyAndSatisfyGapInvariant()
+    {
+        // Arrange — three bills spanning the split spectrum, two incomes.
+        // Bill A: split=1.0 (fully mine), planned=1000, paid (actual=1000).
+        // Bill B: split=0.5 (shared), planned=800, paid (actual=800), received=true (reimbursed).
+        // Bill C: split=0.0 (passes through me), planned=500, unpaid, unreceived.
+        var billA = BillEntry.Create(1L, 10L, 2026, 1, 1000m, 1.0m, null, FixedNow);
+        billA.MarkPaid(FixedNow, actualAmount: 1000m);
+
+        var billB = BillEntry.Create(1L, 20L, 2026, 1, 800m, 0.5m, 99L, FixedNow);
+        billB.MarkPaid(FixedNow, actualAmount: 800m);
+        billB.MarkReceived(FixedNow);
+
+        var billC = BillEntry.Create(1L, 30L, 2026, 1, 500m, 0.0m, 99L, FixedNow);
+
+        var billEntries = new List<BillEntry> { billA, billB, billC };
+
+        var incomeReceived = IncomeEntry.Create(1L, 40L, 2026, 1, 5000m, FixedNow);
+        incomeReceived.MarkReceived(FixedNow, actualAmount: 5200m);
+        var incomeNotReceived = IncomeEntry.Create(1L, 41L, 2026, 1, 1000m, FixedNow);
+        var incomeEntries = new List<IncomeEntry> { incomeReceived, incomeNotReceived };
+
+        // Act — mirrors DashboardEndpoints.GetDashboardMonth's summary computation.
+        var plannedExpense = billEntries.Sum(e => EntryCalculations.MyShare(e.PlannedAmount, e.SplitRatioSnapshot));
+        var plannedIncome = incomeEntries.Sum(e => e.PlannedAmount);
+        var actualIncome = incomeEntries
+            .Where(e => e.Received)
+            .Sum(e => EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount));
+        var (receivablePending, receivableReceived, paidFull) = ComputeReceivables(billEntries);
+
+        var saldoPrevistoOtimista = plannedIncome - plannedExpense;
+        var saldoPrevistoPiorCaso = saldoPrevistoOtimista - receivablePending;
+        var saldoRealizado = actualIncome + receivableReceived - paidFull;
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(receivablePending, Is.EqualTo(500m)); // bill C: 500 x (1-0)
+            Assert.That(receivableReceived, Is.EqualTo(400m)); // bill B: 800 x (1-0.5)
+            Assert.That(paidFull, Is.EqualTo(1800m)); // full value of paid bills A + B
+            Assert.That(saldoPrevistoOtimista, Is.EqualTo(4600m)); // 6000 - (1000 + 400 + 0)
+            Assert.That(saldoPrevistoPiorCaso, Is.EqualTo(4100m)); // 4600 - 500
+            Assert.That(saldoRealizado, Is.EqualTo(3800m)); // (5200 + 400) - 1800
+            Assert.That(saldoPrevistoOtimista - saldoPrevistoPiorCaso, Is.EqualTo(receivablePending));
+        });
+    }
+
+    [Test]
+    public void ReceivablePending_ExcludesAlreadyReceivedBillEntries()
+    {
+        // Arrange — one pending, one already received
+        var pending = BillEntry.Create(1L, 10L, 2026, 1, 200m, 0.5m, 99L, FixedNow); // receivable=100
+        var received = BillEntry.Create(1L, 20L, 2026, 1, 300m, 0.5m, 99L, FixedNow); // receivable=150
+        received.MarkReceived(FixedNow);
+        var billEntries = new List<BillEntry> { pending, received };
+
+        // Act
+        var (receivablePending, _, _) = ComputeReceivables(billEntries);
+
+        // Assert — only the unreceived entry counts
+        Assert.That(receivablePending, Is.EqualTo(100m));
+    }
+
+    [Test]
+    public void SaldoRealizado_UsesFullPaidValueNotMyShareOfPaidBills()
+    {
+        // Arrange — a shared bill (split=0.5) paid in full: effective=1000
+        var bill = BillEntry.Create(1L, 10L, 2026, 1, 1000m, 0.5m, 99L, FixedNow);
+        bill.MarkPaid(FixedNow, actualAmount: 1000m);
+        var billEntries = new List<BillEntry> { bill };
+        var noIncomes = new List<IncomeEntry>();
+
+        // Act
+        var (_, receivableReceived, paidFull) = ComputeReceivables(billEntries);
+        var actualIncome = noIncomes
+            .Where(e => e.Received)
+            .Sum(e => EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount));
+        var saldoRealizado = actualIncome + receivableReceived - paidFull;
+
+        // Assert — subtracts the full 1000, not myShare (500); the bill hasn't been reimbursed yet
+        Assert.That(saldoRealizado, Is.EqualTo(-1000m));
+    }
 }

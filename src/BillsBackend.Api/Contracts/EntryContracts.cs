@@ -35,28 +35,60 @@ internal sealed record IncomeEntryDto(long Id, long IncomeId, string Name,
     decimal EffectiveAmount, bool Received, DateTimeOffset? ReceivedDate);
 
 /// <summary>Aggregated totals for the requested month, returned by <c>GET /api/entries</c>.</summary>
-/// <param name="BillsPlanned">Sum of all bill entry planned amounts.</param>
-/// <param name="BillsEffective">Sum of all bill entry effective amounts.</param>
+/// <param name="BillsPlanned">Sum of all bill entry planned amounts (full value, not myShare).</param>
+/// <param name="BillsEffective">Sum of all bill entry effective amounts (full value, not myShare).</param>
 /// <param name="MyShare">Sum of the owner's share across all bill entries.</param>
 /// <param name="Receivable">
-/// Sum of the other person's share across bill entries not yet marked as received (pending only).
+/// Alias of <see cref="ReceivablePending"/>, kept for backward compatibility: sum of the other person's
+/// share across bill entries not yet marked as received (pending only).
 /// </param>
 /// <param name="Received">
-/// Sum of the other person's share across bill entries already marked as received.
+/// Alias of <see cref="ReceivableReceived"/>, kept for backward compatibility: sum of the other person's
+/// share across bill entries already marked as received.
 /// <c>Received + Receivable</c> equals the total split amount owed by other people this month.
+/// </param>
+/// <param name="ReceivablePending">
+/// Sum of the other person's share across bill entries not yet marked as received (pending only) — the
+/// amount the owner is exposed to if it is never paid back. Same value as <see cref="Receivable"/>.
+/// </param>
+/// <param name="ReceivableReceived">
+/// Sum of the other person's share across bill entries already marked as received. Same value as
+/// <see cref="Received"/>.
+/// </param>
+/// <param name="PaidFull">
+/// Sum of the full effective amount (not myShare) of bill entries already marked as paid — the actual
+/// cash that left the owner's account, including the portion owed back by another person.
 /// </param>
 /// <param name="IncomesPlanned">Sum of all income entry planned amounts.</param>
 /// <param name="IncomesEffective">Sum of all income entry effective amounts.</param>
 /// <param name="SaldoPrevisto">
-/// Planned net balance: Σ(income planned) − Σ(bill planned × split ratio).
+/// Alias of <see cref="SaldoPrevistoOtimista"/>, kept for backward compatibility.
 /// </param>
 /// <param name="SaldoReal">
-/// Realised net balance: Σ(effective amount for received incomes) − Σ(my share for paid bills).
+/// <b>Behavior change:</b> now an alias of <see cref="SaldoRealizado"/> (received incomes and reimbursements
+/// minus the full paid amount of bills). Previously this summed received incomes minus only the owner's
+/// share of paid bills; that undercounted actual cash outflow when a bill was shared. Prefer
+/// <see cref="SaldoRealizado"/> going forward.
+/// </param>
+/// <param name="SaldoPrevistoOtimista">
+/// Optimistic planned balance, assuming everyone pays what they owe: Σ(income planned) − Σ(bill planned ×
+/// split ratio). Same value as <see cref="SaldoPrevisto"/>.
+/// </param>
+/// <param name="SaldoPrevistoPiorCaso">
+/// Worst-case planned balance: <see cref="SaldoPrevistoOtimista"/> minus <see cref="ReceivablePending"/> —
+/// assumes the pending receivable is never paid back. <c>SaldoPrevistoOtimista − SaldoPrevistoPiorCaso</c>
+/// always equals <see cref="ReceivablePending"/>.
+/// </param>
+/// <param name="SaldoRealizado">
+/// Actual realised cash balance: (received incomes + received reimbursements) minus the full amount
+/// actually paid for bills (not just the owner's share). Same value as <see cref="SaldoReal"/>.
 /// </param>
 internal sealed record MonthTotalsDto(decimal BillsPlanned, decimal BillsEffective,
     decimal MyShare, decimal Receivable, decimal Received,
+    decimal ReceivablePending, decimal ReceivableReceived, decimal PaidFull,
     decimal IncomesPlanned, decimal IncomesEffective,
-    decimal SaldoPrevisto, decimal SaldoReal);
+    decimal SaldoPrevisto, decimal SaldoReal,
+    decimal SaldoPrevistoOtimista, decimal SaldoPrevistoPiorCaso, decimal SaldoRealizado);
 
 /// <summary>The complete response returned by <c>GET /api/entries</c>.</summary>
 /// <param name="Year">The requested year.</param>

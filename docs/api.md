@@ -18,7 +18,7 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
 - `POST /api/v1/projection/{year}` → gera 12 entries por molde recorrente ativo. Idempotente. Resp: {billEntriesCreated, incomeEntriesCreated, skipped}.
 
 ## Lançamentos
-- `GET /api/v1/entries?year=&month=` → bills[], incomes[], totals (com derivados). `totals.receivable` = a receber **pendente** (bill entries com `received=false`); `totals.received` = já recebido no mês. `received + receivable` = total a receber do mês.
+- `GET /api/v1/entries?year=&month=` → bills[], incomes[], totals (com derivados). `totals.receivable` = a receber **pendente** (bill entries com `received=false`, alias de `receivablePending`); `totals.received` = já recebido no mês (alias de `receivableReceived`). `received + receivable` = total a receber do mês. `totals.paidFull` = valor cheio (não myShare) dos bill entries pagos. Três saldos: `saldoPrevistoOtimista` (= `saldoPrevisto`, assume que todo pendente será recebido) = incomesPlanned − mySharePlanned; `saldoPrevistoPiorCaso` = saldoPrevistoOtimista − receivablePending (assume que o pendente nunca será pago); `saldoRealizado` (= `saldoReal`) = (incomesReceived + receivableReceived) − paidFull. Nota: `saldoReal` mudou de semântica — antes era baseado no myShare dos bills pagos, agora usa o valor cheio pago (`paidFull`).
 - `POST /api/v1/entries/bill` {billId,year,month,plannedAmount} → 201 / 409 (duplicado).
 - `POST /api/v1/entries/income` {incomeId,year,month,plannedAmount}.
 - `DELETE /api/v1/entries/bill/{id}` → 204 se não pago; 409 se pago. `DELETE /api/v1/entries/income/{id}` idem (received).
@@ -30,7 +30,7 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
 - `POST /api/v1/bills/{billId}/recalculate` {fromYear,fromMonth,newAmount} → atualiza default_amount + planned dos não-pagos ≥ mês. Resp: {updatedEntries, skippedPaid, newDefaultAmount}.
 
 ## Dashboards
-- `GET /api/v1/dashboard/month?year=&month=` → summary + byCategory (myShare previsto/real/diff).
+- `GET /api/v1/dashboard/month?year=&month=` → summary + byCategory (myShare previsto/real/diff). `summary` inclui `receivablePending`, `receivableReceived`, `paidFull` (valor cheio dos bill entries pagos) e os três saldos `saldoPrevistoOtimista`/`saldoPrevistoPiorCaso`/`saldoRealizado` — mesma semântica de `GET /api/v1/entries` (ver acima), incluindo a mudança de `saldoReal` para usar `paidFull` em vez do myShare dos bills pagos.
 - `GET /api/v1/dashboard/year?year=` → months[12] + byCategory + totals.
 
 ## A receber

@@ -89,6 +89,14 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
+    // Marks a bill entry's split as received (reimbursement) via POST /api/receivables/{entryId}/mark.
+    private async Task MarkReceivedAsync(string uid, long entryId)
+    {
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/receivables/{entryId}/mark", uid, new { receivedDate = (DateOnly?)null });
+        using var resp = await Client.SendAsync(req);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
     private async Task<(HttpStatusCode Status, DashboardMonthResponse? Body)> GetDashboardAsync(string uid, int? year, int? month)
     {
         var query = $"?{(year.HasValue ? $"year={year}" : "")}{(month.HasValue ? $"&month={month}" : "")}";
@@ -132,17 +140,76 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
             Assert.That(body.Summary.PlannedIncome, Is.EqualTo(2000m));
             Assert.That(body.Summary.ActualIncome, Is.EqualTo(2100m));
             Assert.That(body.Summary.SaldoPrevisto, Is.EqualTo(1500m)); // 2000 - 500
-            Assert.That(body.Summary.SaldoReal, Is.EqualTo(1650m)); // 2100 - 450
+            // SaldoReal is now an alias of SaldoRealizado: (received income + received reimbursements) minus
+            // the FULL paid amount (900, not myShare 450) — the split half never got reimbursed here.
+            // 2100 + 0 - 900 = 1200 (was 1650 under the old myShare-of-paid semantics).
+            Assert.That(body.Summary.SaldoReal, Is.EqualTo(1200m));
             Assert.That(body.Summary.BillsPaid, Is.EqualTo(1));
             Assert.That(body.Summary.BillsTotal, Is.EqualTo(1));
             Assert.That(body.Summary.IncomesReceived, Is.EqualTo(1));
             Assert.That(body.Summary.IncomesTotal, Is.EqualTo(1));
+
+            // receivable: bill effective=900, split=0.5 -> receivable=450, not yet received.
+            Assert.That(body.Summary.ReceivablePending, Is.EqualTo(450m));
+            Assert.That(body.Summary.ReceivableReceived, Is.EqualTo(0m));
+            Assert.That(body.Summary.PaidFull, Is.EqualTo(900m));
+            Assert.That(body.Summary.SaldoPrevistoOtimista, Is.EqualTo(body.Summary.SaldoPrevisto));
+            Assert.That(body.Summary.SaldoPrevistoPiorCaso, Is.EqualTo(1050m)); // 1500 - 450
+            Assert.That(body.Summary.SaldoRealizado, Is.EqualTo(body.Summary.SaldoReal));
 
             Assert.That(body.ByCategory, Has.Length.EqualTo(1));
             Assert.That(body.ByCategory[0].CategoryId, Is.EqualTo(categories[0].Id));
             Assert.That(body.ByCategory[0].PlannedMyShare, Is.EqualTo(500m));
             Assert.That(body.ByCategory[0].ActualMyShare, Is.EqualTo(450m));
             Assert.That(body.ByCategory[0].Diff, Is.EqualTo(-50m));
+        });
+    }
+
+    [Test]
+    public async Task Get_ThreeBalances_ComputeCorrectlyAndSatisfyGapInvariant()
+    {
+        // Arrange — three bills spanning the split spectrum, two incomes, in a distinct month.
+        // Aluguel: split=1.0 (fully mine), planned=1000, paid in full.
+        // Internet: split=0.5 (shared), planned=800, paid in full, reimbursement already received.
+        // Presente: split=0.0 (passes through me), planned=500, unpaid, unreceived.
+        var uid = Uid("three-balances");
+        var categories = await GetCategoriesAsync(uid);
+        var personId = await CreatePersonAsync(uid, name: "Parceiro");
+        var aluguel = await CreateOneOffBillAsync(uid, categories[0].Id, "Aluguel", 1000m, splitRatio: 1.0m);
+        var internet = await CreateOneOffBillAsync(uid, categories[0].Id, "Internet", 800m, splitRatio: 0.5m, personId: personId);
+        var presente = await CreateOneOffBillAsync(uid, categories[0].Id, "Presente", 500m, splitRatio: 0.0m, personId: personId);
+        var salario = await CreateOneOffIncomeAsync(uid, "Salario", 5000m);
+        var freela = await CreateOneOffIncomeAsync(uid, "Freela", 1000m);
+
+        var aluguelEntryId = await CreateBillEntryAsync(uid, aluguel.Id, 2026, 6, 1000m);
+        var internetEntryId = await CreateBillEntryAsync(uid, internet.Id, 2026, 6, 800m);
+        await CreateBillEntryAsync(uid, presente.Id, 2026, 6, 500m);
+        var salarioEntryId = await CreateIncomeEntryAsync(uid, salario.Id, 2026, 6, 5000m);
+        await CreateIncomeEntryAsync(uid, freela.Id, 2026, 6, 1000m);
+
+        await PayBillEntryAsync(uid, aluguelEntryId, actualAmount: 1000m);
+        await PayBillEntryAsync(uid, internetEntryId, actualAmount: 800m);
+        await MarkReceivedAsync(uid, internetEntryId);
+        await ReceiveIncomeEntryAsync(uid, salarioEntryId, actualAmount: 5200m);
+
+        // Act
+        var (status, body) = await GetDashboardAsync(uid, 2026, 6);
+
+        // Assert
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.Summary.ReceivablePending, Is.EqualTo(500m)); // Presente: 500 x (1-0)
+            Assert.That(body.Summary.ReceivableReceived, Is.EqualTo(400m)); // Internet: 800 x (1-0.5)
+            Assert.That(body.Summary.PaidFull, Is.EqualTo(1800m)); // full value of Aluguel + Internet
+            Assert.That(body.Summary.SaldoPrevistoOtimista, Is.EqualTo(4600m)); // 6000 - (1000 + 400 + 0)
+            Assert.That(body.Summary.SaldoPrevistoPiorCaso, Is.EqualTo(4100m)); // 4600 - 500
+            Assert.That(body.Summary.SaldoRealizado, Is.EqualTo(3800m)); // (5200 + 400) - 1800
+            Assert.That(body.Summary.SaldoPrevisto, Is.EqualTo(body.Summary.SaldoPrevistoOtimista));
+            Assert.That(body.Summary.SaldoReal, Is.EqualTo(body.Summary.SaldoRealizado));
+            Assert.That(
+                body.Summary.SaldoPrevistoOtimista - body.Summary.SaldoPrevistoPiorCaso,
+                Is.EqualTo(body.Summary.ReceivablePending));
         });
     }
 
@@ -298,7 +365,9 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
         decimal PlannedIncome, decimal ActualIncome,
         decimal SaldoPrevisto, decimal SaldoReal,
         int BillsPaid, int BillsTotal,
-        int IncomesReceived, int IncomesTotal);
+        int IncomesReceived, int IncomesTotal,
+        decimal ReceivablePending, decimal ReceivableReceived, decimal PaidFull,
+        decimal SaldoPrevistoOtimista, decimal SaldoPrevistoPiorCaso, decimal SaldoRealizado);
 
     private sealed record DashboardMonthResponse(int Year, int Month, DashboardSummaryResponse Summary, DashboardCategoryResponse[] ByCategory);
 }

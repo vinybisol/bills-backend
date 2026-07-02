@@ -9,8 +9,9 @@ namespace BillsBackend.UnitTests;
 /// avoiding any dependency on the handler or the database.
 /// </para>
 /// <list type="bullet">
-///   <item>saldoPrevisto = Σ(income.PlannedAmount) − Σ(bill.PlannedAmount × bill.SplitRatioSnapshot)</item>
-///   <item>saldoReal = Σ(EffectiveAmount for received incomes) − Σ(MyShare for paid bills)</item>
+///   <item>saldoPrevistoOtimista = Σ(income.PlannedAmount) − Σ(bill.PlannedAmount × bill.SplitRatioSnapshot)</item>
+///   <item>saldoPrevistoPiorCaso = saldoPrevistoOtimista − receivablePending</item>
+///   <item>saldoRealizado = (Σ EffectiveAmount for received incomes + receivableReceived) − Σ(EffectiveAmount for paid bills, full value)</item>
 /// </list>
 /// </summary>
 [TestFixture]
@@ -162,5 +163,119 @@ public sealed class MonthTotalsTests
             Assert.That(totalReceived, Is.EqualTo(0m));
             Assert.That(totalReceivable, Is.EqualTo(0m));
         });
+    }
+
+    // --- three balances (saldoPrevistoOtimista / saldoPrevistoPiorCaso / saldoRealizado) ---
+
+    [Test]
+    public void ThreeBalances_MixedScenario_ComputeCorrectlyAndSatisfyGapInvariant()
+    {
+        // Arrange — three bills spanning the split spectrum, two incomes.
+        // Bill A: split=1.0 (fully mine), planned=effective=1000, paid, not received (n/a, split=1 has no receivable).
+        // Bill B: split=0.5 (shared), planned=effective=800, paid, received=true (reimbursed).
+        // Bill C: split=0.0 (passes through me), planned=effective=500, unpaid, unreceived.
+        var bills = new[]
+        {
+            (Planned: 1000m, Effective: 1000m, Split: 1.0m, Paid: true, Received: false),
+            (Planned: 800m, Effective: 800m, Split: 0.5m, Paid: true, Received: true),
+            (Planned: 500m, Effective: 500m, Split: 0.0m, Paid: false, Received: false),
+        };
+
+        // Income1: planned=5000, received=true, effective=5200.
+        // Income2: planned=1000, received=false, effective=1000 (excluded from received total).
+        var incomes = new[]
+        {
+            (Planned: 5000m, Effective: 5200m, Received: true),
+            (Planned: 1000m, Effective: 1000m, Received: false),
+        };
+
+        // Act — mirrors the totals-building logic in EntryEndpoints.GetEntries.
+        var receivablePending = bills
+            .Where(b => !b.Received)
+            .Sum(b => EntryCalculations.Receivable(b.Effective, b.Split));
+        var receivableReceived = bills
+            .Where(b => b.Received)
+            .Sum(b => EntryCalculations.Receivable(b.Effective, b.Split));
+        var paidFull = bills.Where(b => b.Paid).Sum(b => b.Effective);
+        var incomesPlanned = incomes.Sum(i => i.Planned);
+        var incomesReceivedTotal = incomes.Where(i => i.Received).Sum(i => i.Effective);
+
+        var saldoPrevistoOtimista = incomesPlanned - bills.Sum(b => b.Planned * b.Split);
+        var saldoPrevistoPiorCaso = saldoPrevistoOtimista - receivablePending;
+        var saldoRealizado = incomesReceivedTotal + receivableReceived - paidFull;
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            // receivablePending: only bill C (500 x (1-0) = 500) is unreceived.
+            Assert.That(receivablePending, Is.EqualTo(500m));
+            // receivableReceived: only bill B (800 x (1-0.5) = 400) has been received.
+            Assert.That(receivableReceived, Is.EqualTo(400m));
+            // paidFull: full effective value of paid bills A and B (not myShare) = 1000 + 800.
+            Assert.That(paidFull, Is.EqualTo(1800m));
+            // saldoPrevistoOtimista = 6000 - (1000x1.0 + 800x0.5 + 500x0.0) = 6000 - 1400 = 4600.
+            Assert.That(saldoPrevistoOtimista, Is.EqualTo(4600m));
+            // saldoPrevistoPiorCaso = 4600 - 500 (pending receivable never paid back) = 4100.
+            Assert.That(saldoPrevistoPiorCaso, Is.EqualTo(4100m));
+            // saldoRealizado = (5200 received income + 400 received reimbursement) - 1800 paid full = 3800.
+            Assert.That(saldoRealizado, Is.EqualTo(3800m));
+            // Gap invariant: the difference between the two planned balances is exactly the pending receivable.
+            Assert.That(saldoPrevistoOtimista - saldoPrevistoPiorCaso, Is.EqualTo(receivablePending));
+        });
+    }
+
+    [Test]
+    public void ReceivablePending_ExcludesAlreadyReceivedAmounts()
+    {
+        // Arrange — one pending, one already received; pending total must not include the received one.
+        var bills = new[]
+        {
+            (Effective: 200m, Split: 0.5m, Received: false), // receivable=100, still pending
+            (Effective: 300m, Split: 0.5m, Received: true),  // receivable=150, already received
+        };
+
+        // Act
+        var receivablePending = bills
+            .Where(b => !b.Received)
+            .Sum(b => EntryCalculations.Receivable(b.Effective, b.Split));
+
+        // Assert — only the unreceived entry counts
+        Assert.That(receivablePending, Is.EqualTo(100m));
+    }
+
+    [Test]
+    public void SaldoRealizado_UsesFullPaidValueNotMyShareOfPaidBills()
+    {
+        // Arrange — a shared bill (split=0.5) paid in full by the owner: effective=1000.
+        const decimal effective = 1000m;
+        const decimal splitRatio = 0.5m;
+        var myShare = EntryCalculations.MyShare(effective, splitRatio);
+
+        // Act — saldoRealizado subtracts the full paid amount, not myShare (the old SaldoReal semantics).
+        var saldoRealizado = 0m - effective;
+        var legacySaldoReal = 0m - myShare;
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(saldoRealizado, Is.EqualTo(-1000m));
+            Assert.That(legacySaldoReal, Is.EqualTo(-500m));
+            Assert.That(saldoRealizado, Is.Not.EqualTo(legacySaldoReal));
+        });
+    }
+
+    [Test]
+    public void SaldoRealizado_AddsReceivedReimbursementsOnTopOfReceivedIncome()
+    {
+        // Arrange — no incomes received, but a reimbursement (receivableReceived) came in.
+        const decimal incomesReceivedTotal = 0m;
+        const decimal receivableReceived = 250m;
+        const decimal paidFull = 0m;
+
+        // Act
+        var saldoRealizado = incomesReceivedTotal + receivableReceived - paidFull;
+
+        // Assert
+        Assert.That(saldoRealizado, Is.EqualTo(250m));
     }
 }

@@ -90,12 +90,39 @@ internal static class DashboardEndpoints
             .Where(e => e.Received)
             .Sum(e => EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount));
 
+        // Receivable (the other person's share) split into pending vs. already-received, plus the full
+        // (not myShare) value of already-paid bills — computed inline since this endpoint has no
+        // per-entry Receivable DTO like GET /api/entries does.
+        var receivablePending = billEntries
+            .Where(e => !e.Received)
+            .Sum(e => EntryCalculations.Receivable(
+                EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot));
+        var receivableReceived = billEntries
+            .Where(e => e.Received)
+            .Sum(e => EntryCalculations.Receivable(
+                EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot));
+        var paidFull = billEntries
+            .Where(e => e.Paid)
+            .Sum(e => EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount));
+
+        // saldoPrevistoOtimista: assumes everyone pays what they owe.
+        var saldoPrevistoOtimista = plannedIncome - plannedExpense;
+
+        // saldoPrevistoPiorCaso: assumes the pending receivable is never paid back.
+        var saldoPrevistoPiorCaso = saldoPrevistoOtimista - receivablePending;
+
+        // saldoRealizado: actual cash — received income plus received reimbursements, minus the full
+        // (not myShare) amount actually paid for bills.
+        var saldoRealizado = actualIncome + receivableReceived - paidFull;
+
         var summary = new DashboardSummaryDto(
             plannedExpense, actualExpense,
             plannedIncome, actualIncome,
-            plannedIncome - plannedExpense, actualIncome - actualExpense,
+            saldoPrevistoOtimista, saldoRealizado,
             billEntries.Count(e => e.Paid), billEntries.Count,
-            incomeEntries.Count(e => e.Received), incomeEntries.Count);
+            incomeEntries.Count(e => e.Received), incomeEntries.Count,
+            receivablePending, receivableReceived, paidFull,
+            saldoPrevistoOtimista, saldoPrevistoPiorCaso, saldoRealizado);
 
         return Results.Ok(new DashboardMonthDto(year.Value, month.Value, summary, byCategory));
     }
