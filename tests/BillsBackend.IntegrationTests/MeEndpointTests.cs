@@ -20,7 +20,7 @@ public sealed class MeEndpointTests : IntegrationTestBase
     public async Task GetMe_WithValidToken_ReturnsOkWithIdNameAndEmail()
     {
         // Arrange
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/me");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/me");
         request.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateValidToken("firebase-me-1", "me@example.com", "Me User"));
 
@@ -41,7 +41,7 @@ public sealed class MeEndpointTests : IntegrationTestBase
     public async Task GetMe_TokenWithNoNameClaim_ReturnsOkWithEmptyName()
     {
         // Arrange — name: null omits the claim from the token
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/me");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/me");
         request.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateValidToken("firebase-me-2", "noname@example.com", name: null));
 
@@ -60,7 +60,7 @@ public sealed class MeEndpointTests : IntegrationTestBase
     public async Task GetMe_WithUntrustedSignature_ReturnsUnauthorized()
     {
         // Arrange
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/me");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/me");
         request.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateTokenWithUntrustedSignature());
 
@@ -75,7 +75,7 @@ public sealed class MeEndpointTests : IntegrationTestBase
     public async Task GetMe_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange / Act
-        using var response = await Client.GetAsync("/me");
+        using var response = await Client.GetAsync("/api/v1/me");
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));

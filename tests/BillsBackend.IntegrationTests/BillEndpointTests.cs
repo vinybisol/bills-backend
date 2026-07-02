@@ -35,7 +35,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     // Fetching them avoids name conflicts with those seeded defaults.
     private async Task<long[]> GetDefaultCategoryIdsAsync(string uid)
     {
-        using var req = Req(HttpMethod.Get, "/categories", uid);
+        using var req = Req(HttpMethod.Get, "/api/v1/categories", uid);
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
@@ -46,7 +46,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     // Creates a person for the given uid and returns their id.
     private async Task<long> CreatePersonAsync(string uid, string name = "Parceiro")
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var dto = await resp.Content.ReadFromJsonAsync<PersonDto>();
@@ -61,7 +61,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
         // Arrange
         var uid = Uid("create-ok");
         var categoryIds = await GetDefaultCategoryIdsAsync(uid);
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Aluguel", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 1500m, splitRatio = 1m, personId = (long?)null });
 
         // Act
@@ -89,7 +89,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     {
         // Arrange — validation fires before DB access; any categoryId is fine here
         var uid = Uid($"create-bad-name-{name.Length}");
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name, categoryId = 1L, kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
 
         // Act
@@ -104,7 +104,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     {
         // Arrange — splitRatio > 1 is invalid; validation fires before any DB access
         var uid = Uid("create-bad-ratio");
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Aluguel", categoryId = 1L, kind = "recurring", defaultAmount = 500m, splitRatio = 1.5m, personId = (long?)null });
 
         // Act
@@ -119,7 +119,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     {
         // Arrange — personId is required when splitRatio < 1; validation fires before any DB access
         var uid = Uid("create-split-no-person");
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Aluguel", categoryId = 1L, kind = "recurring", defaultAmount = 500m, splitRatio = 0.5m, personId = (long?)null });
 
         // Act
@@ -134,7 +134,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     {
         // Arrange — personId must be null when splitRatio = 1; validation fires before any DB access
         var uid = Uid("create-split1-with-person");
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Aluguel", categoryId = 1L, kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)2L });
 
         // Act
@@ -148,7 +148,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     public async Task CreateBill_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/bills");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/bills");
         req.Content = JsonContent.Create(new { name = "Aluguel", categoryId = 1L, kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
 
         // Act
@@ -163,7 +163,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     {
         // Arrange — category 999999 does not belong to this owner; checked after auth
         var uid = Uid("create-no-cat");
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Aluguel", categoryId = 999999L, kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
 
         // Act
@@ -179,7 +179,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
         // Arrange — category exists (default), person 999999 does not belong to this owner
         var uid = Uid("create-no-person");
         var categoryIds = await GetDefaultCategoryIdsAsync(uid);
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Aluguel", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 500m, splitRatio = 0.5m, personId = (long?)999999L });
 
         // Act
@@ -195,7 +195,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     public async Task ListBills_NewUser_ReturnsEmptyList()
     {
         // Arrange
-        using var req = Req(HttpMethod.Get, "/bills", Uid("list-empty"));
+        using var req = Req(HttpMethod.Get, "/api/v1/bills", Uid("list-empty"));
 
         // Act
         using var response = await Client.SendAsync(req);
@@ -212,12 +212,12 @@ public sealed class BillEndpointTests : IntegrationTestBase
         // Arrange
         var uid = Uid("list-after-create");
         var categoryIds = await GetDefaultCategoryIdsAsync(uid);
-        using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Aluguel", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 1500m, splitRatio = 1m, personId = (long?)null });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        using var listReq = Req(HttpMethod.Get, "/bills", uid);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/bills", uid);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -232,7 +232,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     [Test]
     public async Task ListBills_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await Client.GetAsync("/bills");
+        using var response = await Client.GetAsync("/api/v1/bills");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -246,7 +246,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
         var categoryIds = await GetDefaultCategoryIdsAsync(uid);
         var personId = await CreatePersonAsync(uid);
 
-        using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Aluguel", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 1500m, splitRatio = 1m, personId = (long?)null });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -254,7 +254,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
         Assert.That(created, Is.Not.Null);
 
         // Update to a different category (index 1) and add a split
-        using var updateReq = ReqWithBody(HttpMethod.Put, $"/bills/{created!.Id}", uid,
+        using var updateReq = ReqWithBody(HttpMethod.Put, $"/api/v1/bills/{created!.Id}", uid,
             new { name = "Carro", categoryId = categoryIds[1], kind = "one_off", defaultAmount = 800m, splitRatio = 0.5m, personId = (long?)personId });
 
         // Act
@@ -278,7 +278,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     public async Task UpdateBill_NotFound_ReturnsNotFound()
     {
         // Arrange — bill 999999 does not exist for this owner
-        using var req = ReqWithBody(HttpMethod.Put, "/bills/999999", Uid("update-notfound"),
+        using var req = ReqWithBody(HttpMethod.Put, "/api/v1/bills/999999", Uid("update-notfound"),
             new { name = "Inexistente", categoryId = 1L, kind = "recurring", defaultAmount = 0m, splitRatio = 1m, personId = (long?)null });
 
         // Act
@@ -291,7 +291,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     [Test]
     public async Task UpdateBill_WithoutToken_ReturnsUnauthorized()
     {
-        using var req = new HttpRequestMessage(HttpMethod.Put, "/bills/1");
+        using var req = new HttpRequestMessage(HttpMethod.Put, "/api/v1/bills/1");
         req.Content = JsonContent.Create(new { name = "x", categoryId = 1L, kind = "recurring", defaultAmount = 0m, splitRatio = 1m, personId = (long?)null });
         using var response = await Client.SendAsync(req);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -305,12 +305,12 @@ public sealed class BillEndpointTests : IntegrationTestBase
         // Arrange
         var uid = Uid("delete-ok");
         var categoryIds = await GetDefaultCategoryIdsAsync(uid);
-        using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "ARemover", categoryId = categoryIds[0], kind = "one_off", defaultAmount = 100m, splitRatio = 1m, personId = (long?)null });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<BillDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/bills/{created!.Id}", uid);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/bills/{created!.Id}", uid);
 
         // Act
         using var response = await Client.SendAsync(deleteReq);
@@ -325,16 +325,16 @@ public sealed class BillEndpointTests : IntegrationTestBase
         // Arrange
         var uid = Uid("delete-disappears");
         var categoryIds = await GetDefaultCategoryIdsAsync(uid);
-        using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Efemera", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<BillDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/bills/{created!.Id}", uid);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/bills/{created!.Id}", uid);
         using var deleteResp = await Client.SendAsync(deleteReq);
         Assert.That(deleteResp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
 
-        using var listReq = Req(HttpMethod.Get, "/bills", uid);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/bills", uid);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -347,7 +347,7 @@ public sealed class BillEndpointTests : IntegrationTestBase
     [Test]
     public async Task DeleteBill_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await Client.DeleteAsync("/bills/1");
+        using var response = await Client.DeleteAsync("/api/v1/bills/1");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -360,12 +360,12 @@ public sealed class BillEndpointTests : IntegrationTestBase
         var uidA = Uid("isolate-list-a");
         var uidB = Uid("isolate-list-b");
         var categoryIds = await GetDefaultCategoryIdsAsync(uidA);
-        using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uidA,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uidA,
             new { name = "SomenteA", categoryId = categoryIds[0], kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        using var listReq = Req(HttpMethod.Get, "/bills", uidB);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/bills", uidB);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -385,14 +385,14 @@ public sealed class BillEndpointTests : IntegrationTestBase
         var uidA = Uid("isolate-update-a");
         var uidB = Uid("isolate-update-b");
         var categoryIdsA = await GetDefaultCategoryIdsAsync(uidA);
-        using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uidA,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uidA,
             new { name = "DoA", categoryId = categoryIdsA[0], kind = "recurring", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<BillDto>();
 
         // Provision user B (triggering their own default categories) and attempt update on A's bill
         var categoryIdsB = await GetDefaultCategoryIdsAsync(uidB);
-        using var updateReq = ReqWithBody(HttpMethod.Put, $"/bills/{created!.Id}", uidB,
+        using var updateReq = ReqWithBody(HttpMethod.Put, $"/api/v1/bills/{created!.Id}", uidB,
             new { name = "Hackeada", categoryId = categoryIdsB[0], kind = "recurring", defaultAmount = 999m, splitRatio = 1m, personId = (long?)null });
 
         // Act
@@ -409,12 +409,12 @@ public sealed class BillEndpointTests : IntegrationTestBase
         var uidA = Uid("isolate-delete-a");
         var uidB = Uid("isolate-delete-b");
         var categoryIds = await GetDefaultCategoryIdsAsync(uidA);
-        using var createReq = ReqWithBody(HttpMethod.Post, "/bills", uidA,
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uidA,
             new { name = "DoA2", categoryId = categoryIds[0], kind = "one_off", defaultAmount = 500m, splitRatio = 1m, personId = (long?)null });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<BillDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/bills/{created!.Id}", uidB);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/bills/{created!.Id}", uidB);
 
         // Act
         using var response = await Client.SendAsync(deleteReq);

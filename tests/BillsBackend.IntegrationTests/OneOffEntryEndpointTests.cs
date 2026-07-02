@@ -33,7 +33,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
 
     private async Task<long> GetFirstCategoryIdAsync(string uid)
     {
-        using var req = Req(HttpMethod.Get, "/categories", uid);
+        using var req = Req(HttpMethod.Get, "/api/v1/categories", uid);
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
@@ -44,7 +44,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
     private async Task<BillDto> CreateOneOffBillAsync(string uid, long categoryId,
         string name = "IPVA", decimal amount = 1200m, decimal splitRatio = 1m, long? personId = null)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name, categoryId, kind = "one_off", defaultAmount = amount, splitRatio, personId });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -53,7 +53,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
 
     private async Task<BillDto> CreateRecurringBillAsync(string uid, long categoryId, string name = "Aluguel")
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name, categoryId, kind = "recurring", defaultAmount = 1000m, splitRatio = 1m, personId = (long?)null });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -62,7 +62,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
 
     private async Task<IncomeDto> CreateOneOffIncomeAsync(string uid, string name = "Reembolso", decimal amount = 500m)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/incomes", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uid,
             new { name, kind = "one_off", defaultAmount = amount });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -71,7 +71,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
 
     private async Task<long> CreatePersonAsync(string uid, string name = "Parceiro")
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return (await resp.Content.ReadFromJsonAsync<PersonDto>())!.Id;
@@ -81,7 +81,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
         string uid, long billId, int year, int month, decimal? plannedAmount = null)
     {
         var body = new { billId, year, month, plannedAmount };
-        using var req = ReqWithBody(HttpMethod.Post, "/api/entries/bill", uid, body);
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/entries/bill", uid, body);
         var resp = await Client.SendAsync(req);
         if (!resp.IsSuccessStatusCode)
             return (resp, null);
@@ -93,7 +93,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
         string uid, long incomeId, int year, int month, decimal? plannedAmount = null)
     {
         var body = new { incomeId, year, month, plannedAmount };
-        using var req = ReqWithBody(HttpMethod.Post, "/api/entries/income", uid, body);
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/entries/income", uid, body);
         var resp = await Client.SendAsync(req);
         if (!resp.IsSuccessStatusCode)
             return (resp, null);
@@ -223,7 +223,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
     [Test]
     public async Task PostBillEntry_WithoutToken_Returns401()
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/entries/bill");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/entries/bill");
         req.Content = JsonContent.Create(new { billId = 1, year = 2026, month = 1 });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -242,7 +242,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         // Act
-        using var delReq = Req(HttpMethod.Delete, $"/api/entries/bill/{body!.Id}", uid);
+        using var delReq = Req(HttpMethod.Delete, $"/api/v1/entries/bill/{body!.Id}", uid);
         using var delResp = await Client.SendAsync(delReq);
 
         // Assert
@@ -270,7 +270,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
         }
 
         // Act — try to delete a paid entry
-        using var delReq = Req(HttpMethod.Delete, $"/api/entries/bill/{body!.Id}", uid);
+        using var delReq = Req(HttpMethod.Delete, $"/api/v1/entries/bill/{body!.Id}", uid);
         using var delResp = await Client.SendAsync(delReq);
 
         // Assert
@@ -280,7 +280,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
     [Test]
     public async Task DeleteBillEntry_WithoutToken_Returns401()
     {
-        using var req = new HttpRequestMessage(HttpMethod.Delete, "/api/entries/bill/1");
+        using var req = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/entries/bill/1");
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
@@ -343,7 +343,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
     [Test]
     public async Task PostIncomeEntry_WithoutToken_Returns401()
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/entries/income");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/entries/income");
         req.Content = JsonContent.Create(new { incomeId = 1, year = 2026, month = 1 });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -361,7 +361,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         // Act
-        using var delReq = Req(HttpMethod.Delete, $"/api/entries/income/{body!.Id}", uid);
+        using var delReq = Req(HttpMethod.Delete, $"/api/v1/entries/income/{body!.Id}", uid);
         using var delResp = await Client.SendAsync(delReq);
 
         // Assert
@@ -387,7 +387,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
         }
 
         // Act
-        using var delReq = Req(HttpMethod.Delete, $"/api/entries/income/{body!.Id}", uid);
+        using var delReq = Req(HttpMethod.Delete, $"/api/v1/entries/income/{body!.Id}", uid);
         using var delResp = await Client.SendAsync(delReq);
 
         // Assert
@@ -397,7 +397,7 @@ public sealed class OneOffEntryEndpointTests : IntegrationTestBase
     [Test]
     public async Task DeleteIncomeEntry_WithoutToken_Returns401()
     {
-        using var req = new HttpRequestMessage(HttpMethod.Delete, "/api/entries/income/1");
+        using var req = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/entries/income/1");
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }

@@ -34,7 +34,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     // Fetches default categories for the given uid; triggers user provisioning on first call.
     private async Task<CategoryDto[]> GetDefaultCategoriesAsync(string uid)
     {
-        using var req = Req(HttpMethod.Get, "/categories", uid);
+        using var req = Req(HttpMethod.Get, "/api/v1/categories", uid);
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
@@ -45,7 +45,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     // Creates a person and returns their id.
     private async Task<long> CreatePersonAsync(string uid, string name = "Parceiro")
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return (await resp.Content.ReadFromJsonAsync<PersonDto>())!.Id;
@@ -55,7 +55,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     private async Task<BillDto> CreateRecurringBillAsync(
         string uid, long categoryId, string name = "Aluguel", decimal amount = 1000m)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio = 1m, personId = (long?)null });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -67,7 +67,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
         string uid, long categoryId, long personId,
         string name = "Internet", decimal amount = 120m)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio = 0.5m, personId = (long?)personId });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -77,7 +77,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     // Creates a recurring income and returns the DTO.
     private async Task<IncomeDto> CreateRecurringIncomeAsync(string uid, string name = "Salario", decimal amount = 5000m)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/incomes", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uid,
             new { name, kind = "recurring", defaultAmount = amount });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -87,7 +87,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     // Runs POST /api/projection/{year} and asserts success.
     private async Task PostProjectionAsync(string uid, int year)
     {
-        using var req = Req(HttpMethod.Post, $"/api/projection/{year}", uid);
+        using var req = Req(HttpMethod.Post, $"/api/v1/projection/{year}", uid);
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
@@ -96,7 +96,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     private async Task<(HttpResponseMessage Response, MonthEntriesResponse? Body)> GetEntriesAsync(
         string uid, int year, int month)
     {
-        using var req = Req(HttpMethod.Get, $"/api/entries?year={year}&month={month}", uid);
+        using var req = Req(HttpMethod.Get, $"/api/v1/entries?year={year}&month={month}", uid);
         var resp = await Client.SendAsync(req);
         if (!resp.IsSuccessStatusCode)
             return (resp, null);
@@ -107,7 +107,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     // Marks a bill entry's split as received via POST /api/receivables/{entryId}/mark.
     private async Task MarkReceivedAsync(string uid, long entryId)
     {
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/receivables/{entryId}/mark", uid, new { receivedDate = (DateOnly?)null });
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/receivables/{entryId}/mark", uid, new { receivedDate = (DateOnly?)null });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
@@ -259,7 +259,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     public async Task Get_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/entries?year=2025&month=1");
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/entries?year=2025&month=1");
 
         // Act
         using var response = await Client.SendAsync(req);
@@ -274,7 +274,7 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     {
         // Arrange — must include a valid token since auth middleware runs before the handler
         var uid = Uid($"bad-month-{invalidMonth}");
-        using var req = Req(HttpMethod.Get, $"/api/entries?year=2025&month={invalidMonth}", uid);
+        using var req = Req(HttpMethod.Get, $"/api/v1/entries?year=2025&month={invalidMonth}", uid);
 
         // Act
         using var response = await Client.SendAsync(req);

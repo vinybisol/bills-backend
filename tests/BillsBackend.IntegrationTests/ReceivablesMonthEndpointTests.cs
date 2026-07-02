@@ -31,7 +31,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
 
     private async Task<long> GetFirstCategoryIdAsync(string uid)
     {
-        using var req = Req(HttpMethod.Get, "/categories", uid);
+        using var req = Req(HttpMethod.Get, "/api/v1/categories", uid);
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
@@ -41,7 +41,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
 
     private async Task<long> CreatePersonAsync(string uid, string name)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         return (await resp.Content.ReadFromJsonAsync<PersonDto>())!.Id;
@@ -50,7 +50,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
     private async Task<long> CreateBillAsync(
         string uid, long categoryId, string name, decimal amount, decimal splitRatio, long? personId)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name, categoryId, kind = "one_off", defaultAmount = amount, splitRatio, personId });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -59,7 +59,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
 
     private async Task<long> CreateBillEntryAsync(string uid, long billId, int year, int month, decimal plannedAmount)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/api/entries/bill", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/entries/bill", uid,
             new { billId, year, month, plannedAmount });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
@@ -68,7 +68,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
 
     private async Task<(HttpStatusCode Status, ReceivablesMonthResponse? Body)> GetPanelAsync(string uid, int year, int month)
     {
-        using var req = Req(HttpMethod.Get, $"/api/receivables/month?year={year}&month={month}", uid);
+        using var req = Req(HttpMethod.Get, $"/api/v1/receivables/month?year={year}&month={month}", uid);
         using var resp = await Client.SendAsync(req);
         var body = resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<ReceivablesMonthResponse>() : null;
         return (resp.StatusCode, body);
@@ -76,7 +76,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
 
     private async Task<(HttpStatusCode Status, EntryResponse? Body)> MarkAsync(string uid, long entryId, DateOnly? receivedDate = null)
     {
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/receivables/{entryId}/mark", uid, new { receivedDate });
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/receivables/{entryId}/mark", uid, new { receivedDate });
         using var resp = await Client.SendAsync(req);
         var body = resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<EntryResponse>() : null;
         return (resp.StatusCode, body);
@@ -84,7 +84,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
 
     private async Task<(HttpStatusCode Status, EntryResponse? Body)> UnmarkAsync(string uid, long entryId)
     {
-        using var req = Req(HttpMethod.Post, $"/api/receivables/{entryId}/unmark", uid);
+        using var req = Req(HttpMethod.Post, $"/api/v1/receivables/{entryId}/unmark", uid);
         using var resp = await Client.SendAsync(req);
         var body = resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<EntryResponse>() : null;
         return (resp.StatusCode, body);
@@ -93,7 +93,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
     private async Task<(HttpStatusCode Status, MarkBatchResponse? Body)> MarkBatchAsync(
         string uid, IReadOnlyList<long> entryIds, DateOnly? receivedDate = null)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/api/receivables/mark-batch", uid, new { entryIds, receivedDate });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/receivables/mark-batch", uid, new { entryIds, receivedDate });
         using var resp = await Client.SendAsync(req);
         var body = resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<MarkBatchResponse>() : null;
         return (resp.StatusCode, body);
@@ -295,7 +295,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
         var person = await CreatePersonAsync(uid, "Esposa");
         var bill = await CreateBillAsync(uid, catId, "Aluguel", 1000m, 0.5m, person);
         var entryId = await CreateBillEntryAsync(uid, bill, 2026, 7, 1000m);
-        using var payReq = ReqWithBody(HttpMethod.Post, $"/api/entries/bill/{entryId}/pay", uid, new { });
+        using var payReq = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uid, new { });
         using var payResp = await Client.SendAsync(payReq);
         var paidBody = await payResp.Content.ReadFromJsonAsync<EntryResponse>();
 
@@ -323,7 +323,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
         var person = await CreatePersonAsync(uid, "Esposa");
         var bill = await CreateBillAsync(uid, catId, "Aluguel", 1000m, 0.5m, person);
         var entryId = await CreateBillEntryAsync(uid, bill, 2026, 7, 1000m);
-        using var payReq = ReqWithBody(HttpMethod.Post, $"/api/entries/bill/{entryId}/pay", uid, new { });
+        using var payReq = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uid, new { });
         using var payResp = await Client.SendAsync(payReq);
         var paidBody = await payResp.Content.ReadFromJsonAsync<EntryResponse>();
         await MarkAsync(uid, entryId);
@@ -420,7 +420,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
     public async Task GetPanel_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/receivables/month?year=2026&month=7");
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/receivables/month?year=2026&month=7");
 
         // Act
         using var resp = await Client.SendAsync(req);
@@ -433,7 +433,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
     public async Task Mark_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/receivables/1/mark");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/receivables/1/mark");
         req.Content = JsonContent.Create(new { });
 
         // Act

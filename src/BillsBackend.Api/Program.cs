@@ -74,9 +74,12 @@ if (!app.Environment.IsEnvironment("Testing"))
 app.UseAuthentication();
 app.UseAuthorization();
 
+// All endpoints are versioned under /api/v1. See docs/decisoes.md for the versioning decision.
+var v1 = app.MapGroup("/api/v1");
+
 // Authenticated liveness endpoint: resolves (and just-in-time provisions) the internal
 // app_user from the Firebase token and returns its internal id.
-app.MapGet("/health", async (
+v1.MapGet("/health", async (
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
     CancellationToken cancellationToken) =>
@@ -94,7 +97,7 @@ app.MapGet("/health", async (
 
 // Returns the logged-in user's internal profile, resolving (and just-in-time provisioning)
 // the app_user from the Firebase token.
-app.MapGet("/me", async (
+v1.MapGet("/me", async (
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
     CancellationToken cancellationToken) =>
@@ -112,7 +115,7 @@ app.MapGet("/me", async (
 
 // --- Category endpoints ---
 
-app.MapPost("/categories", async (
+v1.MapPost("/categories", async (
     CreateCategoryRequest req,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -139,11 +142,11 @@ app.MapPost("/categories", async (
     db.Categories.Add(category);
     await db.SaveChangesAsync(ct);
 
-    return Results.Created($"/categories/{category.Id}", new CategoryDto(category.Id, category.Name));
+    return Results.Created($"/api/v1/categories/{category.Id}", new CategoryDto(category.Id, category.Name));
 })
 .RequireAuthorization();
 
-app.MapGet("/categories", async (
+v1.MapGet("/categories", async (
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
     ICurrentOwner currentOwner,
@@ -166,7 +169,7 @@ app.MapGet("/categories", async (
 })
 .RequireAuthorization();
 
-app.MapPut("/categories/{id:long}", async (
+v1.MapPut("/categories/{id:long}", async (
     long id,
     UpdateCategoryRequest req,
     System.Security.Claims.ClaimsPrincipal user,
@@ -201,7 +204,7 @@ app.MapPut("/categories/{id:long}", async (
 })
 .RequireAuthorization();
 
-app.MapDelete("/categories/{id:long}", async (
+v1.MapDelete("/categories/{id:long}", async (
     long id,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -229,7 +232,7 @@ app.MapDelete("/categories/{id:long}", async (
 
 // --- Person endpoints ---
 
-app.MapPost("/persons", async (
+v1.MapPost("/persons", async (
     CreatePersonRequest req,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -252,11 +255,11 @@ app.MapPost("/persons", async (
     db.Persons.Add(person);
     await db.SaveChangesAsync(ct);
 
-    return Results.Created($"/persons/{person.Id}", new PersonDto(person.Id, person.Name));
+    return Results.Created($"/api/v1/persons/{person.Id}", new PersonDto(person.Id, person.Name));
 })
 .RequireAuthorization();
 
-app.MapGet("/persons", async (
+v1.MapGet("/persons", async (
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
     ICurrentOwner currentOwner,
@@ -279,7 +282,7 @@ app.MapGet("/persons", async (
 })
 .RequireAuthorization();
 
-app.MapPut("/persons/{id:long}", async (
+v1.MapPut("/persons/{id:long}", async (
     long id,
     UpdatePersonRequest req,
     System.Security.Claims.ClaimsPrincipal user,
@@ -309,7 +312,7 @@ app.MapPut("/persons/{id:long}", async (
 })
 .RequireAuthorization();
 
-app.MapDelete("/persons/{id:long}", async (
+v1.MapDelete("/persons/{id:long}", async (
     long id,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -337,7 +340,7 @@ app.MapDelete("/persons/{id:long}", async (
 
 // --- Income endpoints ---
 
-app.MapPost("/incomes", async (
+v1.MapPost("/incomes", async (
     CreateIncomeRequest req,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -363,11 +366,11 @@ app.MapPost("/incomes", async (
     db.Incomes.Add(income);
     await db.SaveChangesAsync(ct);
 
-    return Results.Created($"/incomes/{income.Id}", new IncomeDto(income.Id, income.Name, income.Kind, income.DefaultAmount));
+    return Results.Created($"/api/v1/incomes/{income.Id}", new IncomeDto(income.Id, income.Name, income.Kind, income.DefaultAmount));
 })
 .RequireAuthorization();
 
-app.MapGet("/incomes", async (
+v1.MapGet("/incomes", async (
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
     ICurrentOwner currentOwner,
@@ -390,7 +393,7 @@ app.MapGet("/incomes", async (
 })
 .RequireAuthorization();
 
-app.MapPut("/incomes/{id:long}", async (
+v1.MapPut("/incomes/{id:long}", async (
     long id,
     UpdateIncomeRequest req,
     System.Security.Claims.ClaimsPrincipal user,
@@ -423,7 +426,7 @@ app.MapPut("/incomes/{id:long}", async (
 })
 .RequireAuthorization();
 
-app.MapDelete("/incomes/{id:long}", async (
+v1.MapDelete("/incomes/{id:long}", async (
     long id,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -451,7 +454,7 @@ app.MapDelete("/incomes/{id:long}", async (
 
 // --- Bill endpoints ---
 
-app.MapPost("/bills", async (
+v1.MapPost("/bills", async (
     CreateBillRequest req,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -492,11 +495,11 @@ app.MapPost("/bills", async (
     db.Bills.Add(bill);
     await db.SaveChangesAsync(ct);
 
-    return Results.Created($"/bills/{bill.Id}", new BillDto(bill.Id, bill.Name, bill.CategoryId, bill.Kind, bill.DefaultAmount, bill.SplitRatio, bill.PersonId));
+    return Results.Created($"/api/v1/bills/{bill.Id}", new BillDto(bill.Id, bill.Name, bill.CategoryId, bill.Kind, bill.DefaultAmount, bill.SplitRatio, bill.PersonId));
 })
 .RequireAuthorization();
 
-app.MapGet("/bills", async (
+v1.MapGet("/bills", async (
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
     ICurrentOwner currentOwner,
@@ -519,7 +522,7 @@ app.MapGet("/bills", async (
 })
 .RequireAuthorization();
 
-app.MapPut("/bills/{id:long}", async (
+v1.MapPut("/bills/{id:long}", async (
     long id,
     UpdateBillRequest req,
     System.Security.Claims.ClaimsPrincipal user,
@@ -567,7 +570,7 @@ app.MapPut("/bills/{id:long}", async (
 })
 .RequireAuthorization();
 
-app.MapDelete("/bills/{id:long}", async (
+v1.MapDelete("/bills/{id:long}", async (
     long id,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -595,7 +598,7 @@ app.MapDelete("/bills/{id:long}", async (
 
 // Recalculates bill default amount and propagates to unpaid future entries.
 // Paid entries in range are skipped (immutability); entries before fromMonth are untouched.
-app.MapPost("/api/bills/{billId:long}/recalculate", async (
+v1.MapPost("/bills/{billId:long}/recalculate", async (
     long billId,
     RecalculateRequest req,
     System.Security.Claims.ClaimsPrincipal user,
@@ -658,7 +661,7 @@ app.MapPost("/api/bills/{billId:long}/recalculate", async (
 // Generates annual projected entries for every active recurring bill and income template
 // owned by the authenticated user. Idempotent: existing entries (identified by bill/income
 // id + year + month) are skipped, so calling the endpoint twice for the same year is safe.
-app.MapPost("/api/projection/{year:int}", async (
+v1.MapPost("/projection/{year:int}", async (
     int year,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -744,7 +747,7 @@ app.MapPost("/api/projection/{year:int}", async (
 // enriched with bill/category/person names and derived calculated amounts.
 // Reference tables (bill, category, person) are fetched with IgnoreQueryFilters so
 // entries that were linked to now-inactive templates still resolve their names.
-app.MapGet("/api/entries", async (
+v1.MapGet("/entries", async (
     int? year,
     int? month,
     System.Security.Claims.ClaimsPrincipal user,
@@ -877,7 +880,7 @@ app.MapGet("/api/entries", async (
 // Creates a bill_entry for a one_off bill template in the requested month.
 // Snapshots planned_amount, split_ratio and person_id from the template at creation time.
 // Returns 409 if an entry already exists for the same template and month (UNIQUE constraint).
-app.MapPost("/api/entries/bill", async (
+v1.MapPost("/entries/bill", async (
     CreateBillEntryRequest req,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -920,7 +923,7 @@ app.MapPost("/api/entries/bill", async (
         return Results.Conflict("A one-off entry for this bill and month already exists.");
     }
 
-    return Results.Created($"/api/entries/bill/{entry.Id}", new BillEntryCreatedDto(
+    return Results.Created($"/api/v1/entries/bill/{entry.Id}", new BillEntryCreatedDto(
         entry.Id, entry.BillId, entry.RefYear, entry.RefMonth,
         entry.PlannedAmount, entry.ActualAmount, entry.SplitRatioSnapshot, entry.PersonId,
         entry.Paid, entry.PaidDate, entry.Received, entry.ReceivedDate));
@@ -929,7 +932,7 @@ app.MapPost("/api/entries/bill", async (
 
 // Creates an income_entry for a one_off income template in the requested month.
 // Returns 409 if an entry already exists for the same template and month (UNIQUE constraint).
-app.MapPost("/api/entries/income", async (
+v1.MapPost("/entries/income", async (
     CreateIncomeEntryRequest req,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -972,7 +975,7 @@ app.MapPost("/api/entries/income", async (
         return Results.Conflict("A one-off entry for this income and month already exists.");
     }
 
-    return Results.Created($"/api/entries/income/{entry.Id}", new IncomeEntryCreatedDto(
+    return Results.Created($"/api/v1/entries/income/{entry.Id}", new IncomeEntryCreatedDto(
         entry.Id, entry.IncomeId, entry.RefYear, entry.RefMonth,
         entry.PlannedAmount, entry.ActualAmount, entry.Received, entry.ReceivedDate));
 })
@@ -980,7 +983,7 @@ app.MapPost("/api/entries/income", async (
 
 // Deletes an unpaid one-off bill_entry (hard delete — unpaid entries have no history to preserve).
 // Returns 409 if the entry has been paid (immutability: paid entries are frozen).
-app.MapDelete("/api/entries/bill/{id:long}", async (
+v1.MapDelete("/entries/bill/{id:long}", async (
     long id,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -1011,7 +1014,7 @@ app.MapDelete("/api/entries/bill/{id:long}", async (
 
 // Deletes an unreceived one-off income_entry (hard delete — unreceived entries have no history to preserve).
 // Returns 409 if the entry has been received (immutability: received entries are frozen).
-app.MapDelete("/api/entries/income/{id:long}", async (
+v1.MapDelete("/entries/income/{id:long}", async (
     long id,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -1044,7 +1047,7 @@ app.MapDelete("/api/entries/income/{id:long}", async (
 
 // Updates plannedAmount and/or actualAmount on an unfrozen bill entry.
 // Returns 409 if the entry is paid (frozen).
-app.MapMethods("/api/entries/bill/{id:long}", ["PATCH"], async (
+v1.MapMethods("/entries/bill/{id:long}", ["PATCH"], async (
     long id,
     PatchBillEntryRequest req,
     System.Security.Claims.ClaimsPrincipal user,
@@ -1082,7 +1085,7 @@ app.MapMethods("/api/entries/bill/{id:long}", ["PATCH"], async (
 .RequireAuthorization();
 
 // Marks a bill entry as paid. Freezes it and records the actual amount (defaults to planned).
-app.MapPost("/api/entries/bill/{id:long}/pay", async (
+v1.MapPost("/entries/bill/{id:long}/pay", async (
     long id,
     PayBillEntryRequest req,
     System.Security.Claims.ClaimsPrincipal user,
@@ -1114,7 +1117,7 @@ app.MapPost("/api/entries/bill/{id:long}/pay", async (
 .RequireAuthorization();
 
 // Unfreezes a paid bill entry so it can be edited again.
-app.MapPost("/api/entries/bill/{id:long}/unpay", async (
+v1.MapPost("/entries/bill/{id:long}/unpay", async (
     long id,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -1141,7 +1144,7 @@ app.MapPost("/api/entries/bill/{id:long}/unpay", async (
 
 // Updates plannedAmount and/or actualAmount on an unfrozen income entry.
 // Returns 409 if the entry is received (frozen).
-app.MapMethods("/api/entries/income/{id:long}", ["PATCH"], async (
+v1.MapMethods("/entries/income/{id:long}", ["PATCH"], async (
     long id,
     PatchIncomeEntryRequest req,
     System.Security.Claims.ClaimsPrincipal user,
@@ -1179,7 +1182,7 @@ app.MapMethods("/api/entries/income/{id:long}", ["PATCH"], async (
 .RequireAuthorization();
 
 // Marks an income entry as received. Freezes it and records the actual amount (defaults to planned).
-app.MapPost("/api/entries/income/{id:long}/receive", async (
+v1.MapPost("/entries/income/{id:long}/receive", async (
     long id,
     ReceiveIncomeEntryRequest req,
     System.Security.Claims.ClaimsPrincipal user,
@@ -1211,7 +1214,7 @@ app.MapPost("/api/entries/income/{id:long}/receive", async (
 .RequireAuthorization();
 
 // Unfreezes a received income entry so it can be edited again.
-app.MapPost("/api/entries/income/{id:long}/unreceive", async (
+v1.MapPost("/entries/income/{id:long}/unreceive", async (
     long id,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -1242,7 +1245,7 @@ app.MapPost("/api/entries/income/{id:long}/unreceive", async (
 // the owner's share. Mirrors GET /api/entries's enrichment approach — bill/category lookups use
 // IgnoreQueryFilters (scoped manually by OwnerId) so entries whose bill/category template has
 // since been deactivated still resolve.
-app.MapGet("/api/dashboard/month", async (
+v1.MapGet("/dashboard/month", async (
     int? year,
     int? month,
     System.Security.Claims.ClaimsPrincipal user,
@@ -1334,7 +1337,7 @@ app.MapGet("/api/dashboard/month", async (
 // breakdown of the owner's share, and grand totals. Mirrors GET /api/dashboard/month's
 // enrichment approach (IgnoreQueryFilters scoped by OwnerId), but fetches the whole year once
 // and aggregates per month and per category from the same in-memory sets.
-app.MapGet("/api/dashboard/year", async (
+v1.MapGet("/dashboard/year", async (
     int? year,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -1439,7 +1442,7 @@ app.MapGet("/api/dashboard/year", async (
 // Returns a per-person panel of "a receber" (receivable) amounts for the given month: only
 // BillEntry rows with a split (SplitRatioSnapshot < 1) and an assigned person are relevant.
 // Mirrors GET /api/entries's enrichment approach for bill/person name resolution.
-app.MapGet("/api/receivables/month", async (
+v1.MapGet("/receivables/month", async (
     int? year,
     int? month,
     System.Security.Claims.ClaimsPrincipal user,
@@ -1510,7 +1513,7 @@ app.MapGet("/api/receivables/month", async (
 // Marks the split portion of a bill entry as received from the other person. Idempotent —
 // marking an already-received entry again simply re-applies the same received date. Never
 // touches Paid/PaidDate, which track the independent fact that the owner paid the bill.
-app.MapPost("/api/receivables/{entryId:long}/mark", async (
+v1.MapPost("/receivables/{entryId:long}/mark", async (
     long entryId,
     MarkReceivableRequest req,
     System.Security.Claims.ClaimsPrincipal user,
@@ -1545,7 +1548,7 @@ app.MapPost("/api/receivables/{entryId:long}/mark", async (
 .RequireAuthorization();
 
 // Reverses a prior mark-as-received. Never touches Paid/PaidDate.
-app.MapPost("/api/receivables/{entryId:long}/unmark", async (
+v1.MapPost("/receivables/{entryId:long}/unmark", async (
     long entryId,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -1574,7 +1577,7 @@ app.MapPost("/api/receivables/{entryId:long}/unmark", async (
 // exist, belong to the caller (the BillEntries query filter already scopes reads to the
 // current owner, so a foreign/unknown id is simply absent from the fetched set), and be an
 // actual receivable (SplitRatioSnapshot < 1). If any id fails these checks, nothing is marked.
-app.MapPost("/api/receivables/mark-batch", async (
+v1.MapPost("/receivables/mark-batch", async (
     MarkBatchRequest req,
     System.Security.Claims.ClaimsPrincipal user,
     IUserProvisioningService provisioning,
@@ -1622,7 +1625,7 @@ app.MapPost("/api/receivables/mark-batch", async (
 // Returns the receivable history for a single person: item-level rows plus aggregates computed
 // over whatever period/status filter was applied. personId must belong to the caller — Persons
 // is already owner-filtered, so a null lookup naturally covers "not found" and "not yours" alike.
-app.MapGet("/api/receivables/history", async (
+v1.MapGet("/receivables/history", async (
     long? personId,
     int? fromYear,
     int? fromMonth,
@@ -1705,7 +1708,7 @@ app.MapGet("/api/receivables/history", async (
 })
 .RequireAuthorization();
 
-app.MapGet("/api/bills/{billId:long}/history", async (
+v1.MapGet("/bills/{billId:long}/history", async (
     long billId,
     int? fromYear,
     int? fromMonth,

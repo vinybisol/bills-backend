@@ -30,7 +30,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
 
     private async Task<long> GetFirstCategoryIdAsync(string uid)
     {
-        using var req = Req(HttpMethod.Get, "/categories", uid);
+        using var req = Req(HttpMethod.Get, "/api/v1/categories", uid);
         using var resp = await Client.SendAsync(req);
         var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
         return dtos![0].Id;
@@ -38,7 +38,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
 
     private async Task<long> CreateRecurringBillAsync(string uid, long categoryId)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/bills", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
             new { name = "Aluguel", categoryId, kind = "recurring", defaultAmount = 1000m, splitRatio = 1m, personId = (long?)null });
         using var resp = await Client.SendAsync(req);
         return (await resp.Content.ReadFromJsonAsync<BillDto>())!.Id;
@@ -46,7 +46,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
 
     private async Task<long> CreateRecurringIncomeAsync(string uid)
     {
-        using var req = ReqWithBody(HttpMethod.Post, "/incomes", uid,
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uid,
             new { name = "Salario", kind = "recurring", defaultAmount = 5000m });
         using var resp = await Client.SendAsync(req);
         return (await resp.Content.ReadFromJsonAsync<IncomeDto>())!.Id;
@@ -54,13 +54,13 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
 
     private async Task PostProjectionAsync(string uid, int year)
     {
-        using var req = Req(HttpMethod.Post, $"/api/projection/{year}", uid);
+        using var req = Req(HttpMethod.Post, $"/api/v1/projection/{year}", uid);
         await Client.SendAsync(req);
     }
 
     private async Task<long> GetBillEntryIdAsync(string uid, int year, int month)
     {
-        using var req = Req(HttpMethod.Get, $"/api/entries?year={year}&month={month}", uid);
+        using var req = Req(HttpMethod.Get, $"/api/v1/entries?year={year}&month={month}", uid);
         using var resp = await Client.SendAsync(req);
         var body = await resp.Content.ReadFromJsonAsync<MonthEntriesResponse>();
         return body!.Bills[0].Id;
@@ -68,7 +68,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
 
     private async Task<long> GetIncomeEntryIdAsync(string uid, int year, int month)
     {
-        using var req = Req(HttpMethod.Get, $"/api/entries?year={year}&month={month}", uid);
+        using var req = Req(HttpMethod.Get, $"/api/v1/entries?year={year}&month={month}", uid);
         using var resp = await Client.SendAsync(req);
         var body = await resp.Content.ReadFromJsonAsync<MonthEntriesResponse>();
         return body!.Incomes[0].Id;
@@ -87,7 +87,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
         var entryId = await GetBillEntryIdAsync(uid, 2025, 1);
 
         // Act
-        using var req = ReqWithBody(new HttpMethod("PATCH"), $"/api/entries/bill/{entryId}", uid,
+        using var req = ReqWithBody(new HttpMethod("PATCH"), $"/api/v1/entries/bill/{entryId}", uid,
             new { plannedAmount = 1100m, actualAmount = 1090m });
         using var resp = await Client.SendAsync(req);
 
@@ -113,12 +113,12 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
         var entryId = await GetBillEntryIdAsync(uid, 2025, 2);
 
         // Pay it first
-        using var payReq = ReqWithBody(HttpMethod.Post, $"/api/entries/bill/{entryId}/pay", uid, new { });
+        using var payReq = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uid, new { });
         using var payResp = await Client.SendAsync(payReq);
         Assert.That(payResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         // Act — try to PATCH a paid (frozen) entry
-        using var patchReq = ReqWithBody(new HttpMethod("PATCH"), $"/api/entries/bill/{entryId}", uid,
+        using var patchReq = ReqWithBody(new HttpMethod("PATCH"), $"/api/v1/entries/bill/{entryId}", uid,
             new { plannedAmount = 1200m });
         using var patchResp = await Client.SendAsync(patchReq);
 
@@ -139,7 +139,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
         var entryId = await GetBillEntryIdAsync(uid, 2025, 3);
 
         // Act
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/entries/bill/{entryId}/pay", uid, new { });
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uid, new { });
         using var resp = await Client.SendAsync(req);
 
         // Assert
@@ -163,7 +163,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
         var entryId = await GetBillEntryIdAsync(uid, 2025, 4);
 
         // Act
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/entries/bill/{entryId}/pay", uid,
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uid,
             new { actualAmount = 980m });
         using var resp = await Client.SendAsync(req);
 
@@ -186,18 +186,18 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
         var entryId = await GetBillEntryIdAsync(uid, 2025, 5);
 
         // Pay → freeze
-        using var payReq = ReqWithBody(HttpMethod.Post, $"/api/entries/bill/{entryId}/pay", uid, new { });
+        using var payReq = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uid, new { });
         await Client.SendAsync(payReq);
 
         // Unpay → unfreeze
-        using var unpayReq = Req(HttpMethod.Post, $"/api/entries/bill/{entryId}/unpay", uid);
+        using var unpayReq = Req(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/unpay", uid);
         using var unpayResp = await Client.SendAsync(unpayReq);
         Assert.That(unpayResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var unpayBody = await unpayResp.Content.ReadFromJsonAsync<EntryResponse>();
         Assert.That(unpayBody!.Paid, Is.False);
 
         // PATCH should now succeed
-        using var patchReq = ReqWithBody(new HttpMethod("PATCH"), $"/api/entries/bill/{entryId}", uid,
+        using var patchReq = ReqWithBody(new HttpMethod("PATCH"), $"/api/v1/entries/bill/{entryId}", uid,
             new { plannedAmount = 1050m });
         using var patchResp = await Client.SendAsync(patchReq);
         Assert.That(patchResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -215,7 +215,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
         var entryId = await GetIncomeEntryIdAsync(uid, 2025, 1);
 
         // Act
-        using var req = ReqWithBody(new HttpMethod("PATCH"), $"/api/entries/income/{entryId}", uid,
+        using var req = ReqWithBody(new HttpMethod("PATCH"), $"/api/v1/entries/income/{entryId}", uid,
             new { plannedAmount = 5500m, actualAmount = 5300m });
         using var resp = await Client.SendAsync(req);
 
@@ -239,11 +239,11 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
         var entryId = await GetIncomeEntryIdAsync(uid, 2025, 2);
 
         // Receive first
-        using var recvReq = ReqWithBody(HttpMethod.Post, $"/api/entries/income/{entryId}/receive", uid, new { });
+        using var recvReq = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/income/{entryId}/receive", uid, new { });
         await Client.SendAsync(recvReq);
 
         // Act
-        using var patchReq = ReqWithBody(new HttpMethod("PATCH"), $"/api/entries/income/{entryId}", uid,
+        using var patchReq = ReqWithBody(new HttpMethod("PATCH"), $"/api/v1/entries/income/{entryId}", uid,
             new { plannedAmount = 6000m });
         using var patchResp = await Client.SendAsync(patchReq);
 
@@ -263,7 +263,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
         var entryId = await GetIncomeEntryIdAsync(uid, 2025, 3);
 
         // Act
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/entries/income/{entryId}/receive", uid, new { });
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/income/{entryId}/receive", uid, new { });
         using var resp = await Client.SendAsync(req);
 
         // Assert
@@ -288,18 +288,18 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
         var entryId = await GetIncomeEntryIdAsync(uid, 2025, 4);
 
         // Receive → freeze
-        using var recvReq = ReqWithBody(HttpMethod.Post, $"/api/entries/income/{entryId}/receive", uid, new { });
+        using var recvReq = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/income/{entryId}/receive", uid, new { });
         await Client.SendAsync(recvReq);
 
         // Unreceive → unfreeze
-        using var unrecvReq = Req(HttpMethod.Post, $"/api/entries/income/{entryId}/unreceive", uid);
+        using var unrecvReq = Req(HttpMethod.Post, $"/api/v1/entries/income/{entryId}/unreceive", uid);
         using var unrecvResp = await Client.SendAsync(unrecvReq);
         Assert.That(unrecvResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var body = await unrecvResp.Content.ReadFromJsonAsync<EntryResponse>();
         Assert.That(body!.Received, Is.False);
 
         // PATCH should now succeed
-        using var patchReq = ReqWithBody(new HttpMethod("PATCH"), $"/api/entries/income/{entryId}", uid,
+        using var patchReq = ReqWithBody(new HttpMethod("PATCH"), $"/api/v1/entries/income/{entryId}", uid,
             new { plannedAmount = 5100m });
         using var patchResp = await Client.SendAsync(patchReq);
         Assert.That(patchResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -321,7 +321,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
         _ = await GetFirstCategoryIdAsync(uidB); // provision B
 
         // Act — B tries to pay A's entry
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/entries/bill/{entryId}/pay", uidB, new { });
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uidB, new { });
         using var resp = await Client.SendAsync(req);
 
         // Assert
@@ -333,7 +333,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
     [Test]
     public async Task PayBillEntry_WithoutToken_Returns401()
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/entries/bill/1/pay");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/entries/bill/1/pay");
         req.Content = JsonContent.Create(new { });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -342,7 +342,7 @@ public sealed class PayUnpayEndpointTests : IntegrationTestBase
     [Test]
     public async Task PatchBillEntry_WithoutToken_Returns401()
     {
-        using var req = new HttpRequestMessage(new HttpMethod("PATCH"), "/api/entries/bill/1");
+        using var req = new HttpRequestMessage(new HttpMethod("PATCH"), "/api/v1/entries/bill/1");
         req.Content = JsonContent.Create(new { plannedAmount = 100m });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));

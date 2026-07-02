@@ -37,7 +37,7 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     public async Task CreatePerson_WithValidToken_ReturnsCreatedWithDto()
     {
         // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/persons", Uid("create-ok"), new { name = "Ana" });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/persons", Uid("create-ok"), new { name = "Ana" });
 
         // Act
         using var response = await Client.SendAsync(req);
@@ -55,7 +55,7 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     public async Task CreatePerson_BlankName_ReturnsBadRequest(string name)
     {
         // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/persons", Uid($"create-bad-{name.Length}"), new { name });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/persons", Uid($"create-bad-{name.Length}"), new { name });
 
         // Act
         using var response = await Client.SendAsync(req);
@@ -68,7 +68,7 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     public async Task CreatePerson_WithoutToken_ReturnsUnauthorized()
     {
         // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/persons");
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/persons");
         req.Content = JsonContent.Create(new { name = "Ana" });
 
         // Act
@@ -84,7 +84,7 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     public async Task ListPersons_NewUser_ReturnsEmptyList()
     {
         // Arrange
-        using var req = Req(HttpMethod.Get, "/persons", Uid("list-empty"));
+        using var req = Req(HttpMethod.Get, "/api/v1/persons", Uid("list-empty"));
 
         // Act
         using var response = await Client.SendAsync(req);
@@ -100,11 +100,11 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     {
         // Arrange
         var uid = Uid("list-after-create");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name = "João" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name = "João" });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        using var listReq = Req(HttpMethod.Get, "/persons", uid);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/persons", uid);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -119,7 +119,7 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     [Test]
     public async Task ListPersons_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await Client.GetAsync("/persons");
+        using var response = await Client.GetAsync("/api/v1/persons");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -130,13 +130,13 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     {
         // Arrange
         var uid = Uid("update-ok");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name = "Original" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name = "Original" });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         var created = await createResp.Content.ReadFromJsonAsync<PersonDto>();
         Assert.That(created, Is.Not.Null);
 
-        using var updateReq = ReqWithBody(HttpMethod.Put, $"/persons/{created!.Id}", uid, new { name = "Renomeada" });
+        using var updateReq = ReqWithBody(HttpMethod.Put, $"/api/v1/persons/{created!.Id}", uid, new { name = "Renomeada" });
 
         // Act
         using var response = await Client.SendAsync(updateReq);
@@ -150,7 +150,7 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     [Test]
     public async Task UpdatePerson_WithoutToken_ReturnsUnauthorized()
     {
-        using var req = new HttpRequestMessage(HttpMethod.Put, "/persons/1");
+        using var req = new HttpRequestMessage(HttpMethod.Put, "/api/v1/persons/1");
         req.Content = JsonContent.Create(new { name = "x" });
         using var response = await Client.SendAsync(req);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -163,11 +163,11 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     {
         // Arrange
         var uid = Uid("delete-ok");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name = "ARemover" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name = "ARemover" });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<PersonDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/persons/{created!.Id}", uid);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/persons/{created!.Id}", uid);
 
         // Act
         using var response = await Client.SendAsync(deleteReq);
@@ -181,15 +181,15 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     {
         // Arrange
         var uid = Uid("delete-disappears");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/persons", uid, new { name = "Efêmera" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name = "Efêmera" });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<PersonDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/persons/{created!.Id}", uid);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/persons/{created!.Id}", uid);
         using var deleteResp = await Client.SendAsync(deleteReq);
         Assert.That(deleteResp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
 
-        using var listReq = Req(HttpMethod.Get, "/persons", uid);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/persons", uid);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -202,7 +202,7 @@ public sealed class PersonEndpointTests : IntegrationTestBase
     [Test]
     public async Task DeletePerson_WithoutToken_ReturnsUnauthorized()
     {
-        using var response = await Client.DeleteAsync("/persons/1");
+        using var response = await Client.DeleteAsync("/api/v1/persons/1");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
@@ -214,11 +214,11 @@ public sealed class PersonEndpointTests : IntegrationTestBase
         // Arrange — user A creates a person; user B must not see it
         var uidA = Uid("isolate-list-a");
         var uidB = Uid("isolate-list-b");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/persons", uidA, new { name = "SomenteA" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uidA, new { name = "SomenteA" });
         using var createResp = await Client.SendAsync(createReq);
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        using var listReq = Req(HttpMethod.Get, "/persons", uidB);
+        using var listReq = Req(HttpMethod.Get, "/api/v1/persons", uidB);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
@@ -236,11 +236,11 @@ public sealed class PersonEndpointTests : IntegrationTestBase
         // Arrange — user A creates a person; user B tries to rename it
         var uidA = Uid("isolate-update-a");
         var uidB = Uid("isolate-update-b");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/persons", uidA, new { name = "DoA" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uidA, new { name = "DoA" });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<PersonDto>();
 
-        using var updateReq = ReqWithBody(HttpMethod.Put, $"/persons/{created!.Id}", uidB, new { name = "Hackeada" });
+        using var updateReq = ReqWithBody(HttpMethod.Put, $"/api/v1/persons/{created!.Id}", uidB, new { name = "Hackeada" });
 
         // Act
         using var response = await Client.SendAsync(updateReq);
@@ -255,11 +255,11 @@ public sealed class PersonEndpointTests : IntegrationTestBase
         // Arrange — user A creates a person; user B tries to deactivate it
         var uidA = Uid("isolate-delete-a");
         var uidB = Uid("isolate-delete-b");
-        using var createReq = ReqWithBody(HttpMethod.Post, "/persons", uidA, new { name = "DoA2" });
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uidA, new { name = "DoA2" });
         using var createResp = await Client.SendAsync(createReq);
         var created = await createResp.Content.ReadFromJsonAsync<PersonDto>();
 
-        using var deleteReq = Req(HttpMethod.Delete, $"/persons/{created!.Id}", uidB);
+        using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/persons/{created!.Id}", uidB);
 
         // Act
         using var response = await Client.SendAsync(deleteReq);
