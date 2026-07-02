@@ -132,21 +132,30 @@ internal static class EntryEndpoints
         var totalMyShare = billDtos.Sum(d => d.MyShare);
         // Receivable is split between what's still pending and what has already been received;
         // pending + received always equals the total split amount owed by other people.
-        var totalReceivable = billDtos.Where(d => !d.Received).Sum(d => d.Receivable);
-        var totalReceived = billDtos.Where(d => d.Received).Sum(d => d.Receivable);
+        var receivablePending = billDtos.Where(d => !d.Received).Sum(d => d.Receivable);
+        var receivableReceived = billDtos.Where(d => d.Received).Sum(d => d.Receivable);
+        var paidFull = billDtos.Where(d => d.Paid).Sum(d => d.EffectiveAmount);
         var incomesPlanned = incomeDtos.Sum(d => d.PlannedAmount);
         var incomesEffective = incomeDtos.Sum(d => d.EffectiveAmount);
 
-        // saldoPrevisto: how much I expect to net — planned income minus my planned share of each bill.
-        var saldoPrevisto = incomesPlanned - billDtos.Sum(d => d.PlannedAmount * d.SplitRatio);
+        // saldoPrevistoOtimista: how much I expect to net if everyone pays what they owe — planned
+        // income minus my planned share of each bill.
+        var saldoPrevistoOtimista = incomesPlanned - billDtos.Sum(d => d.PlannedAmount * d.SplitRatio);
 
-        // saldoReal: received income minus my share of already-paid bills.
-        var saldoReal = incomeDtos.Where(d => d.Received).Sum(d => d.EffectiveAmount)
-            - billDtos.Where(d => d.Paid).Sum(d => d.MyShare);
+        // saldoPrevistoPiorCaso: same as above, but assumes the pending receivable is never paid back.
+        var saldoPrevistoPiorCaso = saldoPrevistoOtimista - receivablePending;
+
+        // saldoRealizado: actual cash — received income plus received reimbursements, minus the full
+        // (not myShare) amount actually paid for bills.
+        var saldoRealizado = incomeDtos.Where(d => d.Received).Sum(d => d.EffectiveAmount)
+            + receivableReceived - paidFull;
 
         var totals = new MonthTotalsDto(
-            billsPlanned, billsEffective, totalMyShare, totalReceivable, totalReceived,
-            incomesPlanned, incomesEffective, saldoPrevisto, saldoReal);
+            billsPlanned, billsEffective, totalMyShare, receivablePending, receivableReceived,
+            receivablePending, receivableReceived, paidFull,
+            incomesPlanned, incomesEffective,
+            saldoPrevistoOtimista, saldoRealizado,
+            saldoPrevistoOtimista, saldoPrevistoPiorCaso, saldoRealizado);
 
         return Results.Ok(new MonthEntriesDto(year.Value, month.Value, billDtos, incomeDtos, totals));
     }

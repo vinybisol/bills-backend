@@ -74,6 +74,17 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
         return (await resp.Content.ReadFromJsonAsync<BillDto>())!;
     }
 
+    // Creates a recurring bill with a caller-chosen split ratio and person; returns the DTO.
+    private async Task<BillDto> CreateBillAsync(
+        string uid, long categoryId, string name, decimal amount, decimal splitRatio, long? personId)
+    {
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
+            new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio, personId });
+        using var resp = await Client.SendAsync(req);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        return (await resp.Content.ReadFromJsonAsync<BillDto>())!;
+    }
+
     // Creates a recurring income and returns the DTO.
     private async Task<IncomeDto> CreateRecurringIncomeAsync(string uid, string name = "Salario", decimal amount = 5000m)
     {
@@ -108,6 +119,22 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     private async Task MarkReceivedAsync(string uid, long entryId)
     {
         using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/receivables/{entryId}/mark", uid, new { receivedDate = (DateOnly?)null });
+        using var resp = await Client.SendAsync(req);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    // Pays a bill entry via POST /api/entries/bill/{id}/pay.
+    private async Task PayBillEntryAsync(string uid, long entryId, decimal actualAmount)
+    {
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uid, new { actualAmount });
+        using var resp = await Client.SendAsync(req);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    // Marks an income entry as received via POST /api/entries/income/{id}/receive.
+    private async Task ReceiveIncomeEntryAsync(string uid, long entryId, decimal actualAmount)
+    {
+        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/income/{entryId}/receive", uid, new { actualAmount });
         using var resp = await Client.SendAsync(req);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
@@ -229,6 +256,56 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     }
 
     [Test]
+    public async Task Get_Totals_ThreeBalances_ComputeCorrectlyAndSatisfyGapInvariant()
+    {
+        // Arrange — three bills spanning the split spectrum, two incomes, one already paid/received.
+        // Aluguel: split=1.0 (fully mine), planned=1000, paid in full.
+        // Internet: split=0.5 (shared), planned=800, paid in full, reimbursement already received.
+        // Presente: split=0.0 (passes through me), planned=500, unpaid, unreceived.
+        const int year = 2025;
+        const int month = 1;
+        var uid = Uid("three-balances");
+        var categories = await GetDefaultCategoriesAsync(uid);
+        var personId = await CreatePersonAsync(uid, name: "Parceiro");
+        await CreateBillAsync(uid, categories[0].Id, "Aluguel", 1000m, splitRatio: 1.0m, personId: null);
+        await CreateBillAsync(uid, categories[0].Id, "Internet", 800m, splitRatio: 0.5m, personId: personId);
+        await CreateBillAsync(uid, categories[0].Id, "Presente", 500m, splitRatio: 0.0m, personId: personId);
+        await CreateRecurringIncomeAsync(uid, name: "Salario", amount: 5000m);
+        await CreateRecurringIncomeAsync(uid, name: "Freela", amount: 1000m);
+        await PostProjectionAsync(uid, year);
+
+        var (_, before) = await GetEntriesAsync(uid, year, month);
+        var aluguel = before!.Bills.Single(b => b.Name == "Aluguel");
+        var internet = before.Bills.Single(b => b.Name == "Internet");
+        var salario = before.Incomes.Single(i => i.Name == "Salario");
+
+        await PayBillEntryAsync(uid, aluguel.Id, actualAmount: 1000m);
+        await PayBillEntryAsync(uid, internet.Id, actualAmount: 800m);
+        await MarkReceivedAsync(uid, internet.Id);
+        await ReceiveIncomeEntryAsync(uid, salario.Id, actualAmount: 5200m);
+
+        // Act
+        var (resp, body) = await GetEntriesAsync(uid, year, month);
+
+        // Assert
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.Totals.ReceivablePending, Is.EqualTo(500m)); // Presente: 500 x (1-0)
+            Assert.That(body.Totals.ReceivableReceived, Is.EqualTo(400m)); // Internet: 800 x (1-0.5)
+            Assert.That(body.Totals.PaidFull, Is.EqualTo(1800m)); // full value of Aluguel + Internet
+            Assert.That(body.Totals.SaldoPrevistoOtimista, Is.EqualTo(4600m)); // 6000 - (1000 + 400 + 0)
+            Assert.That(body.Totals.SaldoPrevistoPiorCaso, Is.EqualTo(4100m)); // 4600 - 500
+            Assert.That(body.Totals.SaldoRealizado, Is.EqualTo(3800m)); // (5200 + 400) - 1800
+            Assert.That(body.Totals.SaldoPrevisto, Is.EqualTo(body.Totals.SaldoPrevistoOtimista));
+            Assert.That(body.Totals.SaldoReal, Is.EqualTo(body.Totals.SaldoRealizado));
+            Assert.That(
+                body.Totals.SaldoPrevistoOtimista - body.Totals.SaldoPrevistoPiorCaso,
+                Is.EqualTo(body.Totals.ReceivablePending));
+        });
+    }
+
+    [Test]
     public async Task Get_OwnerIsolation_DoesNotSeeOtherUsersEntries()
     {
         // Arrange — user A creates bill + income and generates a projection
@@ -305,8 +382,10 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     private sealed record MonthTotalsResponse(
         decimal BillsPlanned, decimal BillsEffective,
         decimal MyShare, decimal Receivable, decimal Received,
+        decimal ReceivablePending, decimal ReceivableReceived, decimal PaidFull,
         decimal IncomesPlanned, decimal IncomesEffective,
-        decimal SaldoPrevisto, decimal SaldoReal);
+        decimal SaldoPrevisto, decimal SaldoReal,
+        decimal SaldoPrevistoOtimista, decimal SaldoPrevistoPiorCaso, decimal SaldoRealizado);
 
     private sealed record BillDto(long Id, string Name, long CategoryId, string Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
     private sealed record IncomeDto(long Id, string Name, string Kind, decimal DefaultAmount);

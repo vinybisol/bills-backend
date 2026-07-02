@@ -15,18 +15,49 @@ internal sealed record DashboardCategoryDto(long CategoryId, string Category, de
 /// <param name="ActualExpense">Sum of the owner's share of effective amounts across paid bill entries only.</param>
 /// <param name="PlannedIncome">Sum of planned amounts across all income entries.</param>
 /// <param name="ActualIncome">Sum of effective amounts across received income entries only.</param>
-/// <param name="SaldoPrevisto"><see cref="PlannedIncome"/> minus <see cref="PlannedExpense"/>.</param>
-/// <param name="SaldoReal"><see cref="ActualIncome"/> minus <see cref="ActualExpense"/>.</param>
+/// <param name="SaldoPrevisto">
+/// Alias of <see cref="SaldoPrevistoOtimista"/>, kept for backward compatibility.
+/// </param>
+/// <param name="SaldoReal">
+/// <b>Behavior change:</b> now an alias of <see cref="SaldoRealizado"/> (received incomes and reimbursements
+/// minus the full paid amount of bills). Previously this equalled <see cref="ActualIncome"/> minus
+/// <see cref="ActualExpense"/> (the owner's share of paid bills only), which undercounted actual cash outflow
+/// when a bill was shared. Prefer <see cref="SaldoRealizado"/> going forward.
+/// </param>
 /// <param name="BillsPaid">The number of bill entries in the month with <c>Paid</c> set to <see langword="true"/>.</param>
 /// <param name="BillsTotal">The total number of bill entries in the month.</param>
 /// <param name="IncomesReceived">The number of income entries in the month with <c>Received</c> set to <see langword="true"/>.</param>
 /// <param name="IncomesTotal">The total number of income entries in the month.</param>
+/// <param name="ReceivablePending">
+/// Sum of the other person's share of bill entries not yet marked as received — the amount the owner is
+/// exposed to if it is never paid back.
+/// </param>
+/// <param name="ReceivableReceived">Sum of the other person's share of bill entries already marked as received.</param>
+/// <param name="PaidFull">
+/// Sum of the full effective amount (not myShare) of bill entries already marked as paid — the actual cash
+/// that left the owner's account, including the portion owed back by another person.
+/// </param>
+/// <param name="SaldoPrevistoOtimista">
+/// Optimistic planned balance, assuming everyone pays what they owe: <see cref="PlannedIncome"/> minus
+/// <see cref="PlannedExpense"/>. Same value as <see cref="SaldoPrevisto"/>.
+/// </param>
+/// <param name="SaldoPrevistoPiorCaso">
+/// Worst-case planned balance: <see cref="SaldoPrevistoOtimista"/> minus <see cref="ReceivablePending"/> —
+/// assumes the pending receivable is never paid back. <c>SaldoPrevistoOtimista − SaldoPrevistoPiorCaso</c>
+/// always equals <see cref="ReceivablePending"/>.
+/// </param>
+/// <param name="SaldoRealizado">
+/// Actual realised cash balance: (received incomes + received reimbursements) minus the full amount
+/// actually paid for bills (not just the owner's share). Same value as <see cref="SaldoReal"/>.
+/// </param>
 internal sealed record DashboardSummaryDto(
     decimal PlannedExpense, decimal ActualExpense,
     decimal PlannedIncome, decimal ActualIncome,
     decimal SaldoPrevisto, decimal SaldoReal,
     int BillsPaid, int BillsTotal,
-    int IncomesReceived, int IncomesTotal);
+    int IncomesReceived, int IncomesTotal,
+    decimal ReceivablePending, decimal ReceivableReceived, decimal PaidFull,
+    decimal SaldoPrevistoOtimista, decimal SaldoPrevistoPiorCaso, decimal SaldoRealizado);
 
 /// <summary>The complete response returned by <c>GET /api/dashboard/month</c>.</summary>
 /// <param name="Year">The requested year.</param>
