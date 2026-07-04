@@ -59,18 +59,6 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Apply migrations on startup for relational providers so the deployed environment is
-// self-bootstrapping. Skipped for the in-memory provider used by integration tests.
-if (!app.Environment.IsEnvironment("Testing"))
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    if (db.Database.IsRelational())
-    {
-        await db.Database.MigrateAsync();
-    }
-}
-
 app.UseAuthentication();
 app.UseAuthorization();
 

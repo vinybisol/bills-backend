@@ -10,11 +10,15 @@ name: CI/CD
 # Required GitHub configuration for the deploy job (set before the first run):
 #   - Variable  AZURE_WEBAPP_NAME            -> the Azure Web App name
 #   - Secret    AZURE_WEBAPP_PUBLISH_PROFILE -> the app's publish profile XML
+#   - Secret    NEON_CONNECTION_STRING       -> Neon connection string used to apply
+#                                               migrations from the pipeline (read by the
+#                                               AppDbContextFactory design-time factory)
 #
 # Runtime configuration (set in the Azure Web App, not here):
 #   - ConnectionStrings__Neon  -> Neon pooler connection string (SSL Mode=Require)
 #   - Firebase__ProjectId      -> Firebase project id
-# Database migrations are applied automatically on application startup.
+# Database migrations are applied by the deploy job (dotnet ef database update), before
+# the app is published/deployed, not automatically on application startup.
 
 on:
   push:
@@ -92,7 +96,23 @@ jobs:
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }} 
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore BillsBackend.slnx
+
+      - name: Install dotnet-ef
+        run: |
+          dotnet tool install --global dotnet-ef
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      # Applies pending migrations against Neon before the new app code is deployed, using
+      # the design-time AppDbContextFactory (reads NEON_CONNECTION_STRING). Runs before
+      # publish/deploy so the schema is ready by the time the new code starts serving.
+      - name: Apply database migrations
+        run: dotnet ef database update --project src/BillsBackend.Api/BillsBackend.Api.csproj
+        env:
+          NEON_CONNECTION_STRING: ${{ secrets.NEON_CONNECTION_STRING }}
 
       - name: Publish
         run: dotnet publish src/BillsBackend.Api/BillsBackend.Api.csproj -c Release -r linux-x64 --self-contained true -p:PublishReadyToRun=true -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp'
