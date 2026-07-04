@@ -95,7 +95,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }} 
 
       - name: Publish
-        run: dotnet publish src/BillsBackend.Api/BillsBackend.Api.csproj -c Release -r win-x86 --self-contained true -p:PublishReadyToRun=true -p:PublishTrimmed=true -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp'
+        run: dotnet publish src/BillsBackend.Api/BillsBackend.Api.csproj -c Release --no-restore --no-build -r win-x86 --self-contained true -p:PublishReadyToRun=true -p:PublishTrimmed=true -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp'
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
