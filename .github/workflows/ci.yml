@@ -21,6 +21,16 @@ on:
     branches: [develop, main]
   pull_request:
     branches: [develop, main]
+# CONFIGURATION
+# For help, go to https://github.com/Azure/Actions
+#
+# 1. Set up the following secrets in your repository:
+#   AZURE_WEBAPP_PUBLISH_PROFILE
+#
+# 2. Change these variables for your configuration:   
+env:
+  AZURE_WEBAPP_PACKAGE_PATH: '.'      # set this to the path to your web app project, defaults to the repository root
+  DOTNET_VERSION: '7.0.x'             # set this to the dot net version to use
 
 jobs:
   build-and-test:
@@ -52,7 +62,7 @@ jobs:
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
         run: dotnet restore BillsBackend.slnx
@@ -82,14 +92,14 @@ jobs:
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }} 
 
       - name: Publish
-        run: dotnet publish src/BillsBackend.Api/BillsBackend.Api.csproj -c Release -r win-x86 --self-contained true -p:PublishReadyToRun=true -p:PublishTrimmed=true -o ./publish
+        run: dotnet publish src/BillsBackend.Api/BillsBackend.Api.csproj -c Release -r win-x86 --self-contained true -p:PublishReadyToRun=true -p:PublishTrimmed=true -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp'
 
       - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v5
+        uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ vars.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: ./publish
+          package: '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/myapp'
