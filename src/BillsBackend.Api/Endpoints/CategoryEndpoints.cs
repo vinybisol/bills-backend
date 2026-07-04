@@ -34,7 +34,7 @@ internal static class CategoryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var trimmedName = req.Name.Trim();
         if (await db.Categories.AnyAsync(c => c.Name == trimmedName, ct))
@@ -59,7 +59,7 @@ internal static class CategoryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var categories = await db.Categories
             .OrderBy(c => c.Name)
@@ -86,7 +86,7 @@ internal static class CategoryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (category is null)
@@ -116,7 +116,7 @@ internal static class CategoryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id, ct);
         if (category is null)

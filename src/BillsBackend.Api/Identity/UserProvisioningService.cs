@@ -25,7 +25,8 @@ public sealed class UserProvisioningService(
         ArgumentException.ThrowIfNullOrWhiteSpace(firebaseUid);
 
         var existing = await db.Users
-            .FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid, cancellationToken);
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid, cancellationToken);
         if (existing is not null)
         {
             return existing;

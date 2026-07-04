@@ -180,7 +180,7 @@ public sealed class ProjectionEndpointTests : IntegrationTestBase
         {
             using var scope = Factory.Services.CreateScope();
             var co = scope.ServiceProvider.GetRequiredService<ICurrentOwner>();
-            co.Id = ownerId;
+            co.SetCurrentOwnerId(ownerId);
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var entry = await db.BillEntries.FirstAsync(e => e.RefYear == year);
             entryId = entry.Id;
@@ -195,7 +195,7 @@ public sealed class ProjectionEndpointTests : IntegrationTestBase
         {
             using var scope = Factory.Services.CreateScope();
             var co = scope.ServiceProvider.GetRequiredService<ICurrentOwner>();
-            co.Id = ownerId;
+            co.SetCurrentOwnerId(ownerId);
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var entryAfter = await db.BillEntries.SingleAsync(e => e.Id == entryId);
             Assert.That(entryAfter.Paid, Is.True);

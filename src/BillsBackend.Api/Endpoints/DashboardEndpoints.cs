@@ -32,7 +32,7 @@ internal static class DashboardEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         // Fetch entries for the requested month. The global query filter already scopes
         // BillEntries/IncomeEntries to the current owner.
@@ -147,7 +147,7 @@ internal static class DashboardEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         // Fetch the whole year once; the global query filter already scopes BillEntries/IncomeEntries
         // to the current owner.

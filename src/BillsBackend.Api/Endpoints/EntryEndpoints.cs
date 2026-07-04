@@ -41,7 +41,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         // Fetch entries for the requested month. The global query filter already scopes
         // BillEntries and IncomeEntries to the current owner (owner_id only, no active flag).
@@ -185,7 +185,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var bill = await db.Bills.FirstOrDefaultAsync(b => b.Id == req.BillId, ct);
         if (bill is null)
@@ -236,7 +236,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var income = await db.Incomes.FirstOrDefaultAsync(i => i.Id == req.IncomeId, ct);
         if (income is null)
@@ -279,7 +279,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)
@@ -309,7 +309,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entry = await db.IncomeEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)
@@ -340,7 +340,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)
@@ -378,7 +378,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)
@@ -407,7 +407,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)
@@ -434,7 +434,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entry = await db.IncomeEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)
@@ -472,7 +472,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entry = await db.IncomeEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)
@@ -501,7 +501,7 @@ internal static class EntryEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entry = await db.IncomeEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
         if (entry is null)

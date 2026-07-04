@@ -37,7 +37,7 @@ internal static class IncomeEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var income = Income.Create(appUser.Id, req.Name, req.Kind, req.DefaultAmount, timeProvider.GetUtcNow());
         db.Incomes.Add(income);
@@ -58,7 +58,7 @@ internal static class IncomeEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var incomes = await db.Incomes
             .OrderBy(i => i.Name)
@@ -88,7 +88,7 @@ internal static class IncomeEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var income = await db.Incomes.FirstOrDefaultAsync(i => i.Id == id, ct);
         if (income is null)
@@ -113,7 +113,7 @@ internal static class IncomeEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var income = await db.Incomes.FirstOrDefaultAsync(i => i.Id == id, ct);
         if (income is null)
