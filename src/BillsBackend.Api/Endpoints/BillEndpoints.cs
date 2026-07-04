@@ -48,7 +48,7 @@ internal static class BillEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         if (!await db.Categories.AnyAsync(c => c.Id == req.CategoryId, ct))
             return Results.NotFound("Category not found.");
@@ -75,7 +75,7 @@ internal static class BillEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var bills = await db.Bills
             .OrderBy(b => b.Name)
@@ -114,7 +114,7 @@ internal static class BillEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var bill = await db.Bills.FirstOrDefaultAsync(b => b.Id == id, ct);
         if (bill is null)
@@ -145,7 +145,7 @@ internal static class BillEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var bill = await db.Bills.FirstOrDefaultAsync(b => b.Id == id, ct);
         if (bill is null)
@@ -179,7 +179,7 @@ internal static class BillEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var bill = await db.Bills.FirstOrDefaultAsync(b => b.Id == billId, ct);
         if (bill is null)
@@ -233,7 +233,7 @@ internal static class BillEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         // IgnoreQueryFilters + manual OwnerId check: the bill template may have been deactivated
         // since some of its entries were created, but its history must still resolve.

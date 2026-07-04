@@ -34,7 +34,7 @@ internal static class ProjectionEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         // Fetch only recurring active bill/income templates (global query filter applies active + owner_id).
         var recurringBills = await db.Bills

@@ -34,7 +34,7 @@ internal static class PersonEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var person = Person.Create(appUser.Id, req.Name, timeProvider.GetUtcNow());
         db.Persons.Add(person);
@@ -55,7 +55,7 @@ internal static class PersonEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var persons = await db.Persons
             .OrderBy(p => p.Name)
@@ -82,7 +82,7 @@ internal static class PersonEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var person = await db.Persons.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (person is null)
@@ -107,7 +107,7 @@ internal static class PersonEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var person = await db.Persons.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (person is null)

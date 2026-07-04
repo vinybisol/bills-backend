@@ -54,4 +54,7 @@ internal sealed class TestCurrentOwner : ICurrentOwner
 {
     /// <inheritdoc/>
     public long Id { get; set; }
+
+    public void SetCurrentOwnerId(long id)
+        => Id = id;
 }

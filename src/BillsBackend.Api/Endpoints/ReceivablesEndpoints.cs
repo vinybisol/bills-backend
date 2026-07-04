@@ -35,7 +35,7 @@ internal static class ReceivablesEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entries = await db.BillEntries
             .Where(e => e.RefYear == year.Value && e.RefMonth == month.Value &&
@@ -103,7 +103,7 @@ internal static class ReceivablesEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == entryId, ct);
         if (entry is null)
@@ -135,7 +135,7 @@ internal static class ReceivablesEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entry = await db.BillEntries.FirstOrDefaultAsync(e => e.Id == entryId, ct);
         if (entry is null)
@@ -167,7 +167,7 @@ internal static class ReceivablesEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var entryIds = req.EntryIds.ToHashSet();
         var entries = await db.BillEntries
@@ -216,7 +216,7 @@ internal static class ReceivablesEndpoints
             return Results.Unauthorized();
 
         var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.Id = appUser.Id;
+        currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var person = await db.Persons.FirstOrDefaultAsync(p => p.Id == personId.Value, ct);
         if (person is null)
