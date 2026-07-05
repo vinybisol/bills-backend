@@ -1,7 +1,9 @@
+using Application.Abstractions.Services;
 using BillsBackend.Api.Contracts;
-using BillsBackend.Api.Data;
-using BillsBackend.Api.Domain;
 using BillsBackend.Api.Identity;
+using Data.Contexts;
+using Domain.Abstractions.Filters;
+using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace BillsBackend.Api.Endpoints;

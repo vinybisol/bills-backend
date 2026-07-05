@@ -1,4 +1,4 @@
-using BillsBackend.Api.Domain;
+using Domain.Enums;
 
 namespace BillsBackend.Api.Contracts;
 
@@ -10,7 +10,7 @@ namespace BillsBackend.Api.Contracts;
 /// <param name="DefaultAmount">The default planned amount.</param>
 /// <param name="SplitRatio">The owner's fraction of the expense (0 to 1).</param>
 /// <param name="PersonId">The person who owes the remaining fraction, or <see langword="null"/> when SplitRatio is 1.</param>
-internal sealed record BillDto(long Id, string Name, long CategoryId, BillKind Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
+internal sealed record BillDto(long Id, string Name, long CategoryId, BillKindEnum Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
 
 /// <summary>The request body for <c>POST /bills</c>.</summary>
 /// <param name="Name">The bill template name.</param>
@@ -19,7 +19,7 @@ internal sealed record BillDto(long Id, string Name, long CategoryId, BillKind K
 /// <param name="DefaultAmount">The default planned amount; must be zero or greater.</param>
 /// <param name="SplitRatio">The owner's fraction of the expense; must be in [0, 1].</param>
 /// <param name="PersonId">Required when SplitRatio is less than 1; must be null when SplitRatio is 1.</param>
-internal sealed record CreateBillRequest(string Name, long CategoryId, BillKind Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
+internal sealed record CreateBillRequest(string Name, long CategoryId, BillKindEnum Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
 
 /// <summary>The request body for <c>PUT /bills/{id}</c>.</summary>
 /// <param name="Name">The new bill template name.</param>
@@ -28,7 +28,7 @@ internal sealed record CreateBillRequest(string Name, long CategoryId, BillKind 
 /// <param name="DefaultAmount">The new default planned amount; must be zero or greater.</param>
 /// <param name="SplitRatio">The new owner fraction; must be in [0, 1].</param>
 /// <param name="PersonId">Required when SplitRatio is less than 1; must be null when SplitRatio is 1.</param>
-internal sealed record UpdateBillRequest(string Name, long CategoryId, BillKind Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
+internal sealed record UpdateBillRequest(string Name, long CategoryId, BillKindEnum Kind, decimal DefaultAmount, decimal SplitRatio, long? PersonId);
 
 /// <summary>The request body for <c>POST /api/bills/{billId}/recalculate</c>.</summary>
 /// <param name="FromYear">The reference year from which to start recalculation (inclusive).</param>

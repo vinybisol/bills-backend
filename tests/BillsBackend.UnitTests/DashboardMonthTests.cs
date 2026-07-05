@@ -1,4 +1,6 @@
 using BillsBackend.Api.Domain;
+using Domain.Entities;
+using Domain.Enums;
 
 namespace BillsBackend.UnitTests;
 
@@ -50,7 +52,7 @@ public sealed class DashboardMonthTests
     public void PlannedMyShare_SumsAllEntriesRegardlessOfPaidStatus()
     {
         // Arrange — two entries in the same category, only one paid
-        var bill = Bill.Create(1L, "Aluguel", 1L, BillKind.Recurring, 1000m, 0.5m, 99L, FixedNow);
+        var bill = Bill.Create(1L, "Aluguel", 1L, BillKindEnum.Recurring, 1000m, 0.5m, 99L, FixedNow);
         var billsById = new Dictionary<long, Bill> { [10L] = bill };
         var paid = BillEntry.Create(1L, 10L, 2026, 1, 1000m, 0.5m, 99L, FixedNow);
         paid.MarkPaid(FixedNow);
@@ -68,7 +70,7 @@ public sealed class DashboardMonthTests
     public void ActualMyShare_SumsOnlyPaidEntries()
     {
         // Arrange — same fixture as above: only the first entry is paid
-        var bill = Bill.Create(1L, "Aluguel", 1L, BillKind.Recurring, 1000m, 0.5m, 99L, FixedNow);
+        var bill = Bill.Create(1L, "Aluguel", 1L, BillKindEnum.Recurring, 1000m, 0.5m, 99L, FixedNow);
         var billsById = new Dictionary<long, Bill> { [10L] = bill };
         var paid = BillEntry.Create(1L, 10L, 2026, 1, 1000m, 0.5m, 99L, FixedNow);
         paid.MarkPaid(FixedNow, actualAmount: 900m);
@@ -86,7 +88,7 @@ public sealed class DashboardMonthTests
     public void Diff_OverspendYieldsPositiveValue()
     {
         // Arrange — planned 500 x 1.0 = 500; actual (paid) 700 x 1.0 = 700 → diff = +200
-        var bill = Bill.Create(1L, "Mercado", 1L, BillKind.Recurring, 500m, 1m, null, FixedNow);
+        var bill = Bill.Create(1L, "Mercado", 1L, BillKindEnum.Recurring, 500m, 1m, null, FixedNow);
         var billsById = new Dictionary<long, Bill> { [10L] = bill };
         var entry = BillEntry.Create(1L, 10L, 2026, 1, 500m, 1m, null, FixedNow);
         entry.MarkPaid(FixedNow, actualAmount: 700m);
@@ -103,7 +105,7 @@ public sealed class DashboardMonthTests
     public void Diff_UnderspendYieldsNegativeValue()
     {
         // Arrange — planned 500 x 1.0 = 500; actual (paid) 300 x 1.0 = 300 → diff = -200
-        var bill = Bill.Create(1L, "Mercado", 1L, BillKind.Recurring, 500m, 1m, null, FixedNow);
+        var bill = Bill.Create(1L, "Mercado", 1L, BillKindEnum.Recurring, 500m, 1m, null, FixedNow);
         var billsById = new Dictionary<long, Bill> { [10L] = bill };
         var entry = BillEntry.Create(1L, 10L, 2026, 1, 500m, 1m, null, FixedNow);
         entry.MarkPaid(FixedNow, actualAmount: 300m);
@@ -122,8 +124,8 @@ public sealed class DashboardMonthTests
     public void ByCategory_GroupsEntriesByCategoryAndOrdersByPlannedMyShareDescending()
     {
         // Arrange — category 1 (bill A, planned 300) and category 2 (bill B, planned 1000)
-        var billA = Bill.Create(1L, "Internet", 1L, BillKind.Recurring, 300m, 1m, null, FixedNow);
-        var billB = Bill.Create(1L, "Aluguel", 2L, BillKind.Recurring, 1000m, 1m, null, FixedNow);
+        var billA = Bill.Create(1L, "Internet", 1L, BillKindEnum.Recurring, 300m, 1m, null, FixedNow);
+        var billB = Bill.Create(1L, "Aluguel", 2L, BillKindEnum.Recurring, 1000m, 1m, null, FixedNow);
         var billsById = new Dictionary<long, Bill> { [10L] = billA, [20L] = billB };
         var entries = new List<BillEntry>
         {
@@ -149,8 +151,8 @@ public sealed class DashboardMonthTests
     public void ByCategory_MultipleEntriesSameCategory_ProducesSingleSummedRow()
     {
         // Arrange — two bills, same category, two entries
-        var billA = Bill.Create(1L, "Internet", 1L, BillKind.Recurring, 100m, 1m, null, FixedNow);
-        var billB = Bill.Create(1L, "Agua", 1L, BillKind.Recurring, 50m, 1m, null, FixedNow);
+        var billA = Bill.Create(1L, "Internet", 1L, BillKindEnum.Recurring, 100m, 1m, null, FixedNow);
+        var billB = Bill.Create(1L, "Agua", 1L, BillKindEnum.Recurring, 50m, 1m, null, FixedNow);
         var billsById = new Dictionary<long, Bill> { [10L] = billA, [20L] = billB };
         var entries = new List<BillEntry>
         {

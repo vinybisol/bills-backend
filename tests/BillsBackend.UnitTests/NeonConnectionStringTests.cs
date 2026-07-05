@@ -1,4 +1,4 @@
-using BillsBackend.Api.Data;
+using Data.Contexts;
 using Npgsql;
 
 namespace BillsBackend.UnitTests;

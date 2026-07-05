@@ -1,7 +1,10 @@
+using Application.Abstractions.Services;
 using BillsBackend.Api.Contracts;
-using BillsBackend.Api.Data;
-using BillsBackend.Api.Domain;
 using BillsBackend.Api.Identity;
+using Data.Contexts;
+using Domain.Abstractions.Filters;
+using Domain.Entities;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace BillsBackend.Api.Endpoints;
@@ -38,11 +41,11 @@ internal static class ProjectionEndpoints
 
         // Fetch only recurring active bill/income templates (global query filter applies active + owner_id).
         var recurringBills = await db.Bills
-            .Where(b => b.Kind == BillKind.Recurring)
+            .Where(b => b.Kind == BillKindEnum.Recurring)
             .ToListAsync(ct);
 
         var recurringIncomes = await db.Incomes
-            .Where(i => i.Kind == IncomeKind.Recurring)
+            .Where(i => i.Kind == IncomeKindEnum.Recurring)
             .ToListAsync(ct);
 
         // Fetch already-created entries for the year so subsequent calls are idempotent.
