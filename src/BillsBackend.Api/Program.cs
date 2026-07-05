@@ -22,9 +22,13 @@ builder.Services
 
 // --- Database: PostgreSQL (Neon). Connection string is supplied via configuration
 // (user-secrets locally, environment / GitHub Secrets in CI/CD) and must use the
-// pooler endpoint with "SSL Mode=Require". ---
+// pooler endpoint with "SSL Mode=Require". "App:UseProdConnection" lets a local launch
+// profile point at the "NeonProd" connection string while staying in the Development
+// environment (so user-secrets keep loading); see the "prod-data" launch profile.
+var useProdConnection = builder.Configuration.GetValue<bool>("App:UseProdConnection");
+var neonConnectionStringKey = useProdConnection ? "NeonProd" : "Neon";
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(NeonConnectionString.Normalize(builder.Configuration.GetConnectionString("Neon"))));
+    options.UseNpgsql(NeonConnectionString.Normalize(builder.Configuration.GetConnectionString(neonConnectionStringKey))));
 
 // --- Identity services ---
 builder.Services.AddSingleton(TimeProvider.System);
@@ -57,12 +61,26 @@ builder.Services
 
 builder.Services.AddAuthorization();
 builder.Services.AddOpenApi();
+builder.Services.AddCors();
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseCors(builder => builder
+        .AllowAnyOrigin()
+        .AllowAnyMethod()
+        .AllowAnyHeader());
+
+    // Never auto-migrate when pointed at the production connection string — schema
+    // changes against prod go through the deploy pipeline only.
+    if (!useProdConnection)
+    {
+        var appDbContext = app.Services.CreateScope().ServiceProvider.GetRequiredService<AppDbContext>();
+        if (appDbContext.Database.IsRelational())
+            appDbContext.Database.Migrate();
+    }
 }
 app.UseAuthentication();
 app.UseAuthorization();

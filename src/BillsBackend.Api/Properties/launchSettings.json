@@ -11,6 +11,17 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
+    "PRODUCTION": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:7211/openapi/v1.json",
+      "applicationUrl": "http://localhost:7211",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "App__UseProdConnection": "true"
+      }
+    },
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
