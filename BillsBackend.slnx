@@ -1,6 +1,6 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/BillsBackend.Api/BillsBackend.Api.csproj" />
+    <Project Path="src/Api/Api.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BillsBackend.IntegrationTests/BillsBackend.IntegrationTests.csproj" />
