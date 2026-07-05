@@ -1,4 +1,4 @@
-using BillsBackend.Api.Data;
+using Data.Contexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;

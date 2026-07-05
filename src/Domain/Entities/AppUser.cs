@@ -1,4 +1,4 @@
-namespace BillsBackend.Api.Domain;
+namespace Domain.Entities;
 
 /// <summary>
 /// Represents an authenticated application user, the internal identity that the

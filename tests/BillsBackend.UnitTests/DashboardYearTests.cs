@@ -1,4 +1,6 @@
 using BillsBackend.Api.Domain;
+using Domain.Entities;
+using Domain.Enums;
 
 namespace BillsBackend.UnitTests;
 
@@ -207,7 +209,7 @@ public sealed class DashboardYearTests
     public void ByCategory_SumsAcrossWholeYearNotPerMonth()
     {
         // Arrange — same bill/category, one entry in January and one in July
-        var bill = Bill.Create(1L, "Internet", 1L, BillKind.Recurring, 100m, 1m, null, FixedNow);
+        var bill = Bill.Create(1L, "Internet", 1L, BillKindEnum.Recurring, 100m, 1m, null, FixedNow);
         var billsById = new Dictionary<long, Bill> { [10L] = bill };
         var entries = new List<BillEntry>
         {
@@ -230,8 +232,8 @@ public sealed class DashboardYearTests
     public void ByCategory_OrdersByPlannedMyShareDescending()
     {
         // Arrange — category 1 (bill A, planned 300) and category 2 (bill B, planned 1000)
-        var billA = Bill.Create(1L, "Internet", 1L, BillKind.Recurring, 300m, 1m, null, FixedNow);
-        var billB = Bill.Create(1L, "Aluguel", 2L, BillKind.Recurring, 1000m, 1m, null, FixedNow);
+        var billA = Bill.Create(1L, "Internet", 1L, BillKindEnum.Recurring, 300m, 1m, null, FixedNow);
+        var billB = Bill.Create(1L, "Aluguel", 2L, BillKindEnum.Recurring, 1000m, 1m, null, FixedNow);
         var billsById = new Dictionary<long, Bill> { [10L] = billA, [20L] = billB };
         var entries = new List<BillEntry>
         {

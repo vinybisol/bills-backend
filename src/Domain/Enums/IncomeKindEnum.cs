@@ -1,9 +1,11 @@
-namespace BillsBackend.Api.Domain;
+using Domain.Entities;
+
+namespace Domain.Enums;
 
 /// <summary>
 /// The allowed income kinds for an <see cref="Income"/> template.
 /// </summary>
-public enum IncomeKind
+public enum IncomeKindEnum
 {
     /// <summary>A recurring income that repeats every month (e.g. salary, rent).</summary>
     Recurring,

@@ -1,4 +1,6 @@
-namespace BillsBackend.Api.Domain;
+using Domain.Enums;
+
+namespace Domain.Entities;
 
 /// <summary>
 /// Represents a bill template (molde de despesa) in the owner's financial plan, with optional split.
@@ -22,7 +24,7 @@ public sealed class Bill
         long ownerId,
         string name,
         long categoryId,
-        BillKind kind,
+        BillKindEnum kind,
         decimal defaultAmount,
         decimal splitRatio,
         long? personId,
@@ -52,7 +54,7 @@ public sealed class Bill
     public long CategoryId { get; private set; }
 
     /// <summary>Gets the bill kind: recurring or one-off.</summary>
-    public BillKind Kind { get; private set; }
+    public BillKindEnum Kind { get; private set; }
 
     /// <summary>Gets the default planned amount for this bill template. Zero or greater.</summary>
     public decimal DefaultAmount { get; private set; }
@@ -107,7 +109,7 @@ public sealed class Bill
         long ownerId,
         string name,
         long categoryId,
-        BillKind kind,
+        BillKindEnum kind,
         decimal defaultAmount,
         decimal splitRatio,
         long? personId,
@@ -148,7 +150,7 @@ public sealed class Bill
     public void Update(
         string name,
         long categoryId,
-        BillKind kind,
+        BillKindEnum kind,
         decimal defaultAmount,
         decimal splitRatio,
         long? personId)

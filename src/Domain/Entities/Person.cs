@@ -1,4 +1,4 @@
-namespace BillsBackend.Api.Domain;
+namespace Domain.Entities;
 
 /// <summary>
 /// Represents a person in the user's financial network — a contact who may share bills

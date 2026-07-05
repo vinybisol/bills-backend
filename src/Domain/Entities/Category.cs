@@ -1,4 +1,4 @@
-namespace BillsBackend.Api.Domain;
+namespace Domain.Entities;
 
 /// <summary>
 /// Represents a budget category owned by one user, used to classify bill templates.

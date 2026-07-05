@@ -1,8 +1,9 @@
-using BillsBackend.Api.Domain;
-using BillsBackend.Api.Identity;
+using Domain.Abstractions.Filters;
+using Domain.Entities;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
-namespace BillsBackend.Api.Data;
+namespace Data.Contexts;
 
 /// <summary>
 /// The Entity Framework Core database context for the budgeting backend.
@@ -185,8 +186,8 @@ public sealed class AppDbContext(
                 .HasColumnName("kind")
                 .IsRequired()
                 .HasConversion(
-                    v => v == IncomeKind.Recurring ? "recurring" : "one_off",
-                    v => v == "recurring" ? IncomeKind.Recurring : IncomeKind.OneOff);
+                    v => v == IncomeKindEnum.Recurring ? "recurring" : "one_off",
+                    v => v == "recurring" ? IncomeKindEnum.Recurring : IncomeKindEnum.OneOff);
 
             entity.Property(i => i.DefaultAmount)
                 .HasColumnName("default_amount")
@@ -230,8 +231,8 @@ public sealed class AppDbContext(
                 .HasColumnName("kind")
                 .IsRequired()
                 .HasConversion(
-                    v => v == BillKind.Recurring ? "recurring" : "one_off",
-                    v => v == "recurring" ? BillKind.Recurring : BillKind.OneOff);
+                    v => v == BillKindEnum.Recurring ? "recurring" : "one_off",
+                    v => v == "recurring" ? BillKindEnum.Recurring : BillKindEnum.OneOff);
 
             entity.Property(b => b.DefaultAmount)
                 .HasColumnName("default_amount")

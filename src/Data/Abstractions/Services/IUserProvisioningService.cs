@@ -1,6 +1,6 @@
-using BillsBackend.Api.Domain;
+using Domain.Entities;
 
-namespace BillsBackend.Api.Identity;
+namespace Application.Abstractions.Services;
 
 /// <summary>
 /// Translates an external Firebase identity into the internal <see cref="AppUser"/>,

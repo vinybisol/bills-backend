@@ -1,4 +1,6 @@
 using BillsBackend.Api.Domain;
+using Domain.Entities;
+using Domain.Enums;
 
 namespace BillsBackend.UnitTests;
 
@@ -75,7 +77,7 @@ public sealed class RecalculateTests
     [Test]
     public void BillRecalculate_UpdatesDefaultAmount()
     {
-        var bill = Bill.Create(1L, "Energia", 1L, BillKind.Recurring, 100m, 1m, null, Now);
+        var bill = Bill.Create(1L, "Energia", 1L, BillKindEnum.Recurring, 100m, 1m, null, Now);
 
         bill.Recalculate(175m);
 
@@ -85,7 +87,7 @@ public sealed class RecalculateTests
     [Test]
     public void BillRecalculate_NegativeAmount_Throws()
     {
-        var bill = Bill.Create(1L, "Energia", 1L, BillKind.Recurring, 100m, 1m, null, Now);
+        var bill = Bill.Create(1L, "Energia", 1L, BillKindEnum.Recurring, 100m, 1m, null, Now);
 
         Assert.That(() => bill.Recalculate(-1m), Throws.InstanceOf<ArgumentOutOfRangeException>());
     }

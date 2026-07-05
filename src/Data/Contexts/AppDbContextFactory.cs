@@ -1,8 +1,8 @@
-using BillsBackend.Api.Identity;
+using Domain.Abstractions.Filters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace BillsBackend.Api.Data;
+namespace Data.Contexts;
 
 /// <summary>
 /// Design-time factory used by the EF Core tooling (for example <c>dotnet ef migrations add</c>).
@@ -34,6 +34,14 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
             .UseNpgsql(NeonConnectionString.Normalize(connectionString))
             .Options;
 
-        return new AppDbContext(options, new CurrentOwner());
+        return new AppDbContext(options, new CurrentOwnerForDotNetTooling());
     }
+}
+
+public sealed record CurrentOwnerForDotNetTooling : ICurrentOwner
+{
+    public long Id { get; private set; }
+
+    public void SetCurrentOwnerId(long id)
+        => Id = id;
 }

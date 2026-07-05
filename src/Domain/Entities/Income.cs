@@ -1,4 +1,6 @@
-namespace BillsBackend.Api.Domain;
+using Domain.Enums;
+
+namespace Domain.Entities;
 
 /// <summary>
 /// Represents an income template (molde de receita) in the owner's financial plan.
@@ -14,7 +16,7 @@ public sealed class Income
 {
     private Income() { }
 
-    private Income(long ownerId, string name, IncomeKind kind, decimal defaultAmount, DateTimeOffset createdAt)
+    private Income(long ownerId, string name, IncomeKindEnum kind, decimal defaultAmount, DateTimeOffset createdAt)
     {
         OwnerId = ownerId;
         Name = name;
@@ -34,7 +36,7 @@ public sealed class Income
     public string Name { get; private set; } = null!;
 
     /// <summary>Gets the income kind: recurring or one-off.</summary>
-    public IncomeKind Kind { get; private set; }
+    public IncomeKindEnum Kind { get; private set; }
 
     /// <summary>Gets the default planned amount for this income template. Zero or greater.</summary>
     public decimal DefaultAmount { get; private set; }
@@ -62,7 +64,7 @@ public sealed class Income
     ///   <paramref name="ownerId"/> is not positive;
     ///   or <paramref name="defaultAmount"/> is negative.
     /// </exception>
-    public static Income Create(long ownerId, string name, IncomeKind kind, decimal defaultAmount, DateTimeOffset createdAt)
+    public static Income Create(long ownerId, string name, IncomeKindEnum kind, decimal defaultAmount, DateTimeOffset createdAt)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ownerId);
@@ -78,7 +80,7 @@ public sealed class Income
     /// <param name="defaultAmount">The new default amount; must be zero or greater.</param>
     /// <exception cref="ArgumentException"><paramref name="name"/> is null, empty, or whitespace.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="defaultAmount"/> is negative.</exception>
-    public void Update(string name, IncomeKind kind, decimal defaultAmount)
+    public void Update(string name, IncomeKindEnum kind, decimal defaultAmount)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentOutOfRangeException.ThrowIfNegative(defaultAmount);

@@ -1,4 +1,4 @@
-using BillsBackend.Api.Domain;
+using Domain.Entities;
 
 namespace BillsBackend.UnitTests;
 

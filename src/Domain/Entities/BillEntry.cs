@@ -1,4 +1,4 @@
-namespace BillsBackend.Api.Domain;
+namespace Domain.Entities;
 
 /// <summary>
 /// Represents a projected monthly entry for a bill (lançamento de despesa).

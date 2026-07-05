@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace BillsBackend.Api.Data;
+namespace Data.Contexts;
 
 /// <summary>
 /// Normalizes a PostgreSQL connection string into the key-value form expected by Npgsql.

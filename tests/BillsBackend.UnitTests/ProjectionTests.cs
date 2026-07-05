@@ -1,4 +1,5 @@
-using BillsBackend.Api.Domain;
+using Domain.Entities;
+using Domain.Enums;
 
 namespace BillsBackend.UnitTests;
 
@@ -18,8 +19,8 @@ public sealed class ProjectionTests
     public void BillEntry_RecurringActiveBill_Generates12Entries()
     {
         // Arrange
-        var bill = Bill.Create(1L, "Aluguel", 1L, BillKind.Recurring, 1500m, 1m, null, FixedNow);
-        var recurringBills = new[] { bill }.Where(b => b.Kind == BillKind.Recurring).ToList();
+        var bill = Bill.Create(1L, "Aluguel", 1L, BillKindEnum.Recurring, 1500m, 1m, null, FixedNow);
+        var recurringBills = new[] { bill }.Where(b => b.Kind == BillKindEnum.Recurring).ToList();
 
         // Act — use explicit billId since Bill.Id is 0 without a database to assign it
         var entries = new List<BillEntry>();
@@ -35,10 +36,10 @@ public sealed class ProjectionTests
     public void BillEntry_OneOffBill_IsIgnored()
     {
         // Arrange
-        var bill = Bill.Create(1L, "Reparo", 1L, BillKind.OneOff, 500m, 1m, null, FixedNow);
+        var bill = Bill.Create(1L, "Reparo", 1L, BillKindEnum.OneOff, 500m, 1m, null, FixedNow);
 
         // Act — the endpoint queries only recurring kind; one_off bills must be absent
-        var recurringBills = new[] { bill }.Where(b => b.Kind == BillKind.Recurring).ToList();
+        var recurringBills = new[] { bill }.Where(b => b.Kind == BillKindEnum.Recurring).ToList();
 
         // Assert
         Assert.That(recurringBills, Is.Empty);
@@ -48,11 +49,11 @@ public sealed class ProjectionTests
     public void BillEntry_InactiveBill_IsIgnored()
     {
         // Arrange
-        var bill = Bill.Create(1L, "Aluguel", 1L, BillKind.Recurring, 1500m, 1m, null, FixedNow);
+        var bill = Bill.Create(1L, "Aluguel", 1L, BillKindEnum.Recurring, 1500m, 1m, null, FixedNow);
         bill.Deactivate();
 
         // Act — the global query filter adds Active == true; simulate that here
-        var activeBills = new[] { bill }.Where(b => b.Active && b.Kind == BillKind.Recurring).ToList();
+        var activeBills = new[] { bill }.Where(b => b.Active && b.Kind == BillKindEnum.Recurring).ToList();
 
         // Assert
         Assert.That(activeBills, Is.Empty);
@@ -63,7 +64,7 @@ public sealed class ProjectionTests
     {
         // Arrange
         const long billId = 42L;
-        var bill = Bill.Create(1L, "Internet", 2L, BillKind.Recurring, 120m, 0.5m, 99L, FixedNow);
+        var bill = Bill.Create(1L, "Internet", 2L, BillKindEnum.Recurring, 120m, 0.5m, 99L, FixedNow);
 
         // Act — use explicit billId since Bill.Id is 0 without a database to assign it
         var entry = BillEntry.Create(1L, billId, 2025, 3, bill.DefaultAmount, bill.SplitRatio, bill.PersonId, FixedNow);
@@ -93,8 +94,8 @@ public sealed class ProjectionTests
     public void IncomeEntry_RecurringActiveIncome_Generates12Entries()
     {
         // Arrange
-        var income = Income.Create(1L, "Salario", IncomeKind.Recurring, 5000m, FixedNow);
-        var recurringIncomes = new[] { income }.Where(i => i.Kind == IncomeKind.Recurring).ToList();
+        var income = Income.Create(1L, "Salario", IncomeKindEnum.Recurring, 5000m, FixedNow);
+        var recurringIncomes = new[] { income }.Where(i => i.Kind == IncomeKindEnum.Recurring).ToList();
 
         // Act — use explicit incomeId since Income.Id is 0 without a database to assign it
         var entries = new List<IncomeEntry>();
@@ -110,10 +111,10 @@ public sealed class ProjectionTests
     public void IncomeEntry_OneOffIncome_IsIgnored()
     {
         // Arrange
-        var income = Income.Create(1L, "Bonus", IncomeKind.OneOff, 1000m, FixedNow);
+        var income = Income.Create(1L, "Bonus", IncomeKindEnum.OneOff, 1000m, FixedNow);
 
         // Act — the endpoint queries only recurring kind; one_off incomes must be absent
-        var recurringIncomes = new[] { income }.Where(i => i.Kind == IncomeKind.Recurring).ToList();
+        var recurringIncomes = new[] { income }.Where(i => i.Kind == IncomeKindEnum.Recurring).ToList();
 
         // Assert
         Assert.That(recurringIncomes, Is.Empty);

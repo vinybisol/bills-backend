@@ -1,7 +1,11 @@
+using Application.Abstractions.Services;
 using BillsBackend.Api.Contracts;
-using BillsBackend.Api.Data;
 using BillsBackend.Api.Domain;
 using BillsBackend.Api.Identity;
+using Data.Contexts;
+using Domain.Abstractions.Filters;
+using Domain.Entities;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace BillsBackend.Api.Endpoints;
@@ -191,7 +195,7 @@ internal static class EntryEndpoints
         if (bill is null)
             return Results.NotFound("Bill not found.");
 
-        if (bill.Kind != BillKind.OneOff)
+        if (bill.Kind != BillKindEnum.OneOff)
             return Results.BadRequest("Only one_off bill templates can be used to create entries via this endpoint.");
 
         var plannedAmount = req.PlannedAmount ?? bill.DefaultAmount;
@@ -242,7 +246,7 @@ internal static class EntryEndpoints
         if (income is null)
             return Results.NotFound("Income not found.");
 
-        if (income.Kind != IncomeKind.OneOff)
+        if (income.Kind != IncomeKindEnum.OneOff)
             return Results.BadRequest("Only one_off income templates can be used to create entries via this endpoint.");
 
         var plannedAmount = req.PlannedAmount ?? income.DefaultAmount;
