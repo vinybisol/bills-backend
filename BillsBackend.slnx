@@ -9,4 +9,8 @@
     <Project Path="tests/BillsBackend.IntegrationTests/BillsBackend.IntegrationTests.csproj" />
     <Project Path="tests/BillsBackend.UnitTests/BillsBackend.UnitTests.csproj" />
   </Folder>
+  <Folder Name="/tests/UnitTests/">
+    <Project Path="tests/UnitTests/Application.Tests/Application.Tests.csproj" />
+    <Project Path="tests/UnitTests/TestCommon/TestCommon.csproj" />
+  </Folder>
 </Solution>

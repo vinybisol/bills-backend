@@ -12,6 +12,5 @@ public interface ICategoryRepository
     /// Persists a batch of newly created categories.
     /// </summary>
     /// <param name="categories">The categories to add.</param>
-    /// <param name="cancellationToken">The token to observe for cancellation.</param>
-    Task AddRangeAsync(IEnumerable<Category> categories, CancellationToken cancellationToken = default);
+    void AddRange(IEnumerable<Category> categories);
 }

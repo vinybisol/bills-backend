@@ -15,7 +15,7 @@ Current structure under `src/`:
   `IncomeEntry`, `Income`, `Person`), `Domain/Abstractions/Filters/ICurrentOwner`, enums.
 - `Application/Abstractions/Services/` — service ports (`IUserProvisioningService`).
 - `Application/Abstractions/Repositories/` — narrow repository ports consumed by Application
-  services (`IAppUserRepository`, `ICategoryRepository`), added 2026-07-05. Keep these narrow
+  services (`IAppUserService`, `ICategoryRepository`), added 2026-07-05. Keep these narrow
   (a handful of methods each) — do NOT add an interface that mirrors the whole `DbContext`.
 - `Application/Services/` — `UserProvisioningService` (orchestration only, no EF Core).
 - `Data/Contexts/AppDbContext.cs` — EF config, global per-owner query filters.
@@ -36,7 +36,7 @@ Domain entities are encapsulated classes with `private set` properties, `Create`
 factories, and behavior methods (`MarkPaid`, `Unfreeze`, `UpdateAmounts`, etc.) — good reference
 for "don't build anemic models" pattern. `Category.Create` requires `ownerId > 0`
 (`ArgumentOutOfRangeException.ThrowIfNegativeOrZero`) — relevant when mocking an
-`IAppUserRepository` for seeding tests, see [[project-nunit-nsubstitute-gotchas]].
+`IAppUserService` for seeding tests, see [[project-nunit-nsubstitute-gotchas]].
 
 Enrichment pattern for reference-table lookups (bill -> category, bill -> person, etc.): entries
 are fetched via the normal DbSet (global `owner_id` query filter applies), but the bill/category/

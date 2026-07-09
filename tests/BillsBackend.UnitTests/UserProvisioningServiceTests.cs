@@ -1,5 +1,4 @@
-using System.Reflection;
-using Application.Abstractions.Repositories;
+using Application.Abstractions.Services;
 using Application.Services;
 using Domain.Entities;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -18,8 +17,8 @@ public sealed class UserProvisioningServiceTests
     private static readonly DateTimeOffset FixedNow =
         new(2026, 06, 28, 12, 00, 00, TimeSpan.Zero);
 
-    private IAppUserRepository _users = null!;
-    private ICategoryRepository _categories = null!;
+    private IAppUserService _users = null!;
+    private ICategoryService _categories = null!;
 
     /// <summary>Creates fresh mocks before each test — NUnit reuses a single fixture instance
     /// across all test methods, so instance-level substitutes must be re-created here rather
@@ -27,17 +26,17 @@ public sealed class UserProvisioningServiceTests
     [SetUp]
     public void SetUp()
     {
-        _users = Substitute.For<IAppUserRepository>();
-        _categories = Substitute.For<ICategoryRepository>();
+        _users = Substitute.For<IAppUserService>();
+        _categories = Substitute.For<ICategoryService>();
     }
 
     private UserProvisioningService CreateService() =>
         new(_users, _categories, new FixedTimeProvider(FixedNow), NullLogger<UserProvisioningService>.Instance);
 
-    /// <summary>Configures <see cref="_users"/> as if no user exists yet, and <see cref="IAppUserRepository.AddAsync"/>
+    /// <summary>Configures <see cref="_users"/> as if no user exists yet, and <see cref="IAppUserService.AddAsync"/>
     /// always succeeds by persisting whatever <see cref="AppUser"/> it is given. Assigns a fake
     /// database-generated id, mirroring what EF Core does to <see cref="AppUser.Id"/> on
-    /// <c>SaveChangesAsync</c> in the real <see cref="IAppUserRepository"/> implementation —
+    /// <c>SaveChangesAsync</c> in the real <see cref="IAppUserService"/> implementation —
     /// required because <see cref="Category.Create"/> demands a positive owner id.</summary>
     private void SetUpNoExistingUser()
     {
@@ -65,7 +64,7 @@ public sealed class UserProvisioningServiceTests
         var service = CreateService();
 
         // Act
-        var user = await service.GetOrCreateAsync("firebase-uid-1", "alice@example.com", "Alice Example");
+        var user = await service.GetOrCreateAsync("firebase-uid-1", "alice@example.com", "Alice Example", CancellationToken.None);
 
         // Assert
         using (Assert.EnterMultipleScope())
@@ -84,7 +83,7 @@ public sealed class UserProvisioningServiceTests
         var service = CreateService();
 
         // Act
-        var user = await service.GetOrCreateAsync("firebase-uid-2", email: null, name: null);
+        var user = await service.GetOrCreateAsync("firebase-uid-2", email: null, name: null, CancellationToken.None);
 
         // Assert
         Assert.That(user.CreatedAt, Is.EqualTo(FixedNow));
@@ -106,8 +105,8 @@ public sealed class UserProvisioningServiceTests
         var service = CreateService();
 
         // Act
-        var first = await service.GetOrCreateAsync("firebase-uid-3", "bob@example.com", "Bob Example");
-        var second = await service.GetOrCreateAsync("firebase-uid-3", "bob@example.com", "Bob Example");
+        var first = await service.GetOrCreateAsync("firebase-uid-3", "bob@example.com", "Bob Example", CancellationToken.None);
+        var second = await service.GetOrCreateAsync("firebase-uid-3", "bob@example.com", "Bob Example", CancellationToken.None);
 
         // Assert
         Assert.That(second, Is.SameAs(first));
@@ -122,7 +121,7 @@ public sealed class UserProvisioningServiceTests
         var service = CreateService();
 
         // Act
-        var user = await service.GetOrCreateAsync("firebase-uid-4", "carol@example.com", "Carol Example");
+        var user = await service.GetOrCreateAsync("firebase-uid-4", "carol@example.com", "Carol Example", CancellationToken.None);
 
         // Assert
         Assert.That(user.Name, Is.EqualTo("Carol Example"));
@@ -138,7 +137,7 @@ public sealed class UserProvisioningServiceTests
         var service = CreateService();
 
         // Act
-        var user = await service.GetOrCreateAsync("firebase-uid-5", "dave@example.com", name);
+        var user = await service.GetOrCreateAsync("firebase-uid-5", "dave@example.com", name, CancellationToken.None);
 
         // Assert
         Assert.That(user.Name, Is.EqualTo(string.Empty));
@@ -154,7 +153,7 @@ public sealed class UserProvisioningServiceTests
 
         // Act / Assert
         Assert.That(
-            async () => await service.GetOrCreateAsync(firebaseUid!, "x@example.com", name: null),
+            async () => await service.GetOrCreateAsync(firebaseUid!, "x@example.com", name: null, CancellationToken.None),
             Throws.InstanceOf<ArgumentException>());
     }
 
@@ -166,7 +165,7 @@ public sealed class UserProvisioningServiceTests
         var service = CreateService();
 
         // Act
-        var persisted = await service.GetOrCreateAsync("firebase-seed-1", "seed@example.com", "Seed User");
+        var persisted = await service.GetOrCreateAsync("firebase-seed-1", "seed@example.com", "Seed User", CancellationToken.None);
 
         // Assert
         await _categories.Received(1).AddRangeAsync(
@@ -188,7 +187,7 @@ public sealed class UserProvisioningServiceTests
         var service = CreateService();
 
         // Act
-        await service.GetOrCreateAsync("firebase-seed-2", "seed2@example.com", "Seed 2");
+        await service.GetOrCreateAsync("firebase-seed-2", "seed2@example.com", "Seed 2", CancellationToken.None);
 
         // Assert
         await _categories.DidNotReceive().AddRangeAsync(Arg.Any<IEnumerable<Category>>(), Arg.Any<CancellationToken>());

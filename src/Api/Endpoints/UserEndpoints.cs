@@ -18,7 +18,7 @@ internal static class UserEndpoints
     private static async Task<IResult> GetHealth(
         System.Security.Claims.ClaimsPrincipal user,
         IUserProvisioningService provisioning,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
         var firebaseUid = user.GetFirebaseUid();
         if (string.IsNullOrWhiteSpace(firebaseUid))
@@ -26,7 +26,7 @@ internal static class UserEndpoints
             return Results.Unauthorized();
         }
 
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), cancellationToken);
+        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
         return Results.Ok(new HealthResponse(appUser.Id, "healthy"));
     }
 
@@ -35,7 +35,7 @@ internal static class UserEndpoints
     private static async Task<IResult> GetMe(
         System.Security.Claims.ClaimsPrincipal user,
         IUserProvisioningService provisioning,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
         var firebaseUid = user.GetFirebaseUid();
         if (string.IsNullOrWhiteSpace(firebaseUid))
@@ -43,7 +43,7 @@ internal static class UserEndpoints
             return Results.Unauthorized();
         }
 
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), cancellationToken);
+        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
         return Results.Ok(new MeResponse(appUser.Id, appUser.Name, appUser.Email));
     }
 }
