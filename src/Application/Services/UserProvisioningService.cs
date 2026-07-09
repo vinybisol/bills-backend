@@ -6,16 +6,16 @@ using Microsoft.Extensions.Logging;
 namespace Application.Services;
 
 /// <summary>
-/// Default <see cref="IUserProvisioningService"/>, backed by <see cref="IAppUserRepository"/>
+/// Default <see cref="IUserProvisioningService"/>, backed by <see cref="IAppUserService"/>
 /// and <see cref="ICategoryRepository"/>.
 /// </summary>
-/// <param name="users">The repository used to look up and persist users.</param>
-/// <param name="categories">The repository used to seed default categories for new users.</param>
+/// <param name="usersService">The repository used to look up and persist users.</param>
+/// <param name="categoriesService">The repository used to seed default categories for new users.</param>
 /// <param name="timeProvider">The clock used to stamp newly provisioned users and seed categories.</param>
 /// <param name="logger">The logger used to record provisioning events.</param>
 public sealed class UserProvisioningService(
-    IAppUserRepository users,
-    ICategoryRepository categories,
+    IAppUserService usersService,
+    ICategoryService categoriesService,
     TimeProvider timeProvider,
     ILogger<UserProvisioningService> logger) : IUserProvisioningService
 {
@@ -24,11 +24,11 @@ public sealed class UserProvisioningService(
         string firebaseUid,
         string? email,
         string? name,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(firebaseUid);
 
-        var existing = await users.FindByFirebaseUidAsync(firebaseUid, cancellationToken);
+        var existing = await usersService.FindByFirebaseUidAsync(firebaseUid, ct);
         if (existing is not null)
         {
             return existing;
@@ -36,14 +36,14 @@ public sealed class UserProvisioningService(
 
         var user = AppUser.Provision(firebaseUid, email, name, timeProvider.GetUtcNow());
 
-        var (persisted, wasCreated) = await users.AddAsync(user, cancellationToken);
+        var (persisted, wasCreated) = await usersService.AddAsync(user, ct);
 
         if (wasCreated)
         {
             var now = timeProvider.GetUtcNow();
-            await categories.AddRangeAsync(
+            await categoriesService.AddRangeAsync(
                 Category.DefaultNames.Select(n => Category.Create(persisted.Id, n, now)),
-                cancellationToken);
+                ct);
             logger.LogInformation("Provisioned new app_user {UserId} on first authenticated request.", persisted.Id);
         }
 

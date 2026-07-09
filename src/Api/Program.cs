@@ -9,8 +9,6 @@ using Api.Filters;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Data.Contexts;
 using Domain.Infrastructures;
-using Application.Abstractions.Services;
-using Application.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,7 +37,6 @@ builder.Services
 
 // --- Identity services ---
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddScoped<IUserProvisioningService, UserProvisioningService>();
 builder.Services.AddScoped<ICurrentOwner, CurrentOwner>();
 
 // --- Authentication: validate Firebase-issued JWTs ---
@@ -86,7 +83,8 @@ if (app.Environment.IsDevelopment())
         .AllowAnyMethod()
         .AllowAnyHeader());
 
-    var migrationService = app.Services.CreateScope().ServiceProvider.GetRequiredService<IMigrationService>();
+    var migrationService = app.Services.CreateScope()
+        .ServiceProvider.GetRequiredService<IMigrationService>();
     migrationService.RunMigration(options);
 }
 

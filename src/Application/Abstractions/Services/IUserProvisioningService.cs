@@ -17,5 +17,5 @@ public interface IUserProvisioningService
     /// <param name="cancellationToken">The token to observe for cancellation.</param>
     /// <returns>The existing or newly created <see cref="AppUser"/> mapped to <paramref name="firebaseUid"/>.</returns>
     /// <exception cref="ArgumentException"><paramref name="firebaseUid"/> is <see langword="null"/> or empty.</exception>
-    Task<AppUser> GetOrCreateAsync(string firebaseUid, string? email, string? name, CancellationToken cancellationToken = default);
+    Task<AppUser> GetOrCreateAsync(string firebaseUid, string? email, string? name, CancellationToken cancellationToken);
 }

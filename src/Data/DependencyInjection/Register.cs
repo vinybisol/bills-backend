@@ -13,6 +13,7 @@ public static class RegisterData
     public static void Register(IServiceCollection services, AppOptions options)
     {
         ResolveContexts(services, options);
+        ResolveRepositores(services);
         ResolveServices(services);
     }
 
@@ -30,10 +31,15 @@ public static class RegisterData
             opt.UseNpgsql(NeonConnectionString.Normalize(connString)));
     }
 
+    private static void ResolveRepositores(IServiceCollection services)
+    {
+        services.AddScoped<IAppUserRepository, AppUserRepository>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+    }
+
     private static void ResolveServices(IServiceCollection services)
     {
         services.AddScoped<IMigrationService, MigrationService>();
-        services.AddScoped<IAppUserRepository, AppUserRepository>();
-        services.AddScoped<ICategoryRepository, CategoryRepository>();
     }
 }

@@ -6,7 +6,7 @@ metadata:
 ---
 
 Two non-obvious issues surfaced 2026-07-05 while converting `UserProvisioningServiceTests` from a
-real (InMemory) `AppDbContext` to NSubstitute mocks of `IAppUserRepository`/`ICategoryRepository`
+real (InMemory) `AppDbContext` to NSubstitute mocks of `IAppUserService`/`ICategoryRepository`
 (see [[project-stack-and-testing]] for the layout this applies to):
 
 1. **NUnit reuses a single `[TestFixture]` instance across all `[Test]` methods by default**

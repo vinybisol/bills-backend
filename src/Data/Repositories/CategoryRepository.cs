@@ -8,12 +8,11 @@ namespace Data.Repositories;
 /// Default <see cref="ICategoryRepository"/> backed by the <see cref="AppDbContext"/>.
 /// </summary>
 /// <param name="db">The database context used to persist categories.</param>
-public sealed class CategoryRepository(AppDbContext db) : ICategoryRepository
+internal sealed class CategoryRepository(AppDbContext db) : ICategoryRepository
 {
     /// <inheritdoc/>
-    public async Task AddRangeAsync(IEnumerable<Category> categories, CancellationToken cancellationToken = default)
+    public void AddRange(IEnumerable<Category> categories)
     {
         db.Categories.AddRange(categories);
-        await db.SaveChangesAsync(cancellationToken);
     }
 }
