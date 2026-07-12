@@ -1,132 +1,72 @@
+using Api.Contracts;
+using Api.Extensions;
+using Api.Filters;
 using Application.Abstractions.Services;
-using BillsBackend.Api.Contracts;
-using BillsBackend.Api.Identity;
-using Data.Contexts;
-using Domain.Abstractions.Filters;
-using Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 
-namespace BillsBackend.Api.Endpoints;
+namespace Api.Endpoints;
 
 internal static class CategoryEndpoints
 {
     public static RouteGroupBuilder MapCategoryEndpoints(this RouteGroupBuilder group)
     {
-        group.MapPost("/categories", CreateCategory);
-        group.MapGet("/categories", ListCategories);
-        group.MapPut("/categories/{id:long}", UpdateCategory);
-        group.MapDelete("/categories/{id:long}", DeleteCategory);
+        var categoryGroup = group
+          .MapGroup("/categories")
+          .AddEndpointFilter<UserEndpointFilter>();
+
+        categoryGroup.MapPost("", CreateCategory);
+        categoryGroup.MapGet("", ListCategories);
+        categoryGroup.MapPut("/{id:long}", UpdateCategory);
+        categoryGroup.MapDelete("/{id:long}", DeleteCategory);
+
         return group;
     }
 
     private static async Task<IResult> CreateCategory(
         CreateCategoryRequest req,
-        System.Security.Claims.ClaimsPrincipal user,
-        IUserProvisioningService provisioning,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
-        TimeProvider timeProvider,
+        ICategoryService categoryService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.BadRequest("Name is required.");
 
-        var firebaseUid = user.GetFirebaseUid();
-        if (string.IsNullOrWhiteSpace(firebaseUid))
-            return Results.Unauthorized();
+        var result = await categoryService.CreateCategoryAsync(req.Name, ct);
 
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.SetCurrentOwnerId(appUser.Id);
+        if (result.IsFailure)
+            return result.ToHttpResult();
 
-        var trimmedName = req.Name.Trim();
-        if (await db.Categories.AnyAsync(c => c.Name == trimmedName, ct))
-            return Results.Conflict("A category with that name already exists.");
-
-        var category = Category.Create(appUser.Id, trimmedName, timeProvider.GetUtcNow());
-        db.Categories.Add(category);
-        await db.SaveChangesAsync(ct);
-
-        return Results.Created($"/api/v1/categories/{category.Id}", new CategoryDto(category.Id, category.Name));
+        var category = result.Value;
+        return Results.Created($"/api/v1/categories/{category.Id}", category);
     }
 
     private static async Task<IResult> ListCategories(
-        System.Security.Claims.ClaimsPrincipal user,
-        IUserProvisioningService provisioning,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
+        ICategoryService categoryService,
         CancellationToken ct)
     {
-        var firebaseUid = user.GetFirebaseUid();
-        if (string.IsNullOrWhiteSpace(firebaseUid))
-            return Results.Unauthorized();
+        var result = await categoryService.GetAllByNameAsync(ct);
 
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.SetCurrentOwnerId(appUser.Id);
-
-        var categories = await db.Categories
-            .OrderBy(c => c.Name)
-            .Select(c => new CategoryDto(c.Id, c.Name))
-            .ToListAsync(ct);
-
-        return Results.Ok(categories);
+        return result.ToHttpResult();
     }
 
     private static async Task<IResult> UpdateCategory(
         long id,
         UpdateCategoryRequest req,
-        System.Security.Claims.ClaimsPrincipal user,
-        IUserProvisioningService provisioning,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
+        ICategoryService categoryService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.BadRequest("Name is required.");
 
-        var firebaseUid = user.GetFirebaseUid();
-        if (string.IsNullOrWhiteSpace(firebaseUid))
-            return Results.Unauthorized();
+        var result = await categoryService.UpdateAsync(id, req.Name, ct);
 
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.SetCurrentOwnerId(appUser.Id);
-
-        var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id, ct);
-        if (category is null)
-            return Results.NotFound();
-
-        var trimmedName = req.Name.Trim();
-        if (category.Name != trimmedName &&
-            await db.Categories.AnyAsync(c => c.Id != id && c.Name == trimmedName, ct))
-            return Results.Conflict("A category with that name already exists.");
-
-        category.Rename(trimmedName);
-        await db.SaveChangesAsync(ct);
-
-        return Results.Ok(new CategoryDto(category.Id, category.Name));
+        return result.ToHttpResult();
     }
 
     private static async Task<IResult> DeleteCategory(
         long id,
-        System.Security.Claims.ClaimsPrincipal user,
-        IUserProvisioningService provisioning,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
+        ICategoryService service,
         CancellationToken ct)
     {
-        var firebaseUid = user.GetFirebaseUid();
-        if (string.IsNullOrWhiteSpace(firebaseUid))
-            return Results.Unauthorized();
-
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.SetCurrentOwnerId(appUser.Id);
-
-        var category = await db.Categories.FirstOrDefaultAsync(c => c.Id == id, ct);
-        if (category is null)
-            return Results.NotFound();
-
-        category.Deactivate();
-        await db.SaveChangesAsync(ct);
-
-        return Results.NoContent();
+        var result = await service.DeleteByIdAsync(id, ct);
+        return result.ToHttpResult();
     }
 }

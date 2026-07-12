@@ -1,6 +1,4 @@
 using System.Text.Json.Serialization;
-using BillsBackend.Api.Endpoints;
-using BillsBackend.Api.Identity;
 using Microsoft.IdentityModel.Tokens;
 using Application.DependencyInjection;
 using Data.DependencyInjection;
@@ -9,6 +7,8 @@ using Api.Filters;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Data.Contexts;
 using Domain.Infrastructures;
+using Api.Endpoints;
+using Api.Identity;
 
 
 var builder = WebApplication.CreateBuilder(args);
