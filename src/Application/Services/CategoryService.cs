@@ -16,7 +16,7 @@ internal sealed class CategoryService(
 {
     public async Task<Result<CategoryDto>> CreateCategoryAsync(string name, CancellationToken cancellationToken)
     {
-        var trimmedName = name.Trim();
+        var trimmedName = name?.Trim();
         if (string.IsNullOrWhiteSpace(trimmedName))
             return Error.Validation("Category name cannot be empty ou null");
 
@@ -48,7 +48,7 @@ internal sealed class CategoryService(
         if (category is null)
             return Error.NotFound(nameof(category));
 
-        if (trimmedName == category.Name)
+        if (await repository.ExistsByNameAsync(trimmedName, ct))
             return Error.Conflict("A category with that name already exists.");
 
         category.Rename(trimmedName);

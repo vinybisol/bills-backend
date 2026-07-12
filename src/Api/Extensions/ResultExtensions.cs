@@ -5,7 +5,7 @@ namespace Api.Extensions;
 public static class ResultExtensions
 {
     public static IResult ToHttpResult(this Result result) =>
-        result.IsSuccess ? Results.Ok() : Problem(result.Error);
+        result.IsSuccess ? Results.NoContent() : Problem(result.Error);
 
     public static IResult ToHttpResult<T>(this Result<T> result) =>
         result.IsSuccess ? Results.Ok(result.Value) : Problem(result.Error);
