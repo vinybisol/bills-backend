@@ -90,6 +90,32 @@ jobs:
           # leaves it untouched and does not force SSL Mode=Require on the local server.
           ConnectionStrings__NeonTest: "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres"
 
+      - name: Install ReportGenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Merge coverage reports
+        run: |
+          reportgenerator \
+            -reports:"$GITHUB_WORKSPACE/TestResults/**/coverage.cobertura.xml" \
+            -targetdir:"$GITHUB_WORKSPACE/CoverageReport" \
+            -reporttypes:"Html;Cobertura;TextSummary"
+
+      - name: Enforce minimum coverage (80%)
+        run: |
+          LINE_COVERAGE=$(grep -oP '(?<=Line coverage: )[0-9]+(\.[0-9]+)?' "$GITHUB_WORKSPACE/CoverageReport/Summary.txt")
+          echo "Line coverage: $LINE_COVERAGE%"
+          if (( $(echo "$LINE_COVERAGE < 80" | bc -l) )); then
+            echo "::error::Code coverage $LINE_COVERAGE% is below the required 80% threshold."
+            exit 1
+          fi
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: ${{ github.workspace }}/CoverageReport
+
   deploy:
     name: Deploy to Azure (F1)
     runs-on: ubuntu-latest
