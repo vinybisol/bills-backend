@@ -1,4 +1,10 @@
-[![codecov](https://codecov.io/github/vinybisol/bills-backend/branch/develop/graph/badge.svg?token=ISA68KJ8DQ)](https://codecov.io/github/vinybisol/bills-backend)
+[![codecov](https://codecov.io/github/vinybisol/bills-backend/graph/badge.svg?token=ISA68KJ8DQ)](https://codecov.io/github/vinybisol/bills-backend)
+![CI/CD](https://github.com/vinybisol/bills-backend/actions/workflows/ci.yml/badge.svg)
+![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)
+![Last Commit](https://img.shields.io/github/last-commit/vinybisol/bills-backend)
+![Issues](https://img.shields.io/github/issues/vinybisol/bills-backend)
+![Top Language](https://img.shields.io/github/languages/top/vinybisol/bills-backend)
+
 
 # Bills Backend
 
