@@ -4,6 +4,7 @@
 ![Last Commit](https://img.shields.io/github/last-commit/vinybisol/bills-backend)
 ![Issues](https://img.shields.io/github/issues/vinybisol/bills-backend)
 ![Top Language](https://img.shields.io/github/languages/top/vinybisol/bills-backend)
+![License](https://img.shields.io/github/license/vinybisol/bills-backend)
 
 
 # Bills Backend
