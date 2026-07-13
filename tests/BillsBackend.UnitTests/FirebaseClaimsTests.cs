@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using BillsBackend.Api.Identity;
+using Api.Identity;
 
 namespace BillsBackend.UnitTests;
 

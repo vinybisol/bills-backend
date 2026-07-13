@@ -1,8 +1,8 @@
+using Api.Identity;
 using Application.Abstractions.Services;
 using BillsBackend.Api.Contracts;
-using BillsBackend.Api.Identity;
 
-namespace BillsBackend.Api.Endpoints;
+namespace Api.Endpoints;
 
 internal static class UserEndpoints
 {

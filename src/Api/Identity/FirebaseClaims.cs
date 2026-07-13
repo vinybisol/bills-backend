@@ -1,6 +1,6 @@
 using System.Security.Claims;
 
-namespace BillsBackend.Api.Identity;
+namespace Api.Identity;
 
 /// <summary>
 /// Helpers for reading Firebase identity information out of a <see cref="ClaimsPrincipal"/>.

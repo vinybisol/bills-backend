@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace BillsBackend.Api.Identity;
+namespace Api.Identity;
 
 /// <summary>
 /// Strongly-typed configuration for validating Firebase-issued JWTs.
