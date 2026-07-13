@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/github/vinybisol/bills-backend/branch/develop/graph/badge.svg?token=ISA68KJ8DQ)](https://codecov.io/github/vinybisol/bills-backend)
+
 # Bills Backend
 
 Um backend simples e robusto para gerenciamento de orçamento pessoal, construído com .NET 10 e PostgreSQL.
