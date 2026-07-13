@@ -95,7 +95,7 @@ jobs:
           reportgenerator \
             -reports:"${{ github.workspace }}/TestResults/**/coverage.cobertura.xml" \
             -targetdir:"${{ github.workspace }}/CoverageReport" \
-            -reporttypes:"Cobertura;Html
+            -reporttypes:"Cobertura;Html"
 
       - name: Code Coverage Report
         uses: irongut/CodeCoverageSummary@v1.3.0
