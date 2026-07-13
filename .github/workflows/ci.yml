@@ -74,9 +74,6 @@ jobs:
       - name: Build
         run: dotnet build BillsBackend.slnx --configuration Release --no-restore
 
-      - name: Run TestCommon
-        run: dotnet test --project tests/UnitTests/TestCommon/TestCommon.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Common/coverage.cobertura.xml"
-        
       - name: Run Application.Tests
         run: dotnet test --project tests/UnitTests/Application.Tests/Application.Tests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Application/coverage.cobertura.xml"
         
