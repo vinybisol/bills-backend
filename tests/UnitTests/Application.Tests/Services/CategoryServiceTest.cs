@@ -87,7 +87,6 @@ public sealed class CategoryServiceTest
     internal async Task CreateCategoryAsync_NameWithWhitespace_TrimsNameBeforeSaving(
     [Frozen] Mock<ICategoryRepository> repoMock,
     [Frozen] Mock<ICurrentOwner> currentOwnerMock,
-    [Frozen] Mock<IUnitOfWork> unitOfWorkMock,
     CategoryService sut,
     string name,
     int currentOwner,
@@ -175,7 +174,6 @@ public sealed class CategoryServiceTest
     [Theory]
     [AutoMoqData]
     internal async Task AddRangeAsync_CancelledToken_ThrowsOperationCanceledException(
-        [Frozen] Mock<ICategoryRepository> repoMock,
         [Frozen] Mock<IUnitOfWork> unitOfWorkMock,
         CategoryService sut,
         List<Category> categories)
@@ -228,7 +226,7 @@ public sealed class CategoryServiceTest
     {
         // Arrange
         repoMock.Setup(r => r.GetByIdAsync(id, cancellationToken))
-            .ReturnsAsync((Category)null);
+            .ReturnsAsync((Category)null!);
 
         // Act
         var result = await sut.UpdateAsync(id, name, cancellationToken);
@@ -245,7 +243,6 @@ public sealed class CategoryServiceTest
     [AutoMoqData]
     internal async Task UpdateAsync_SameName_ReturnsConflictError(
         [Frozen] Mock<ICategoryRepository> repoMock,
-        [Frozen] Mock<IUnitOfWork> unitOfWorkMock,
         CategoryService sut,
         Category category,
         string name,
@@ -440,7 +437,7 @@ public sealed class CategoryServiceTest
     {
         // Arrange
         repoMock.Setup(r => r.GetByIdAsync(id, cancellationToken))
-            .ReturnsAsync((Category)null);
+            .ReturnsAsync((Category)null!);
 
         // Act
         var result = await sut.DeleteByIdAsync(id, cancellationToken);
