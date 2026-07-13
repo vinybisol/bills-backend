@@ -1,0 +1,26 @@
+# Local PostgreSQL for running the integration test suite without Neon.
+#
+# Usage:
+#   docker compose up -d
+#   dotnet user-secrets set "ConnectionStrings:NeonTest" \
+#     "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres" \
+#     --project tests/BillsBackend.IntegrationTests
+#   dotnet test
+#
+# Data is ephemeral (no named volume): `docker compose down` discards it. Respawn resets
+# the schema between fixtures anyway, so persistence is unnecessary for tests.
+services:
+  postgres:
+    image: postgres:16
+    container_name: bills-test-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bills_test
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bills_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
