@@ -74,92 +74,21 @@ jobs:
       - name: Build
         run: dotnet build BillsBackend.slnx --configuration Release --no-restore
 
-      - name: Test with coverage (Application.Tests)
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/TestResults/application"
-          dotnet test tests/UnitTests/Application.Tests/Application.Tests.csproj \
-            --configuration Release \
-            --no-restore \
-            --verbosity normal \
-            -- \
-            --coverage \
-            --coverage-output-format cobertura \
-            --coverage-output "$GITHUB_WORKSPACE/TestResults/application/coverage"
+      - name: Run TestCommon
+        run: dotnet test --project tests/UnitTests/TestCommon/TestCommon.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Common/coverage.cobertura.xml"
+        
+      - name: Run Application.Tests
+        run: dotnet test --project tests/UnitTests/Application.Tests/Application.Tests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Application/coverage.cobertura.xml"
+        
+      - name: Run BillsBackend.UnitTests
+        run: dotnet test --project tests/BillsBackend.UnitTests/BillsBackend.UnitTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Unit/coverage.cobertura.xml"
+
+      - name: Run BillsBackend.IntegrationTests
+        run: dotnet test --project tests/BillsBackend.IntegrationTests/BillsBackend.IntegrationTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Integration/coverage.cobertura.xml"
         env:
           # Key-value form (not a postgresql:// URI) so NeonConnectionString.Normalize
           # leaves it untouched and does not force SSL Mode=Require on the local server.
           ConnectionStrings__NeonTest: "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres"
-
-      - name: Test with coverage (BillsBackend.UnitTests)
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/TestResults/unit"
-          dotnet test tests/BillsBackend.UnitTests/BillsBackend.UnitTests.csproj \
-            --configuration Release \
-            --no-restore \
-            --verbosity normal \
-            --collect:"XPlat Code Coverage" \
-            --results-directory "$GITHUB_WORKSPACE/TestResults/unit"
-
-      - name: Test with coverage (BillsBackend.IntegrationTests)
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/TestResults/integration"
-          dotnet test tests/BillsBackend.IntegrationTests/BillsBackend.IntegrationTests.csproj \
-            --configuration Release \
-            --no-restore \
-            --verbosity normal \
-            --collect:"XPlat Code Coverage" \
-            --results-directory "$GITHUB_WORKSPACE/TestResults/integration"
-        env:
-          ConnectionStrings__NeonTest: "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres"
-
-      - name: Write coverage summary
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import glob
-          import os
-          import xml.etree.ElementTree as ET
-
-          files = sorted(glob.glob('TestResults/**/*.cobertura.xml', recursive=True))
-          if not files:
-              print('No Cobertura reports found.')
-              raise SystemExit(0)
-
-          lines = []
-          lines.append('## Coverage summary')
-          lines.append('')
-          lines.append('| Report | Line coverage | Branch coverage |')
-          lines.append('| --- | ---: | ---: |')
-
-          for path in files:
-              try:
-                  root = ET.parse(path).getroot()
-              except ET.ParseError as exc:
-                  print(f'Skipping {path}: {exc}')
-                  continue
-
-              line_rate = float(root.attrib.get('line-rate', '0')) * 100
-              branch_rate = float(root.attrib.get('branch-rate', '0')) * 100
-              lines_valid = int(root.attrib.get('lines-valid', '0'))
-              lines_covered = int(root.attrib.get('lines-covered', '0'))
-              branches_valid = int(root.attrib.get('branches-valid', '0'))
-              branches_covered = int(root.attrib.get('branches-covered', '0'))
-
-              label = os.path.relpath(path)
-              lines.append(f'| {label} | {line_rate:.2f}% ({lines_covered}/{lines_valid}) | {branch_rate:.2f}% ({branches_covered}/{branches_valid}) |')
-              print(f'{label}: line coverage {line_rate:.2f}% ({lines_covered}/{lines_valid})')
-              print(f'{label}: branch coverage {branch_rate:.2f}% ({branches_covered}/{branches_valid})')
-
-          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as fh:
-              fh.write('\n'.join(lines) + '\n')
-          PY
-
-      - name: Upload coverage reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-reports
-          path: ./TestResults
-          if-no-files-found: error
 
   deploy:
     name: Deploy to Azure (F1)
