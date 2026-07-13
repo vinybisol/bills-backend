@@ -40,7 +40,7 @@ internal sealed class CategoryService(
 
     public async Task<Result<CategoryDto>> UpdateAsync(long id, string name, CancellationToken ct)
     {
-        var trimmedName = name.Trim();
+        var trimmedName = name?.Trim();
         if (string.IsNullOrWhiteSpace(trimmedName))
             return Error.Validation("Category name cannot be empty ou null");
 
