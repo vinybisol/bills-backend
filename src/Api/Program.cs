@@ -73,6 +73,20 @@ var options = builder.Configuration.Get<AppOptions>()
 RegisterApplications.Register(builder.Services);
 RegisterData.Register(builder.Services, options);
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+    {
+        policy
+            .WithOrigins(
+                "https://bills-261c7.web.app"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials(); // somente se usar cookies/autenticação
+    });
+});
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -90,6 +104,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseCors("Frontend");
 
 // All endpoints are versioned under /api/v1. See docs/decisoes.md for the versioning decision.
 var v1 = app.MapGroup("/api/v1").RequireAuthorization();
