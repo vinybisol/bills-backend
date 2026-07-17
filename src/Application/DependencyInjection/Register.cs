@@ -6,15 +6,13 @@ namespace Application.DependencyInjection;
 
 public static class RegisterApplications
 {
-    public static void Register(IServiceCollection services)
-    {
-        ResolveServices(services);
-    }
+    public static void Register(IServiceCollection services) => ResolveServices(services);
 
     private static void ResolveServices(IServiceCollection services)
     {
         services.AddScoped<IAppUserService, AppUserService>();
         services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<IPersonService, PersonService>();
         services.AddScoped<IUserProvisioningService, UserProvisioningService>();
     }
 }

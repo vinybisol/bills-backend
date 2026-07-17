@@ -17,29 +17,20 @@ public sealed class IncomeTests
     [TestCase(null)]
     [TestCase("")]
     [TestCase("   ")]
-    public void Create_BlankName_ThrowsArgumentException(string? name)
-    {
-        Assert.That(
+    public void Create_BlankName_ThrowsArgumentException(string? name) => Assert.That(
             () => Income.Create(1L, name!, IncomeKindEnum.Recurring, 1000m, FixedNow),
             Throws.InstanceOf<ArgumentException>());
-    }
 
     [Test]
-    public void Create_NegativeDefaultAmount_ThrowsArgumentOutOfRangeException()
-    {
-        Assert.That(
+    public void Create_NegativeDefaultAmount_ThrowsArgumentOutOfRangeException() => Assert.That(
             () => Income.Create(1L, "Salário", IncomeKindEnum.Recurring, -0.01m, FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 
     [TestCase(0L)]
     [TestCase(-1L)]
-    public void Create_NonPositiveOwnerId_ThrowsArgumentOutOfRangeException(long ownerId)
-    {
-        Assert.That(
+    public void Create_NonPositiveOwnerId_ThrowsArgumentOutOfRangeException(long ownerId) => Assert.That(
             () => Income.Create(ownerId, "Salário", IncomeKindEnum.Recurring, 1000m, FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 
     [Test]
     public void Create_ValidArgs_ReturnsActiveIncome()

@@ -11,8 +11,5 @@ public class InvalidStrings : IEnumerable<TheoryDataRow<string>>
         yield return new(null!);
     }
 
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-        return GetEnumerator();
-    }
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

@@ -35,11 +35,9 @@ public static class RegisterData
     {
         services.AddScoped<IAppUserRepository, AppUserRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IPersonRepository, PersonRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
     }
 
-    private static void ResolveServices(IServiceCollection services)
-    {
-        services.AddScoped<IMigrationService, MigrationService>();
-    }
+    private static void ResolveServices(IServiceCollection services) => services.AddScoped<IMigrationService, MigrationService>();
 }

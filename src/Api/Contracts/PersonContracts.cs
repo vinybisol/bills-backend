@@ -1,9 +1,4 @@
-namespace BillsBackend.Api.Contracts;
-
-/// <summary>The payload returned by person read operations.</summary>
-/// <param name="Id">The internal person id.</param>
-/// <param name="Name">The person's display name.</param>
-internal sealed record PersonDto(long Id, string Name);
+namespace Api.Contracts;
 
 /// <summary>The request body for <c>POST /persons</c>.</summary>
 /// <param name="Name">The desired person name.</param>

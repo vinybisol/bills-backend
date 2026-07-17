@@ -71,8 +71,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             options.UseNpgsql(_testConnectionString));
     }
 
-    private static void SetupJwt(IServiceCollection services)
-    {
+    private static void SetupJwt(IServiceCollection services) =>
         // Validate against the local test key instead of fetching Firebase metadata.
         services.PostConfigure<JwtBearerOptions>(
             JwtBearerDefaults.AuthenticationScheme,
@@ -91,5 +90,4 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                     IssuerSigningKey = TestTokens.SigningKey,
                 };
             });
-    }
 }

@@ -45,12 +45,9 @@ public sealed class OneOffEntryTests
     }
 
     [Test]
-    public void BillEntry_Create_NegativePlannedAmount_Throws()
-    {
-        Assert.That(
+    public void BillEntry_Create_NegativePlannedAmount_Throws() => Assert.That(
             () => BillEntry.Create(1L, 9L, 2026, 4, -1m, 1m, null, FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 
     // --- IncomeEntry snapshot ---
 
@@ -70,10 +67,7 @@ public sealed class OneOffEntryTests
     }
 
     [Test]
-    public void IncomeEntry_Create_NegativePlannedAmount_Throws()
-    {
-        Assert.That(
+    public void IncomeEntry_Create_NegativePlannedAmount_Throws() => Assert.That(
             () => IncomeEntry.Create(1L, 5L, 2026, 4, -1m, FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 }

@@ -28,7 +28,7 @@ internal sealed class CategoryService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new CategoryDto(category.Id, category.Name));
+        return new CategoryDto(category.Id, category.Name);
     }
 
     public async Task AddRangeAsync(IEnumerable<Category> categories, CancellationToken ct)
@@ -55,7 +55,7 @@ internal sealed class CategoryService(
 
         await unitOfWork.SaveChangesAsync(ct);
 
-        return Result.Success(new CategoryDto(category.Id, category.Name));
+        return new CategoryDto(category.Id, category.Name);
     }
 
     public async Task<Result<IEnumerable<CategoryDto>>> GetAllByNameAsync(CancellationToken ct)
@@ -63,6 +63,8 @@ internal sealed class CategoryService(
         var pagedQuery = new PagedQueryDto<Category>(1000, 0, c => c.Name);
 
         var result = await repository.GetAllByNameAsync(pagedQuery, ct);
+        if (result is null)
+            return Result.Success(Enumerable.Empty<CategoryDto>());
 
         return Result.Success(result);
     }

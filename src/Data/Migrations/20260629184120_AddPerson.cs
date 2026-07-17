@@ -9,9 +9,7 @@ namespace BillsBackend.Api.Migrations
     public partial class AddPerson : Migration
     {
         /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.CreateTable(
+        protected override void Up(MigrationBuilder migrationBuilder) => migrationBuilder.CreateTable(
                 name: "person",
                 columns: table => new
                 {
@@ -27,13 +25,9 @@ namespace BillsBackend.Api.Migrations
                 {
                     table.PrimaryKey("PK_person", x => x.id);
                 });
-        }
 
         /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropTable(
+        protected override void Down(MigrationBuilder migrationBuilder) => migrationBuilder.DropTable(
                 name: "person");
-        }
     }
 }

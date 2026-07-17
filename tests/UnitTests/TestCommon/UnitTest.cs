@@ -6,8 +6,5 @@ namespace TestCommon;
 public class UnitTest
 {
     [Fact]
-    public void JustRun()
-    {
-        Assert.True(true);
-    }
+    public void JustRun() => Assert.True(true);
 }

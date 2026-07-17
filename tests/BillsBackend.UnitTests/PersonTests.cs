@@ -16,21 +16,15 @@ public sealed class PersonTests
     [TestCase(null)]
     [TestCase("")]
     [TestCase("   ")]
-    public void Create_BlankName_ThrowsArgumentException(string? name)
-    {
-        Assert.That(
+    public void Create_BlankName_ThrowsArgumentException(string? name) => Assert.That(
             () => Person.Create(1L, name!, FixedNow),
             Throws.InstanceOf<ArgumentException>());
-    }
 
     [TestCase(0L)]
     [TestCase(-1L)]
-    public void Create_NonPositiveOwnerId_ThrowsArgumentOutOfRangeException(long ownerId)
-    {
-        Assert.That(
+    public void Create_NonPositiveOwnerId_ThrowsArgumentOutOfRangeException(long ownerId) => Assert.That(
             () => Person.Create(ownerId, "Ana", FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 
     [Test]
     public void Create_ValidArgs_ReturnsActivePerson()

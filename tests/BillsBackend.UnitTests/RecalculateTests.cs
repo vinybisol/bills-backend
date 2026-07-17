@@ -23,34 +23,19 @@ public sealed class RecalculateTests
     // --- IsInForwardRange predicate ---
 
     [Test]
-    public void IsInForwardRange_SameMonthAsFrom_IsIncluded()
-    {
-        Assert.That(EntryCalculations.IsInForwardRange(2026, 7, 2026, 7), Is.True);
-    }
+    public void IsInForwardRange_SameMonthAsFrom_IsIncluded() => Assert.That(EntryCalculations.IsInForwardRange(2026, 7, 2026, 7), Is.True);
 
     [Test]
-    public void IsInForwardRange_MonthBeforeFrom_IsExcluded()
-    {
-        Assert.That(EntryCalculations.IsInForwardRange(2026, 6, 2026, 7), Is.False);
-    }
+    public void IsInForwardRange_MonthBeforeFrom_IsExcluded() => Assert.That(EntryCalculations.IsInForwardRange(2026, 6, 2026, 7), Is.False);
 
     [Test]
-    public void IsInForwardRange_MonthAfterFrom_SameYear_IsIncluded()
-    {
-        Assert.That(EntryCalculations.IsInForwardRange(2026, 12, 2026, 7), Is.True);
-    }
+    public void IsInForwardRange_MonthAfterFrom_SameYear_IsIncluded() => Assert.That(EntryCalculations.IsInForwardRange(2026, 12, 2026, 7), Is.True);
 
     [Test]
-    public void IsInForwardRange_NextYear_IsIncluded()
-    {
-        Assert.That(EntryCalculations.IsInForwardRange(2027, 1, 2026, 7), Is.True);
-    }
+    public void IsInForwardRange_NextYear_IsIncluded() => Assert.That(EntryCalculations.IsInForwardRange(2027, 1, 2026, 7), Is.True);
 
     [Test]
-    public void IsInForwardRange_PriorYear_IsExcluded()
-    {
-        Assert.That(EntryCalculations.IsInForwardRange(2025, 12, 2026, 7), Is.False);
-    }
+    public void IsInForwardRange_PriorYear_IsExcluded() => Assert.That(EntryCalculations.IsInForwardRange(2025, 12, 2026, 7), Is.False);
 
     // --- BillEntry.UpdatePlanned ---
 

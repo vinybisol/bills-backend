@@ -16,38 +16,23 @@ internal sealed class CategoryRepository(AppDbContext db) : ICategoryRepository
     private readonly DbSet<Category> _entity = db.Categories;
 
     /// <inheritdoc/>
-    public void Add(Category category)
-    {
-        _entity.Add(category);
-    }
+    public void Add(Category category) => _entity.Add(category);
 
     /// <inheritdoc/>
-    public void AddRange(IEnumerable<Category> categories)
-    {
-        _entity.AddRange(categories);
-    }
+    public void AddRange(IEnumerable<Category> categories) => _entity.AddRange(categories);
 
     /// <inheritdoc/>
-    public async Task<Category?> GetByIdAsync(long id, CancellationToken ct)
-    {
-        return await _entity.FirstOrDefaultAsync(f => f.Id == id, ct);
-    }
+    public async Task<Category?> GetByIdAsync(long id, CancellationToken ct) => await _entity.FirstOrDefaultAsync(f => f.Id == id, ct);
 
     /// <inheritdoc/>
-    public async Task<IEnumerable<CategoryDto>> GetAllByNameAsync(IPagedQuery<Category> pagedQuery, CancellationToken ct)
-    {
-        return await _entity
+    public async Task<IEnumerable<CategoryDto>> GetAllByNameAsync(IPagedQuery<Category> pagedQuery, CancellationToken ct) => await _entity
         .AsNoTracking()
         .OrderBy(pagedQuery.OrderBy)
         .Skip(pagedQuery.Skip)
         .Take(pagedQuery.Take)
         .Select(s => new CategoryDto(s.Id, s.Name))
         .ToListAsync(ct);
-    }
 
     /// <inheritdoc/>
-    public async Task<bool> ExistsByNameAsync(string name, CancellationToken ct)
-    {
-        return await _entity.AnyAsync(f => f.Name == name, ct);
-    }
+    public async Task<bool> ExistsByNameAsync(string name, CancellationToken ct) => await _entity.AnyAsync(f => f.Name == name, ct);
 }

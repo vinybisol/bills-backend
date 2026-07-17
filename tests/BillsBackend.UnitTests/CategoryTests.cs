@@ -16,21 +16,15 @@ public sealed class CategoryTests
     [TestCase(null)]
     [TestCase("")]
     [TestCase("   ")]
-    public void Create_BlankName_ThrowsArgumentException(string? name)
-    {
-        Assert.That(
+    public void Create_BlankName_ThrowsArgumentException(string? name) => Assert.That(
             () => Category.Create(1L, name!, FixedNow),
             Throws.InstanceOf<ArgumentException>());
-    }
 
     [TestCase(0L)]
     [TestCase(-1L)]
-    public void Create_NonPositiveOwnerId_ThrowsArgumentOutOfRangeException(long ownerId)
-    {
-        Assert.That(
+    public void Create_NonPositiveOwnerId_ThrowsArgumentOutOfRangeException(long ownerId) => Assert.That(
             () => Category.Create(ownerId, "Moradia", FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 
     [Test]
     public void Create_ValidArgs_ReturnsActiveCategory()
@@ -105,18 +99,12 @@ public sealed class CategoryTests
     // --- DefaultNames ---
 
     [Test]
-    public void DefaultNames_ContainsSevenEntries()
-    {
-        Assert.That(Category.DefaultNames, Has.Count.EqualTo(7));
-    }
+    public void DefaultNames_ContainsSevenEntries() => Assert.That(Category.DefaultNames, Has.Count.EqualTo(7));
 
     [Test]
-    public void DefaultNames_ContainsExpectedCategories()
-    {
-        Assert.That(Category.DefaultNames, Is.EquivalentTo(new[]
+    public void DefaultNames_ContainsExpectedCategories() => Assert.That(Category.DefaultNames, Is.EquivalentTo(new[]
         {
             "Moradia", "Saúde", "Transporte", "Alimentação", "Lazer", "Educação", "Outros"
         }));
-    }
 
 }

@@ -28,9 +28,7 @@ public sealed class DashboardMonthTests
     // Builds a category -> bill -> entries fixture mirroring the handler's grouping key
     // (bill.CategoryId), returning the per-category rows the handler would compute.
     private static List<(long CategoryId, decimal PlannedMyShare, decimal ActualMyShare, decimal Diff)> ComputeByCategory(
-        IReadOnlyDictionary<long, Bill> billsById, IReadOnlyList<BillEntry> billEntries)
-    {
-        return billEntries
+        IReadOnlyDictionary<long, Bill> billsById, IReadOnlyList<BillEntry> billEntries) => billEntries
             .GroupBy(e => billsById[e.BillId].CategoryId)
             .Select(g =>
             {
@@ -44,7 +42,6 @@ public sealed class DashboardMonthTests
             })
             .OrderByDescending(r => r.plannedMyShare)
             .ToList();
-    }
 
     // --- Per-category plannedMyShare / actualMyShare ---
 

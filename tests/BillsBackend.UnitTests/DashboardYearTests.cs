@@ -58,9 +58,7 @@ public sealed class DashboardYearTests
 
     // Mirrors the handler's whole-year per-category aggregation.
     private static List<(long CategoryId, decimal PlannedMyShare, decimal ActualMyShare)> ComputeByCategory(
-        IReadOnlyDictionary<long, Bill> billsById, IReadOnlyList<BillEntry> billEntries)
-    {
-        return billEntries
+        IReadOnlyDictionary<long, Bill> billsById, IReadOnlyList<BillEntry> billEntries) => billEntries
             .GroupBy(e => billsById[e.BillId].CategoryId)
             .Select(g =>
             {
@@ -74,7 +72,6 @@ public sealed class DashboardYearTests
             })
             .OrderByDescending(r => r.plannedMyShare)
             .ToList();
-    }
 
     // --- 12-position series ---
 

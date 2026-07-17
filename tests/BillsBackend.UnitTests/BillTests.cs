@@ -17,61 +17,40 @@ public sealed class BillTests
     [TestCase(null)]
     [TestCase("")]
     [TestCase("   ")]
-    public void Create_BlankName_ThrowsArgumentException(string? name)
-    {
-        Assert.That(
+    public void Create_BlankName_ThrowsArgumentException(string? name) => Assert.That(
             () => Bill.Create(1L, name!, 1L, BillKindEnum.Recurring, 500m, 1m, null, FixedNow),
             Throws.InstanceOf<ArgumentException>());
-    }
 
     [TestCase(0L)]
     [TestCase(-1L)]
-    public void Create_NonPositiveOwnerId_ThrowsArgumentOutOfRangeException(long ownerId)
-    {
-        Assert.That(
+    public void Create_NonPositiveOwnerId_ThrowsArgumentOutOfRangeException(long ownerId) => Assert.That(
             () => Bill.Create(ownerId, "Aluguel", 1L, BillKindEnum.Recurring, 500m, 1m, null, FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 
     [Test]
-    public void Create_NegativeDefaultAmount_ThrowsArgumentOutOfRangeException()
-    {
-        Assert.That(
+    public void Create_NegativeDefaultAmount_ThrowsArgumentOutOfRangeException() => Assert.That(
             () => Bill.Create(1L, "Aluguel", 1L, BillKindEnum.Recurring, -0.01m, 1m, null, FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 
     [Test]
-    public void Create_SplitRatioBelow0_ThrowsArgumentOutOfRangeException()
-    {
-        Assert.That(
+    public void Create_SplitRatioBelow0_ThrowsArgumentOutOfRangeException() => Assert.That(
             () => Bill.Create(1L, "Aluguel", 1L, BillKindEnum.Recurring, 500m, -0.01m, 2L, FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 
     [Test]
-    public void Create_SplitRatioAbove1_ThrowsArgumentOutOfRangeException()
-    {
-        Assert.That(
+    public void Create_SplitRatioAbove1_ThrowsArgumentOutOfRangeException() => Assert.That(
             () => Bill.Create(1L, "Aluguel", 1L, BillKindEnum.Recurring, 500m, 1.01m, null, FixedNow),
             Throws.InstanceOf<ArgumentOutOfRangeException>());
-    }
 
     [Test]
-    public void Create_SplitRatioLessThan1_WithNullPersonId_ThrowsArgumentException()
-    {
-        Assert.That(
+    public void Create_SplitRatioLessThan1_WithNullPersonId_ThrowsArgumentException() => Assert.That(
             () => Bill.Create(1L, "Aluguel", 1L, BillKindEnum.Recurring, 500m, 0.5m, null, FixedNow),
             Throws.InstanceOf<ArgumentException>());
-    }
 
     [Test]
-    public void Create_SplitRatioEquals1_WithPersonId_ThrowsArgumentException()
-    {
-        Assert.That(
+    public void Create_SplitRatioEquals1_WithPersonId_ThrowsArgumentException() => Assert.That(
             () => Bill.Create(1L, "Aluguel", 1L, BillKindEnum.Recurring, 500m, 1m, 2L, FixedNow),
             Throws.InstanceOf<ArgumentException>());
-    }
 
     [Test]
     public void Create_SplitRatioLessThan1_WithPersonId_Succeeds()

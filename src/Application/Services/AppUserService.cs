@@ -32,8 +32,5 @@ internal sealed class AppUserService(
 
     }
 
-    public async Task<AppUser?> FindByFirebaseUidAsync(string firebaseUid, CancellationToken ct)
-    {
-        return await repository.FindByFirebaseUidAsync(firebaseUid, ct);
-    }
+    public async Task<AppUser?> FindByFirebaseUidAsync(string firebaseUid, CancellationToken ct) => await repository.FindByFirebaseUidAsync(firebaseUid, ct);
 }
