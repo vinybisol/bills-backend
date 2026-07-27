@@ -85,9 +85,7 @@ public sealed class PersonEndpointTests : IntegrationTestBase
         using var response = await Client.SendAsync(req);
 
         // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var body = await response.Content.ReadFromJsonAsync<PersonDto[]>();
-        Assert.That(body, Is.Empty);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
     }
 
     [Test]
@@ -177,7 +175,9 @@ public sealed class PersonEndpointTests : IntegrationTestBase
         // Arrange
         var uid = Uid("delete-disappears");
         using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name = "Efêmera" });
+        using var createReqII = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name = "Second" });
         using var createResp = await Client.SendAsync(createReq);
+        using var _ = await Client.SendAsync(createReqII);
         var created = await createResp.Content.ReadFromJsonAsync<PersonDto>();
 
         using var deleteReq = Req(HttpMethod.Delete, $"/api/v1/persons/{created!.Id}", uid);
@@ -214,15 +214,18 @@ public sealed class PersonEndpointTests : IntegrationTestBase
         Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         using var listReq = Req(HttpMethod.Get, "/api/v1/persons", uidB);
+        using var listReqA = Req(HttpMethod.Get, "/api/v1/persons", uidA);
 
         // Act
         using var listResp = await Client.SendAsync(listReq);
+        using var listRespA = await Client.SendAsync(listReqA);
 
         // Assert
-        Assert.That(listResp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var body = await listResp.Content.ReadFromJsonAsync<PersonDto[]>();
-        Assert.That(body!.Select(p => p.Name), Does.Not.Contain("SomenteA"));
-        Assert.That(body, Is.Empty);
+        Assert.That(listResp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+
+        Assert.That(listRespA.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var body = await listRespA.Content.ReadFromJsonAsync<PersonDto[]>();
+        Assert.That(body!.Select(p => p.Name), Does.Contain("SomenteA"));
     }
 
     [Test]

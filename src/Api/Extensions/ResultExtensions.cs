@@ -9,7 +9,7 @@ public static class ResultExtensions
 
     public static IResult ToHttpResult<T>(this Result<T> result)
     {
-        return result.IsSuccess ? Results.Ok() : Problem(result.Error);
+        return result.IsSuccess ? Results.Ok(result.Value) : Problem(result.Error);
     }
 
     public static IResult ToHttpResult<T>(this Result<IEnumerable<T>> result)

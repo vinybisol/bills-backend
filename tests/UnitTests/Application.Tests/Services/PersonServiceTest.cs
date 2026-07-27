@@ -404,7 +404,7 @@ public sealed class PersonServiceTest
         Assert.Multiple(() =>
         {
             Assert.True(result.IsFailure);
-            Assert.Contains("Categoria", result.Error.Message);
+            Assert.Contains("Person", result.Error.Message, StringComparison.InvariantCultureIgnoreCase);
         });
     }
 
