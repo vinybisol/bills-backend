@@ -1,3 +1,6 @@
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("Api.IntegrationTests")]
 namespace Api.Contracts;
 
 /// <summary>The request body for <c>POST /persons</c>.</summary>

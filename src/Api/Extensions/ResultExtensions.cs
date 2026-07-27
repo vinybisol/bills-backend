@@ -7,8 +7,25 @@ public static class ResultExtensions
     public static IResult ToHttpResult(this Result result) =>
         result.IsSuccess ? Results.NoContent() : Problem(result.Error);
 
-    public static IResult ToHttpResult<T>(this Result<T> result) =>
-        result.IsSuccess ? Results.Ok(result.Value) : Problem(result.Error);
+    public static IResult ToHttpResult<T>(this Result<T> result)
+    {
+        return result.IsSuccess ? Results.Ok() : Problem(result.Error);
+    }
+
+    public static IResult ToHttpResult<T>(this Result<IEnumerable<T>> result)
+    {
+        if (!result.IsSuccess)
+            return Problem(result.Error);
+
+        if (result.Value is ICollection<T> collection)
+        {
+            return collection.Count == 0 ? Results.NoContent() : Results.Ok(collection);
+        }
+
+        // só materializa se realmente precisar (IQueryable, iterator, etc)
+        var list = result.Value.ToList();
+        return list.Count == 0 ? Results.NoContent() : Results.Ok(list);
+    }
 
     private static IResult Problem(Error error)
     {
