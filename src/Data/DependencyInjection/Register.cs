@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Application.Abstractions.Repositories;
 using Data.Contexts;
 using Data.Repositories;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Data.DependencyInjection;
 
+[ExcludeFromCodeCoverage]
 public static class RegisterData
 {
     public static void Register(IServiceCollection services, AppOptions options)

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Domain.Abstractions.Filters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
@@ -14,6 +15,7 @@ namespace Data.Contexts;
 /// environment variable; if it is missing the factory fails fast rather than falling back to a
 /// placeholder, so the application is never bootstrapped against an unintended database.
 /// </remarks>
+[ExcludeFromCodeCoverage]
 public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     /// <inheritdoc/>

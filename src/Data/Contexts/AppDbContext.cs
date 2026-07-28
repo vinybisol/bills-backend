@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Domain.Abstractions.Filters;
 using Domain.Entities;
 using Domain.Enums;
@@ -20,6 +21,7 @@ namespace Data.Contexts;
 /// </remarks>
 /// <param name="options">The options used to configure the context.</param>
 /// <param name="currentOwner">The scoped current-owner context used by query filters.</param>
+[ExcludeFromCodeCoverage]
 public sealed class AppDbContext(
     DbContextOptions<AppDbContext> options,
     ICurrentOwner currentOwner) : DbContext(options)

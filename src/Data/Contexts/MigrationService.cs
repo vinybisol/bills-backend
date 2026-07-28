@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Domain.Infrastructures;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ public interface IMigrationService
     void RunMigration(AppOptions options);
 }
 
+[ExcludeFromCodeCoverage]
 public sealed class MigrationService(AppDbContext db) : IMigrationService
 {
     public void RunMigration(AppOptions options)

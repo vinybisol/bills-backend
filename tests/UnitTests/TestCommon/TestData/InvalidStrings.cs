@@ -1,7 +1,9 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TestCommon.TestData;
 
+[ExcludeFromCodeCoverage]
 public class InvalidStrings : IEnumerable<TheoryDataRow<string>>
 {
     public IEnumerator<TheoryDataRow<string>> GetEnumerator()
