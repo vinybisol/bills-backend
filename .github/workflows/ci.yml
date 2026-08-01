@@ -79,6 +79,8 @@ jobs:
               
       - name: Run Api.IntegrationTests
         run: dotnet test --project tests/IntegrationTests/Api.IntegrationTests/Api.IntegrationTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Api.integration/coverage.cobertura.xml"
+        env:
+          ConnectionStrings__NeonTest: "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres"
 
       - name: Run BillsBackend.UnitTests
         run: dotnet test --project tests/BillsBackend.UnitTests/BillsBackend.UnitTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Unit/coverage.cobertura.xml"
@@ -86,8 +88,6 @@ jobs:
       - name: Run BillsBackend.IntegrationTests
         run: dotnet test --project tests/BillsBackend.IntegrationTests/BillsBackend.IntegrationTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Integration/coverage.cobertura.xml"
         env:
-          # Key-value form (not a postgresql:// URI) so NeonConnectionString.Normalize
-          # leaves it untouched and does not force SSL Mode=Require on the local server.
           ConnectionStrings__NeonTest: "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres"
 
       - name: Install ReportGenerator
