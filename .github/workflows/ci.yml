@@ -76,7 +76,10 @@ jobs:
 
       - name: Run Application.Tests
         run: dotnet test --project tests/UnitTests/Application.Tests/Application.Tests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Application/coverage.cobertura.xml"
-        
+              
+      - name: Run Api.IntegrationTests
+        run: dotnet test --project tests/IntegrationTests/Api.IntegrationTests/Api.IntegrationTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Api.integration/coverage.cobertura.xml"
+
       - name: Run BillsBackend.UnitTests
         run: dotnet test --project tests/BillsBackend.UnitTests/BillsBackend.UnitTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Unit/coverage.cobertura.xml"
 
