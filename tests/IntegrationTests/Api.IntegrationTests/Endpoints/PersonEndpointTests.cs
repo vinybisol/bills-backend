@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Api.Contracts;
 using Application.DTOs.Services;
 using Bogus;
+using IntegrationCommon.TestData;
 using Microsoft.AspNetCore.Http;
 
 namespace Api.IntegrationTests.Endpoints;
@@ -54,6 +55,29 @@ public sealed class PersonEndpointTests(IntegrationTestBase testBase) : IClassFi
             () => Assert.True(body.Id > 0, $"Expected Id greater than 0, but was {body.Id}"),
             () => Assert.Equal(person.Name, body.Name),
             () => Assert.Contains($"/persons/{body.Id}", response.Headers.Location!.ToString())
+        );
+    }
+
+    [Theory]
+    [ClassData<InvalidStrings>]
+    public async Task CreatePerson_WithInvalidData_ReturnsBadRequest(string invalidStrings)
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        var person = new CreatePersonRequest(invalidStrings);
+        HttpContent httpContent = JsonContent.Create(person);
+
+        //Act
+        var response = await testBase.Client.PostAsync(PERSONSURI, httpContent, ct);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync(ct);
+        Assert.NotNull(body);
+        Assert.Multiple(
+            () => Assert.Null(response.Headers.Location),
+            () => Assert.Contains("Person name cannot be empty ou null", body)
         );
     }
 }

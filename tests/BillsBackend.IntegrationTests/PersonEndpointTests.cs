@@ -26,53 +26,6 @@ public sealed class PersonEndpointTests : IntegrationTestBase
         return req;
     }
 
-    // --- Create ---
-
-    [Test]
-    public async Task CreatePerson_WithValidToken_ReturnsCreatedWithDto()
-    {
-        // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/persons", Uid("create-ok"), new { name = "Ana" });
-
-        // Act
-        using var response = await Client.SendAsync(req);
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        var body = await response.Content.ReadFromJsonAsync<PersonDto>();
-        Assert.That(body, Is.Not.Null);
-        Assert.That(body!.Id, Is.GreaterThan(0));
-        Assert.That(body.Name, Is.EqualTo("Ana"));
-    }
-
-    [TestCase("")]
-    [TestCase("   ")]
-    public async Task CreatePerson_BlankName_ReturnsBadRequest(string name)
-    {
-        // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/persons", Uid($"create-bad-{name.Length}"), new { name });
-
-        // Act
-        using var response = await Client.SendAsync(req);
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-    }
-
-    [Test]
-    public async Task CreatePerson_WithoutToken_ReturnsUnauthorized()
-    {
-        // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/persons");
-        req.Content = JsonContent.Create(new { name = "Ana" });
-
-        // Act
-        using var response = await Client.SendAsync(req);
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
-    }
-
     // --- List ---
 
     [Test]
