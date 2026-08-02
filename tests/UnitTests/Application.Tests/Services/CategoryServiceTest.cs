@@ -405,6 +405,30 @@ public sealed class CategoryServiceTest
 
     [Theory]
     [AutoMoqData]
+    internal async Task GetAllByNameAsync_NullResult_ReturnsEmptyCollection(
+    [Frozen] Mock<ICategoryRepository> repoMock,
+    CategoryService sut,
+    CancellationToken cancellationToken)
+    {
+        // Arrange
+        repoMock.Setup(r => r.GetAllByNameAsync(
+                It.IsAny<PagedQueryDto<Category>>(),
+                cancellationToken))
+            .ReturnsAsync((IEnumerable<CategoryDto>)null!);
+
+        // Act
+        var result = await sut.GetAllByNameAsync(cancellationToken);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.True(result.IsSuccess);
+            Assert.Empty(result.Value);
+        });
+    }
+
+    [Theory]
+    [AutoMoqData]
     internal async Task GetAllByNameAsync_CancelledToken_ThrowsOperationCanceledException(
         [Frozen] Mock<ICategoryRepository> repoMock,
         CategoryService sut)

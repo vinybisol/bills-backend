@@ -363,6 +363,30 @@ public sealed class PersonServiceTest
 
     [Theory]
     [AutoMoqData]
+    internal async Task GetAllByNameAsync_NullResult_ReturnsEmptyCollection(
+    [Frozen] Mock<IPersonRepository> repoMock,
+    PersonService sut,
+    CancellationToken cancellationToken)
+    {
+        // Arrange
+        repoMock.Setup(r => r.GetAllByNameAsync(
+                It.IsAny<PagedQueryDto<Person>>(),
+                cancellationToken))
+            .ReturnsAsync((IEnumerable<PersonDto>)null!);
+
+        // Act
+        var result = await sut.GetAllByNameAsync(cancellationToken);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.True(result.IsSuccess);
+            Assert.Empty(result.Value);
+        });
+    }
+
+    [Theory]
+    [AutoMoqData]
     internal async Task GetAllByNameAsync_CancelledToken_ThrowsOperationCanceledException(
         [Frozen] Mock<IPersonRepository> repoMock,
         PersonService sut)
