@@ -133,7 +133,7 @@ jobs:
     environment: development
     # Run only after CI passes, and only on a merge into develop (never on PRs or main).
     needs: build-and-test
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
     steps:
       - name: Checkout
