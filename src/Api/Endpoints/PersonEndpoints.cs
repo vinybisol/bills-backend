@@ -2,8 +2,6 @@ using Api.Contracts;
 using Api.Extensions;
 using Api.Filters;
 using Application.Abstractions.Services;
-using Data.Contexts;
-using Domain.Abstractions.Filters;
 
 namespace Api.Endpoints;
 
@@ -25,9 +23,6 @@ internal static class PersonEndpoints
     private static async Task<IResult> CreatePerson(
         CreatePersonRequest req,
         IPersonService personService,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
-        TimeProvider timeProvider,
         CancellationToken ct)
     {
         var result = await personService.CreateAsync(req.Name, ct);

@@ -42,6 +42,12 @@ public sealed class AppDbContext(
     public DbSet<Person> Persons => Set<Person>();
 
     /// <summary>
+    /// Gets the pre-filtered set of person access link.
+    /// Only active person access belonging to the authenticated owner are visible.
+    /// </summary>
+    public DbSet<PersonAccessLink> PersonAccessLink => Set<PersonAccessLink>();
+
+    /// <summary>
     /// Gets the pre-filtered set of income templates for the current owner.
     /// Only active incomes belonging to the authenticated owner are visible.
     /// </summary>
@@ -161,6 +167,49 @@ public sealed class AppDbContext(
             entity.Property(p => p.CreatedAt)
                 .HasColumnName("created_at")
                 .IsRequired();
+
+            // Restricts all Person reads to the current owner's active rows.
+            // currentOwner.Id is evaluated at query-execution time from the scoped service.
+            entity.HasQueryFilter(p => p.Active && p.OwnerId == currentOwner.Id);
+        });
+
+        modelBuilder.Entity<PersonAccessLink>(entity =>
+        {
+            entity.ToTable("person_access_link");
+
+            entity.HasKey(p => p.Id);
+            entity.Property(p => p.Id)
+                .HasColumnName("id")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(p => p.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            entity.Property(p => p.PersonId)
+                .HasColumnName("person_id")
+                .IsRequired();
+
+            entity.Property(p => p.Active)
+                .HasColumnName("active")
+                .IsRequired();
+
+            entity.Property(p => p.TokenHash)
+                .HasColumnName("token_hash")
+                .IsRequired();
+
+            entity.Property(p => p.RevokeAt)
+            .HasColumnName("revoke_at")
+            .IsRequired();
+
+            entity.Property(p => p.CreatedAt)
+                .HasColumnName("created_at")
+                .IsRequired();
+
+            entity.HasOne(p => p.Person)
+            .WithMany(p => p.PersonAccessLinks)
+            .HasForeignKey(k => k.PersonId)
+            .OnDelete(DeleteBehavior.Restrict);
 
             // Restricts all Person reads to the current owner's active rows.
             // currentOwner.Id is evaluated at query-execution time from the scoped service.
