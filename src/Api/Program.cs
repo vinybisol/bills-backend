@@ -25,16 +25,6 @@ builder.Services
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// // --- Database: PostgreSQL (Neon). Connection string is supplied via configuration
-// // (user-secrets locally, environment / GitHub Secrets in CI/CD) and must use the
-// // pooler endpoint with "SSL Mode=Require". "App:UseProdConnection" lets a local launch
-// // profile point at the "NeonProd" connection string while staying in the Development
-// // environment (so user-secrets keep loading); see the "prod-data" launch profile.
-// var useProdConnection = builder.Configuration.GetValue<bool>("App:UseProdConnection");
-// var neonConnectionStringKey = useProdConnection ? "NeonProd" : "Neon";
-// builder.Services.AddDbContext<AppDbContext>(options =>
-//     options.UseNpgsql(NeonConnectionString.Normalize(builder.Configuration.GetConnectionString(neonConnectionStringKey))));
-
 // --- Identity services ---
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<ICurrentOwner, CurrentOwner>();
@@ -123,4 +113,5 @@ v1.MapUserEndpoints()
 
 await app.RunAsync();
 
+[ExcludeFromDescription]
 public partial class Program;
