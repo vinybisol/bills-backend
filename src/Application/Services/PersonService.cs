@@ -18,7 +18,7 @@ internal sealed class PersonService(
     {
         var trimmedName = name?.Trim();
         if (string.IsNullOrWhiteSpace(trimmedName))
-            return Error.Validation("Person name cannot be empty ou null");
+            return Error.Validation("Person name cannot be empty or null");
 
         if (await repository.ExistsByNameAsync(trimmedName, ct))
             return Error.Conflict("A person with that name already exists.");

@@ -2,8 +2,6 @@ using Api.Contracts;
 using Api.Extensions;
 using Api.Filters;
 using Application.Abstractions.Services;
-using Data.Contexts;
-using Domain.Abstractions.Filters;
 
 namespace Api.Endpoints;
 
@@ -23,11 +21,9 @@ internal static class PersonEndpoints
     }
 
     private static async Task<IResult> CreatePerson(
+        HttpRequest httpRequest,
         CreatePersonRequest req,
         IPersonService personService,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
-        TimeProvider timeProvider,
         CancellationToken ct)
     {
         var result = await personService.CreateAsync(req.Name, ct);
@@ -36,7 +32,7 @@ internal static class PersonEndpoints
             return result.ToHttpResult();
 
         var person = result.Value;
-        return Results.Created($"/api/v1/persons/{person.Id}", person);
+        return Results.Created($"{httpRequest.Path.Value}/{person.Id}", person);
     }
 
     private static async Task<IResult> ListPersons(

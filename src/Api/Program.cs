@@ -117,7 +117,9 @@ v1.MapUserEndpoints()
     .MapProjectionEndpoints()
     .MapEntryEndpoints()
     .MapDashboardEndpoints()
-    .MapReceivablesEndpoints();
+    .MapReceivablesEndpoints()
+    .MapSharedBillsEndpoint()
+    .MapAccessLinkEndpoints();
 
 await app.RunAsync();
 

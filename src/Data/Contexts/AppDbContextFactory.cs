@@ -24,7 +24,8 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     /// </exception>
     public AppDbContext CreateDbContext(string[] args)
     {
-        var connectionString = Environment.GetEnvironmentVariable("NEON_CONNECTION_STRING");
+        //var connectionString = Environment.GetEnvironmentVariable("NEON_CONNECTION_STRING");
+        var connectionString = "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres";
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(

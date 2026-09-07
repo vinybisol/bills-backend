@@ -49,6 +49,7 @@ public sealed class Person
 
     /// <summary>Gets the UTC instant at which the person was created.</summary>
     public DateTimeOffset CreatedAt { get; private set; }
+    public ICollection<PersonAccessLink> PersonAccessLinks { get; private set; } = null!;
 
     /// <summary>
     /// Creates a new active person for the given owner.

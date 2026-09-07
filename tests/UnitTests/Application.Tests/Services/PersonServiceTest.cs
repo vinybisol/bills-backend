@@ -34,7 +34,7 @@ public sealed class PersonServiceTest
         Assert.Multiple(() =>
         {
             Assert.True(result.IsFailure);
-            Assert.Contains("cannot be empty ou null", result.Error.Message);
+            Assert.Contains("cannot be empty or null", result.Error.Message);
         });
     }
 
