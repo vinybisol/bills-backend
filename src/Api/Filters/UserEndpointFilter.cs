@@ -6,15 +6,12 @@ namespace Api.Filters;
 
 
 public sealed class UserEndpointFilter(
-                IUserProvisioningService provisioning,
-                   ICurrentOwner currentOwner) : IEndpointFilter
+    IUserProvisioningService provisioning,
+    ICurrentOwner currentOwner) : IEndpointFilter
 {
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var user = context.HttpContext.User;
-        if (user is null)
-            return Results.Unauthorized();
-
         var firebaseUid = user.GetFirebaseUid();
         if (string.IsNullOrWhiteSpace(firebaseUid))
             return Results.Unauthorized();

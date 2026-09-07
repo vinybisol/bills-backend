@@ -2,6 +2,7 @@ using Domain.Abstractions;
 
 namespace Api.Extensions;
 
+[ExcludeFromDescription]
 public static class ResultExtensions
 {
     public static IResult ToHttpResult(this Result result) =>
