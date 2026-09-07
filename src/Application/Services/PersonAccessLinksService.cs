@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
+using Application.DTOs.Services;
 using Domain.Abstractions;
 using Domain.Abstractions.Filters;
 using Domain.Entities;
@@ -15,7 +16,7 @@ internal sealed class PersonAccessLinksService(
     ICurrentOwner currentOwner,
     TimeProvider timeProvider) : IPersonAccessLinksService
 {
-    public async Task<Result<string>> CreateAsync(long personId, CancellationToken ct)
+    public async Task<Result<PersonAccessLinkDto>> CreateAsync(long personId, CancellationToken ct)
     {
         if (personId <= 0)
             return Error.Validation("Person id cannot be less or equals zero");
@@ -28,11 +29,11 @@ internal sealed class PersonAccessLinksService(
         if (personAccessLinkExists)
             return Error.Conflict(nameof(PersonAccessLink));
 
-        var tokenPlano = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+        var plainToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
         .Replace("+", "").Replace("/", "").Replace("=", "");
 
         var tokenHash = Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(tokenPlano))
+            SHA256.HashData(Encoding.UTF8.GetBytes(plainToken))
         );
 
         var personAccessLink = PersonAccessLink.Create(currentOwner.Id, person.Id, tokenHash, timeProvider.GetUtcNow());
@@ -40,7 +41,7 @@ internal sealed class PersonAccessLinksService(
 
         await unitOfWork.SaveChangesAsync(ct);
 
-        return tokenPlano;
+        return Result.Create(new PersonAccessLinkDto(personAccessLink.Id, plainToken));
     }
 
     public async Task<Result> RevokeAsync(long id, CancellationToken ct)

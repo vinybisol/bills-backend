@@ -14,7 +14,7 @@ internal static class PersonAccessLinksEndpoint
         .AddEndpointFilter<UserEndpointFilter>();
 
         accessLinkGroup.MapPost("", CreateAccessLink);
-        accessLinkGroup.MapPatch("/{id:long}/revoke", RevokeAccessLink);
+        accessLinkGroup.MapPut("/{id:long}/revoke", RevokeAccessLink);
 
         return group;
     }

@@ -49,7 +49,6 @@ public sealed class PersonEndpointTests(IntegrationTestBase testBase) : IClassFi
     public async Task CreatePerson_WithValidToken_ReturnsCreatedWithDto()
     {
         // Arrange
-        var ct = TestContext.Current.CancellationToken;
         var person = new CreatePersonRequest(new Faker().Name.FirstName());
         HttpContent httpContent = JsonContent.Create(person);
 
@@ -89,7 +88,7 @@ public sealed class PersonEndpointTests(IntegrationTestBase testBase) : IClassFi
         Assert.NotNull(body);
         Assert.Multiple(
             () => Assert.Null(response.Headers.Location),
-            () => Assert.Contains("Person name cannot be empty ou null", body)
+            () => Assert.Contains("Person name cannot be empty or null", body)
         );
     }
 
