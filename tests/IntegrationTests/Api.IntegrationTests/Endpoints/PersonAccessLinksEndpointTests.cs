@@ -123,7 +123,7 @@ public sealed class PersonAccessLinksEndpointTests(IntegrationTestBase testBase)
 
         Assert.Multiple(
             () => Assert.NotEqual(0, responseBody.Id),
-            () => Assert.InRange(responseBody.Token.Length, 0, 100)
+            () => Assert.True(responseBody.Token.Length > 20)
         );
     }
 
