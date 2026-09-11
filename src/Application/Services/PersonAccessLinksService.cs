@@ -1,5 +1,7 @@
+using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
 using Application.DTOs.Services;
@@ -29,19 +31,23 @@ internal sealed class PersonAccessLinksService(
         if (personAccessLinkExists)
             return Error.Conflict(nameof(PersonAccessLink));
 
-        var plainToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
-        .Replace("+", "").Replace("/", "").Replace("=", "");
+        var plainToken = Convert.ToBase64String(
+            RandomNumberGenerator.GetBytes(32));
 
         var tokenHash = Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(plainToken))
-        );
+            SHA256.HashData(
+                Encoding.UTF8.GetBytes(plainToken)));
+
+        var accessToken = new PesonAccessLinkTokenDto(personId, tokenHash);
+
+        var encodedToken = Base64Url.EncodeToString(JsonSerializer.SerializeToUtf8Bytes(accessToken));
 
         var personAccessLink = PersonAccessLink.Create(currentOwner.Id, person.Id, tokenHash, timeProvider.GetUtcNow());
         repository.Add(personAccessLink);
 
         await unitOfWork.SaveChangesAsync(ct);
 
-        return Result.Create(new PersonAccessLinkDto(personAccessLink.Id, plainToken));
+        return Result.Create(new PersonAccessLinkDto(personAccessLink.Id, encodedToken));
     }
 
     public async Task<Result> RevokeAsync(long id, CancellationToken ct)
@@ -55,5 +61,30 @@ internal sealed class PersonAccessLinksService(
         await unitOfWork.SaveChangesAsync(ct);
 
         return Result.Success();
+    }
+
+    public async Task<Result> ValidateTokenAsync(string token, CancellationToken ct)
+    {
+        try
+        {
+            var json = Base64Url.DecodeFromChars(token);
+            var pesonAccessLinkTokenDto = JsonSerializer.Deserialize<PesonAccessLinkTokenDto>(json);
+
+            if (pesonAccessLinkTokenDto is null)
+                return Result.Failure(Error.InvalidOperation);
+
+            if (string.IsNullOrWhiteSpace(pesonAccessLinkTokenDto.Token))
+                return Result.Failure(Error.InvalidOperation);
+
+            var personAccessLink = await repository.GetByPersonIdAndHashAsync(pesonAccessLinkTokenDto.PersonId, pesonAccessLinkTokenDto.Token, ct);
+            if (personAccessLink is null)
+                return Result.Failure(Error.None);
+
+            return Result.Success();
+        }
+        catch
+        {
+            return Result.Failure(Error.InvalidOperation);
+        }
     }
 }
