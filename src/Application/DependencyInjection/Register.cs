@@ -11,6 +11,7 @@ public static class RegisterApplications
     private static void ResolveServices(IServiceCollection services)
     {
         services.AddScoped<IAppUserService, AppUserService>();
+        services.AddScoped<IBillService, BillService>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IIncomeService, IncomeService>();
         services.AddScoped<IPersonService, PersonService>();

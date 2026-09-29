@@ -17,7 +17,13 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
   - `PUT /{id}` {name,kind,defaultAmount} → 200 com o DTO atualizado; 404 (ProblemDetails) se não existe/inativo/de outro owner.
   - `DELETE /{id}` → 204 (soft delete, `active=false`); 404 (ProblemDetails) se não existe/já inativo/de outro owner.
   - Validação → 400 `application/problem+json` (ValidationProblem) com `errors` por campo: `name` (vazio), `kind` (valor fora do enum), `defaultAmount` (negativo). `kind` string desconhecido → 400 no binding.
-- `/api/v1/bills` — idem (molde: category_id, kind, default_amount, split_ratio, person_id). Regra: split<1 exige person_id; =1 proíbe.
+- `/api/v1/bills` — molde: categoryId, kind, defaultAmount, splitRatio, personId. Contrato padronizado (Result → HTTP):
+  - `POST` {name, categoryId, kind: `recurring`|`one_off`, defaultAmount ≥ 0, splitRatio ∈ [0,1], personId?} → 201 + `Location: /api/v1/bills/{id}` + {id,name,categoryId,kind,defaultAmount,splitRatio,personId}.
+  - `GET` → 200 com a lista (ordenada por nome, só ativos) ou **204 se vazia**.
+  - `PUT /{id}` (mesmo corpo) → 200 com o DTO atualizado; 404 (ProblemDetails) se o molde não existe/inativo/de outro owner.
+  - `DELETE /{id}` → 204 (soft delete, `active=false`); 404 (ProblemDetails) se não existe/já inativo/de outro owner.
+  - Validação → 400 ValidationProblem com `errors` por campo: `name` (vazio), `kind` (fora do enum), `defaultAmount` (negativo), `splitRatio` (fora de [0,1]), `personId` (split<1 exige; =1 proíbe). Validação roda antes de qualquer acesso ao banco.
+  - `categoryId`/`personId` inexistente, inativo ou de outro owner → 404 (ProblemDetails) em POST/PUT.
 
 ## Projeção
 - `POST /api/v1/projection/{year}` → gera 12 entries por molde recorrente ativo. Idempotente. Resp: {billEntriesCreated, incomeEntriesCreated, skipped}.
@@ -32,7 +38,7 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
 - `POST /api/v1/entries/income/{id}/receive` / `/unreceive`.
 
 ## Recálculo
-- `POST /api/v1/bills/{billId}/recalculate` {fromYear,fromMonth,newAmount} → atualiza default_amount + planned dos não-pagos ≥ mês. Resp: {updatedEntries, skippedPaid, newDefaultAmount}.
+- `POST /api/v1/bills/{billId}/recalculate` {fromYear,fromMonth,newAmount} → atualiza default_amount + planned dos não-pagos ≥ mês (pagos ficam congelados). 200 {billId, updatedEntries, skippedPaid, newDefaultAmount}. 400 ValidationProblem (`fromMonth` fora de 1–12, `newAmount` negativo); 404 ProblemDetails se o molde não existe/inativo/de outro owner.
 
 ## Dashboards
 - `GET /api/v1/dashboard/month?year=&month=` → summary + byCategory (myShare previsto/real/diff). `summary` inclui `receivablePending`, `receivableReceived`, `paidFull` (valor cheio dos bill entries pagos) e os três saldos `saldoPrevistoOtimista`/`saldoPrevistoPiorCaso`/`saldoRealizado` — mesma semântica de `GET /api/v1/entries` (ver acima), incluindo a mudança de `saldoReal` para usar `paidFull` em vez do myShare dos bills pagos.
@@ -45,7 +51,7 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
 - `GET /api/v1/receivables/history?personId=&fromYear=&fromMonth=&toYear=&toMonth=&status=` → totals + items.
 
 ## Históricos
-- `GET /api/v1/bills/{billId}/history?fromYear=&...` → header do molde + summary(avg/min/max/totalPaidMyShare) + items (com variation vs anterior).
+- `GET /api/v1/bills/{billId}/history?fromYear=&fromMonth=&toYear=&toMonth=` → 200 header do molde {billId,name,category,splitRatio,person} + summary(avgEffective/minEffective/maxEffective/totalPaidMyShare) + items (com variation vs anterior). Resolve também moldes desativados. 404 ProblemDetails se não existe/de outro owner.
 
 ## Códigos comuns
 - 401 sem/invalid token · 404 recurso de outro owner · 400 validação · 409 imutabilidade/duplicado.

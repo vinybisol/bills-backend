@@ -35,4 +35,7 @@ internal sealed class CategoryRepository(AppDbContext db) : ICategoryRepository
 
     /// <inheritdoc/>
     public async Task<bool> ExistsByNameAsync(string name, CancellationToken ct) => await _entity.AnyAsync(f => f.Name == name, ct);
+
+    /// <inheritdoc/>
+    public async Task<bool> ExistsByIdAsync(long id, CancellationToken ct) => await _entity.AnyAsync(f => f.Id == id, ct);
 }
