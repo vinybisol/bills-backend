@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Api.IntegrationTests.TestSupport;
 
 namespace Api.IntegrationTests.Endpoints;
 
@@ -65,18 +66,17 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
         Assert.That(body.Name, Is.EqualTo("Vestuário"));
     }
 
-    [TestCase("")]
-    [TestCase("   ")]
-    public async Task CreateCategory_BlankName_ReturnsBadRequest(string name)
+    [TestCaseSource(typeof(InvalidStrings), nameof(InvalidStrings.Cases))]
+    public async Task CreateCategory_BlankName_ReturnsValidationProblem(string? name)
     {
         // Arrange
-        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/categories", Uid($"create-bad-{name.Length}"), new { name });
+        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/categories", Uid($"create-bad-{name?.Length ?? -1}"), new { name });
 
         // Act
         using var response = await Client.SendAsync(req);
 
         // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        await ProblemAssertions.AssertValidationProblemAsync(response, "name");
     }
 
     [Test]
@@ -183,6 +183,29 @@ public sealed class CategoryEndpointTests : IntegrationTestBase
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+    }
+
+    [TestCaseSource(typeof(InvalidStrings), nameof(InvalidStrings.Cases))]
+    public async Task UpdateCategory_BlankName_ReturnsValidationProblemAndKeepsName(string? name)
+    {
+        // Arrange
+        var uid = Uid($"update-bad-{name?.Length ?? -1}");
+        using var createReq = ReqWithBody(HttpMethod.Post, "/api/v1/categories", uid, new { name = "Original" });
+        using var createResp = await Client.SendAsync(createReq);
+        Assert.That(createResp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var created = await createResp.Content.ReadFromJsonAsync<CategoryDto>();
+
+        using var updateReq = ReqWithBody(HttpMethod.Put, $"/api/v1/categories/{created!.Id}", uid, new { name });
+
+        // Act
+        using var response = await Client.SendAsync(updateReq);
+
+        // Assert
+        await ProblemAssertions.AssertValidationProblemAsync(response, "name");
+        using var listReq = Req(HttpMethod.Get, "/api/v1/categories", uid);
+        using var listResp = await Client.SendAsync(listReq);
+        var categories = await listResp.Content.ReadFromJsonAsync<List<CategoryDto>>();
+        Assert.That(categories!.Single(c => c.Id == created.Id).Name, Is.EqualTo("Original"));
     }
 
     [Test]

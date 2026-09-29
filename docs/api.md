@@ -14,7 +14,7 @@ Camadas e fluxo da requisição (filtro → serviço → repositório): ver `doc
 - `/api/v1/categories` — {name}. Nome único por owner.
   - `POST` → 201 + `Location: /api/v1/categories/{id}` + {id,name}. `GET` → 200 (ordenado por nome, só ativas) ou **204 se vazia**. `PUT /{id}` → 200 com o DTO. `DELETE /{id}` → 204 (soft delete).
   - 404 ProblemDetails se não existe/inativa/de outro owner; 409 se o nome já existe.
-  - Nome vazio → 400. ⚠️ Ainda responde **texto puro** (`"Name is required."`) no endpoint, não `ValidationProblem` — pendente de padronização.
+  - Nome ausente/vazio/só espaços (POST e PUT) → 400 `ValidationProblem` com `errors.name` (validado no `CategoryService`, antes de qualquer acesso ao banco).
 - `/api/v1/persons` — {name}. Mesmo contrato de categorias (201/200/204/404/409); nome vazio → 400 `ProblemDetails` (`Error.Validation`, sem `errors` por campo).
 - `/api/v1/incomes` — idem (molde: kind, default_amount). Contrato padronizado (Result → HTTP):
   - `POST` {name, kind: `recurring`|`one_off`, defaultAmount ≥ 0} → 201 + `Location: /api/v1/incomes/{id}` + {id,name,kind,defaultAmount}.

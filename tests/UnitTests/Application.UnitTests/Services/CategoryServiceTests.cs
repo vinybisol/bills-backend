@@ -35,6 +35,19 @@ public sealed class CategoryServiceTests
     private static Category ExistingCategory(long id = 20L, string name = "Moradia") =>
         EntityId.With(Category.Create(OwnerId, name, FixedNow), id);
 
+    private static void AssertNameValidationFailure(Result result)
+    {
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(result.IsFailure, Is.True);
+            Assert.That(result.Error.Type, Is.EqualTo(ErrorType.Validation));
+            Assert.That(result.Error, Is.InstanceOf<ValidationError>());
+        }
+        var errors = ((ValidationError)result.Error).Errors;
+        Assert.That(errors.Select(e => e.Code), Is.EquivalentTo(new[] { CategoryService.NameField }));
+        Assert.That(errors.Select(e => e.Type), Is.All.EqualTo(ErrorType.Validation));
+    }
+
     // --- CreateCategoryAsync ---
 
     [TestCaseSource(typeof(InvalidStrings), nameof(InvalidStrings.Cases))]
@@ -44,12 +57,10 @@ public sealed class CategoryServiceTests
         var result = await _sut.CreateCategoryAsync(name!, CancellationToken.None);
 
         // Assert
-        using (Assert.EnterMultipleScope())
-        {
-            Assert.That(result.IsFailure, Is.True);
-            Assert.That(result.Error.Type, Is.EqualTo(ErrorType.Validation));
-        }
+        AssertNameValidationFailure(result);
+        await _repository.DidNotReceiveWithAnyArgs().ExistsByNameAsync(default!, default);
         _repository.DidNotReceiveWithAnyArgs().Add(default!);
+        await _unitOfWork.DidNotReceiveWithAnyArgs().SaveChangesAsync(default);
     }
 
     [Test]
@@ -141,8 +152,10 @@ public sealed class CategoryServiceTests
         var result = await _sut.UpdateAsync(20L, name!, CancellationToken.None);
 
         // Assert
-        Assert.That(result.Error.Type, Is.EqualTo(ErrorType.Validation));
+        AssertNameValidationFailure(result);
         await _repository.DidNotReceiveWithAnyArgs().GetByIdAsync(default, default);
+        await _repository.DidNotReceiveWithAnyArgs().ExistsByNameAsync(default!, default);
+        await _unitOfWork.DidNotReceiveWithAnyArgs().SaveChangesAsync(default);
     }
 
     [Test]
