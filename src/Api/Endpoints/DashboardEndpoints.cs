@@ -1,7 +1,7 @@
 using Api.Identity;
 using Application.Abstractions.Services;
-using BillsBackend.Api.Contracts;
-using BillsBackend.Api.Domain;
+using Api.Contracts;
+using Domain.Calculations;
 using Data.Contexts;
 using Domain.Abstractions.Filters;
 using Domain.Entities;
@@ -67,65 +67,37 @@ internal static class DashboardEndpoints
 
         // Group bill entries by category: plannedMyShare over all entries, actualMyShare over paid
         // entries only. Ordered by plannedMyShare descending; categories with no entries are absent.
-        var byCategory = billEntries
-            .GroupBy(e => billsById[e.BillId].CategoryId)
-            .Select(g =>
-            {
-                var plannedMyShare = g.Sum(e => EntryCalculations.MyShare(e.PlannedAmount, e.SplitRatioSnapshot));
-                var actualMyShare = g
-                    .Where(e => e.Paid)
-                    .Sum(e => EntryCalculations.MyShare(
-                        EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount),
-                        e.SplitRatioSnapshot));
-
-                return new DashboardCategoryDto(
-                    g.Key, categoriesById[g.Key].Name,
-                    plannedMyShare, actualMyShare, actualMyShare - plannedMyShare);
-            })
-            .OrderByDescending(d => d.PlannedMyShare)
+        var byCategory = EntryAggregations
+            .SummarizeByCategory(billEntries, e => billsById[e.BillId].CategoryId)
+            .Select(c => new DashboardCategoryDto(
+                c.CategoryId, categoriesById[c.CategoryId].Name,
+                c.PlannedMyShare, c.ActualMyShare, c.ActualMyShare - c.PlannedMyShare))
             .ToList();
 
         var plannedExpense = byCategory.Sum(d => d.PlannedMyShare);
         var actualExpense = byCategory.Sum(d => d.ActualMyShare);
 
-        var plannedIncome = incomeEntries.Sum(e => e.PlannedAmount);
-        var actualIncome = incomeEntries
-            .Where(e => e.Received)
-            .Sum(e => EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount));
+        var plannedIncome = EntryAggregations.PlannedIncome(incomeEntries);
+        var actualIncome = EntryAggregations.ReceivedIncome(incomeEntries);
 
         // Receivable (the other person's share) split into pending vs. already-received, plus the full
-        // (not myShare) value of already-paid bills — computed inline since this endpoint has no
-        // per-entry Receivable DTO like GET /api/entries does.
-        var receivablePending = billEntries
-            .Where(e => !e.Received)
-            .Sum(e => EntryCalculations.Receivable(
-                EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot));
-        var receivableReceived = billEntries
-            .Where(e => e.Received)
-            .Sum(e => EntryCalculations.Receivable(
-                EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot));
-        var paidFull = billEntries
-            .Where(e => e.Paid)
-            .Sum(e => EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount));
+        // (not myShare) value of already-paid bills.
+        var receivablePending = EntryAggregations.ReceivablePending(billEntries);
+        var receivableReceived = EntryAggregations.ReceivableReceived(billEntries);
+        var paidFull = EntryAggregations.PaidFull(billEntries);
 
-        // saldoPrevistoOtimista: assumes everyone pays what they owe.
-        var saldoPrevistoOtimista = plannedIncome - plannedExpense;
-
-        // saldoPrevistoPiorCaso: assumes the pending receivable is never paid back.
-        var saldoPrevistoPiorCaso = saldoPrevistoOtimista - receivablePending;
-
-        // saldoRealizado: actual cash — received income plus received reimbursements, minus the full
-        // (not myShare) amount actually paid for bills.
-        var saldoRealizado = actualIncome + receivableReceived - paidFull;
+        var balance = BalanceCalculations.ComputeMonthBalance(
+            plannedIncome, plannedExpense, receivablePending,
+            actualIncome, receivableReceived, paidFull);
 
         var summary = new DashboardSummaryDto(
             plannedExpense, actualExpense,
             plannedIncome, actualIncome,
-            saldoPrevistoOtimista, saldoRealizado,
+            balance.PlannedOptimistic, balance.Realized,
             billEntries.Count(e => e.Paid), billEntries.Count,
             incomeEntries.Count(e => e.Received), incomeEntries.Count,
             receivablePending, receivableReceived, paidFull,
-            saldoPrevistoOtimista, saldoPrevistoPiorCaso, saldoRealizado);
+            balance.PlannedOptimistic, balance.PlannedWorstCase, balance.Realized);
 
         return Results.Ok(new DashboardMonthDto(year.Value, month.Value, summary, byCategory));
     }
@@ -181,48 +153,17 @@ internal static class DashboardEndpoints
             : new Dictionary<long, Category>();
 
         // Build the 12 always-present month summaries (month 1..12, zeroed when no data).
-        var billEntriesByMonth = billEntries.ToLookup(e => e.RefMonth);
-        var incomeEntriesByMonth = incomeEntries.ToLookup(e => e.RefMonth);
-
-        var months = Enumerable.Range(1, 12)
-            .Select(m =>
-            {
-                var monthBills = billEntriesByMonth[m];
-                var monthIncomes = incomeEntriesByMonth[m];
-
-                var plannedExpense = monthBills.Sum(e => EntryCalculations.MyShare(e.PlannedAmount, e.SplitRatioSnapshot));
-                var actualExpense = monthBills
-                    .Where(e => e.Paid)
-                    .Sum(e => EntryCalculations.MyShare(
-                        EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount),
-                        e.SplitRatioSnapshot));
-
-                var plannedIncome = monthIncomes.Sum(e => e.PlannedAmount);
-                var actualIncome = monthIncomes
-                    .Where(e => e.Received)
-                    .Sum(e => EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount));
-
-                return new DashboardMonthSummaryDto(
-                    m, plannedExpense, actualExpense, plannedIncome, actualIncome,
-                    plannedIncome - plannedExpense, actualIncome - actualExpense);
-            })
+        var months = EntryAggregations.SummarizeByMonth(billEntries, incomeEntries)
+            .Select(m => new DashboardMonthSummaryDto(
+                m.Month, m.PlannedExpense, m.ActualExpense, m.PlannedIncome, m.ActualIncome,
+                m.PlannedBalance, m.ActualBalance))
             .ToList();
 
         // Per-category totals across the whole year; categories with no bill entries are omitted.
-        var byCategory = billEntries
-            .GroupBy(e => billsById[e.BillId].CategoryId)
-            .Select(g =>
-            {
-                var plannedMyShare = g.Sum(e => EntryCalculations.MyShare(e.PlannedAmount, e.SplitRatioSnapshot));
-                var actualMyShare = g
-                    .Where(e => e.Paid)
-                    .Sum(e => EntryCalculations.MyShare(
-                        EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount),
-                        e.SplitRatioSnapshot));
-
-                return new DashboardCategoryYearDto(g.Key, categoriesById[g.Key].Name, plannedMyShare, actualMyShare);
-            })
-            .OrderByDescending(d => d.PlannedMyShare)
+        var byCategory = EntryAggregations
+            .SummarizeByCategory(billEntries, e => billsById[e.BillId].CategoryId)
+            .Select(c => new DashboardCategoryYearDto(
+                c.CategoryId, categoriesById[c.CategoryId].Name, c.PlannedMyShare, c.ActualMyShare))
             .ToList();
 
         var totals = new DashboardYearTotalsDto(

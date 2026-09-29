@@ -1,4 +1,4 @@
-namespace BillsBackend.Api.Contracts;
+namespace Api.Contracts;
 
 /// <summary>The payload returned by <c>POST /api/projection/{year}</c>.</summary>
 /// <param name="Year">The year for which the projection was generated.</param>

@@ -1,4 +1,4 @@
-namespace BillsBackend.Api.Contracts;
+namespace Api.Contracts;
 
 /// <summary>The payload for a single bill entry returned by <c>GET /api/entries</c>.</summary>
 /// <param name="Id">The bill entry id.</param>

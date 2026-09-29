@@ -1,6 +1,6 @@
-using BillsBackend.Api.Domain;
+using Domain.Calculations;
 
-namespace Api.UnitTests.Domain;
+namespace Domain.UnitTests.Calculations;
 
 [TestFixture]
 public sealed class EntryCalculationsTests
@@ -52,6 +52,49 @@ public sealed class EntryCalculationsTests
     [TestCase(2025, 12, 2026, 7, false, TestName = "IsInForwardRange_PreviousYearLaterMonth_IsExcluded")]
     public void IsInForwardRange_EntryVersusFrom_ReturnsExpected(int entryYear, int entryMonth, int fromYear, int fromMonth, bool expected) =>
         Assert.That(EntryCalculations.IsInForwardRange(entryYear, entryMonth, fromYear, fromMonth), Is.EqualTo(expected));
+
+    // --- IsInPeriod ---
+
+    [TestCase(2026, 7, null, null, null, null, true, TestName = "IsInPeriod_NoBounds_IsIncluded")]
+    [TestCase(2026, 7, 2026, 7, 2026, 7, true, TestName = "IsInPeriod_OnBothBoundaries_IsIncluded")]
+    [TestCase(2026, 6, 2026, 7, null, null, false, TestName = "IsInPeriod_BeforeFrom_IsExcluded")]
+    [TestCase(2026, 8, null, null, 2026, 7, false, TestName = "IsInPeriod_AfterTo_IsExcluded")]
+    [TestCase(2026, 1, 2025, 11, 2026, 2, true, TestName = "IsInPeriod_InsideCrossYearRange_IsIncluded")]
+    [TestCase(2026, 6, 2026, null, null, null, true, TestName = "IsInPeriod_FromMonthMissing_FromBoundIgnored")]
+    [TestCase(2026, 8, null, null, null, 7, true, TestName = "IsInPeriod_ToYearMissing_ToBoundIgnored")]
+    [TestCase(2026, 5, 2026, 7, 2026, 3, false, TestName = "IsInPeriod_InvertedRange_IsExcluded")]
+    public void IsInPeriod_EntryVersusBounds_ReturnsExpected(
+        int entryYear, int entryMonth, int? fromYear, int? fromMonth, int? toYear, int? toMonth, bool expected) =>
+        Assert.That(EntryCalculations.IsInPeriod(entryYear, entryMonth, fromYear, fromMonth, toYear, toMonth), Is.EqualTo(expected));
+
+    // --- ResolveEventInstant ---
+
+    [Test]
+    public void ResolveEventInstant_WithDate_ReturnsMidnightUtcOfDate()
+    {
+        // Arrange
+        var fallback = new DateTimeOffset(2026, 7, 5, 15, 30, 0, TimeSpan.FromHours(-3));
+
+        // Act
+        var instant = EntryCalculations.ResolveEventInstant(new DateOnly(2026, 7, 1), fallback);
+
+        // Assert
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(instant, Is.EqualTo(new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero)));
+            Assert.That(instant.Offset, Is.EqualTo(TimeSpan.Zero));
+        }
+    }
+
+    [Test]
+    public void ResolveEventInstant_WithoutDate_ReturnsFallback()
+    {
+        // Arrange
+        var fallback = new DateTimeOffset(2026, 7, 5, 15, 30, 0, TimeSpan.Zero);
+
+        // Act & Assert
+        Assert.That(EntryCalculations.ResolveEventInstant(null, fallback), Is.EqualTo(fallback));
+    }
 
     // --- ComputeVariation ---
 

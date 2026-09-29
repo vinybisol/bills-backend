@@ -1,4 +1,4 @@
-namespace BillsBackend.Api.Contracts;
+namespace Api.Contracts;
 
 /// <summary>The per-category breakdown row returned by <c>GET /api/dashboard/month</c>.</summary>
 /// <param name="CategoryId">The category id.</param>

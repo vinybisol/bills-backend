@@ -1,7 +1,7 @@
 using Api.Identity;
 using Application.Abstractions.Services;
-using BillsBackend.Api.Contracts;
-using BillsBackend.Api.Domain;
+using Api.Contracts;
+using Domain.Calculations;
 using Data.Contexts;
 using Domain.Abstractions.Filters;
 using Domain.Entities;
@@ -136,32 +136,25 @@ internal static class EntryEndpoints
         var totalMyShare = billDtos.Sum(d => d.MyShare);
         // Receivable is split between what's still pending and what has already been received;
         // pending + received always equals the total split amount owed by other people.
-        var receivablePending = billDtos.Where(d => !d.Received).Sum(d => d.Receivable);
-        var receivableReceived = billDtos.Where(d => d.Received).Sum(d => d.Receivable);
-        var paidFull = billDtos.Where(d => d.Paid).Sum(d => d.EffectiveAmount);
+        var receivablePending = EntryAggregations.ReceivablePending(billEntries);
+        var receivableReceived = EntryAggregations.ReceivableReceived(billEntries);
+        var paidFull = EntryAggregations.PaidFull(billEntries);
         var incomesPlanned = incomeDtos.Sum(d => d.PlannedAmount);
         var incomesEffective = incomeDtos.Sum(d => d.EffectiveAmount);
         // incomesReceived: effective amount of only the incomes actually marked as received — unlike
         // incomesEffective, this does not fall back to the planned amount for entries not yet received.
-        var incomesReceived = incomeDtos.Where(d => d.Received).Sum(d => d.EffectiveAmount);
+        var incomesReceived = EntryAggregations.ReceivedIncome(incomeEntries);
 
-        // saldoPrevistoOtimista: how much I expect to net if everyone pays what they owe — planned
-        // income minus my planned share of each bill.
-        var saldoPrevistoOtimista = incomesPlanned - billDtos.Sum(d => d.PlannedAmount * d.SplitRatio);
-
-        // saldoPrevistoPiorCaso: same as above, but assumes the pending receivable is never paid back.
-        var saldoPrevistoPiorCaso = saldoPrevistoOtimista - receivablePending;
-
-        // saldoRealizado: actual cash — received income plus received reimbursements, minus the full
-        // (not myShare) amount actually paid for bills.
-        var saldoRealizado = incomesReceived + receivableReceived - paidFull;
+        var balance = BalanceCalculations.ComputeMonthBalance(
+            incomesPlanned, EntryAggregations.PlannedMyShare(billEntries), receivablePending,
+            incomesReceived, receivableReceived, paidFull);
 
         var totals = new MonthTotalsDto(
             billsPlanned, billsEffective, totalMyShare, receivablePending, receivableReceived,
             receivablePending, receivableReceived, paidFull,
             incomesPlanned, incomesEffective, incomesReceived,
-            saldoPrevistoOtimista, saldoRealizado,
-            saldoPrevistoOtimista, saldoPrevistoPiorCaso, saldoRealizado);
+            balance.PlannedOptimistic, balance.Realized,
+            balance.PlannedOptimistic, balance.PlannedWorstCase, balance.Realized);
 
         return Results.Ok(new MonthEntriesDto(year.Value, month.Value, billDtos, incomeDtos, totals));
     }
@@ -388,9 +381,7 @@ internal static class EntryEndpoints
         if (entry is null)
             return Results.NotFound();
 
-        var paidAt = req.PaidDate.HasValue
-            ? new DateTimeOffset(req.PaidDate.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
-            : timeProvider.GetUtcNow();
+        var paidAt = EntryCalculations.ResolveEventInstant(req.PaidDate, timeProvider.GetUtcNow());
 
         entry.MarkPaid(paidAt, req.ActualAmount);
         await db.SaveChangesAsync(ct);
@@ -482,9 +473,7 @@ internal static class EntryEndpoints
         if (entry is null)
             return Results.NotFound();
 
-        var receivedAt = req.ReceivedDate.HasValue
-            ? new DateTimeOffset(req.ReceivedDate.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
-            : timeProvider.GetUtcNow();
+        var receivedAt = EntryCalculations.ResolveEventInstant(req.ReceivedDate, timeProvider.GetUtcNow());
 
         entry.MarkReceived(receivedAt, req.ActualAmount);
         await db.SaveChangesAsync(ct);

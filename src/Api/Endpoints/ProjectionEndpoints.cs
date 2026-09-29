@@ -1,8 +1,9 @@
 using Api.Identity;
 using Application.Abstractions.Services;
-using BillsBackend.Api.Contracts;
+using Api.Contracts;
 using Data.Contexts;
 using Domain.Abstractions.Filters;
+using Domain.Calculations;
 using Domain.Entities;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -75,14 +76,11 @@ internal static class ProjectionEndpoints
 
         foreach (var bill in recurringBills)
         {
-            for (var month = 1; month <= 12; month++)
-            {
-                if (existingBillSet.Contains((bill.Id, month)))
-                {
-                    skipped++;
-                    continue;
-                }
+            var missingMonths = ProjectionCalculations.MissingMonths(bill.Id, existingBillSet).ToList();
+            skipped += ProjectionCalculations.MonthsPerYear - missingMonths.Count;
 
+            foreach (var month in missingMonths)
+            {
                 db.BillEntries.Add(BillEntry.Create(appUser.Id, bill.Id, year, month, bill.DefaultAmount, bill.SplitRatio, bill.PersonId, now));
                 billEntriesCreated++;
             }
@@ -90,14 +88,11 @@ internal static class ProjectionEndpoints
 
         foreach (var income in recurringIncomes)
         {
-            for (var month = 1; month <= 12; month++)
-            {
-                if (existingIncomeSet.Contains((income.Id, month)))
-                {
-                    skipped++;
-                    continue;
-                }
+            var missingMonths = ProjectionCalculations.MissingMonths(income.Id, existingIncomeSet).ToList();
+            skipped += ProjectionCalculations.MonthsPerYear - missingMonths.Count;
 
+            foreach (var month in missingMonths)
+            {
                 db.IncomeEntries.Add(IncomeEntry.Create(appUser.Id, income.Id, year, month, income.DefaultAmount, now));
                 incomeEntriesCreated++;
             }

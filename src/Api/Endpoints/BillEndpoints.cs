@@ -1,7 +1,7 @@
 using Api.Identity;
 using Application.Abstractions.Services;
-using BillsBackend.Api.Contracts;
-using BillsBackend.Api.Domain;
+using Api.Contracts;
+using Domain.Calculations;
 using Data.Contexts;
 using Domain.Abstractions.Filters;
 using Domain.Entities;
@@ -201,22 +201,12 @@ internal static class BillEndpoints
 
         bill.Recalculate(req.NewAmount);
 
-        int updatedEntries = 0, skippedPaid = 0;
-        foreach (var entry in entriesInRange)
-        {
-            if (entry.Paid)
-            {
-                skippedPaid++;
-                continue;
-            }
-            entry.UpdatePlanned(req.NewAmount);
-            updatedEntries++;
-        }
+        var result = BillRecalculation.ApplyToEntries(entriesInRange, req.NewAmount);
 
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        return Results.Ok(new RecalculateResponse(billId, updatedEntries, skippedPaid, req.NewAmount));
+        return Results.Ok(new RecalculateResponse(billId, result.UpdatedEntries, result.SkippedPaid, req.NewAmount));
     }
 
     private static async Task<IResult> GetBillHistory(
@@ -260,44 +250,20 @@ internal static class BillEndpoints
             .Where(e => e.BillId == billId)
             .ToListAsync(ct);
 
-        if (fromYear.HasValue && fromMonth.HasValue)
-        {
-            entries = entries
-                .Where(e => EntryCalculations.IsInForwardRange(e.RefYear, e.RefMonth, fromYear.Value, fromMonth.Value))
-                .ToList();
-        }
+        var historyItems = BillHistoryCalculations.BuildItems(
+            entries.Where(e => EntryCalculations.IsInPeriod(e.RefYear, e.RefMonth, fromYear, fromMonth, toYear, toMonth)));
 
-        if (toYear.HasValue && toMonth.HasValue)
-        {
-            // Reuses IsInForwardRange the other way round: "entry at or before (toYear, toMonth)".
-            entries = entries
-                .Where(e => EntryCalculations.IsInForwardRange(toYear.Value, toMonth.Value, e.RefYear, e.RefMonth))
-                .ToList();
-        }
+        var items = historyItems
+            .Select(i => new BillHistoryItemDto(
+                i.Year, i.Month, i.PlannedAmount, i.ActualAmount, i.Effective, i.MyShare,
+                i.Paid, i.PaidDate,
+                i.Variation is null ? null : new BillHistoryVariationDto(i.Variation.Value.Abs, i.Variation.Value.Pct)))
+            .ToList();
 
-        var ordered = entries.OrderBy(e => e.RefYear).ThenBy(e => e.RefMonth).ToList();
-
-        var items = new List<BillHistoryItemDto>(ordered.Count);
-        decimal? previousEffective = null;
-        foreach (var e in ordered)
-        {
-            var effective = EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount);
-            var myShare = EntryCalculations.MyShare(effective, e.SplitRatioSnapshot);
-            var variation = EntryCalculations.ComputeVariation(effective, previousEffective);
-
-            items.Add(new BillHistoryItemDto(
-                e.RefYear, e.RefMonth, e.PlannedAmount, e.ActualAmount, effective, myShare,
-                e.Paid, e.PaidDate,
-                variation is null ? null : new BillHistoryVariationDto(variation.Value.Abs, variation.Value.Pct)));
-
-            previousEffective = effective;
-        }
-
+        var historySummary = BillHistoryCalculations.Summarize(historyItems);
         var summary = new BillHistorySummaryDto(
-            items.Count > 0 ? items.Average(i => i.Effective) : 0m,
-            items.Count > 0 ? items.Min(i => i.Effective) : 0m,
-            items.Count > 0 ? items.Max(i => i.Effective) : 0m,
-            items.Where(i => i.Paid).Sum(i => i.MyShare));
+            historySummary.AverageEffective, historySummary.MinEffective,
+            historySummary.MaxEffective, historySummary.TotalPaidMyShare);
 
         return Results.Ok(new BillHistoryDto(
             bill.Id, bill.Name, category.Name, bill.SplitRatio, person?.Name, summary, items));

@@ -1,6 +1,6 @@
 using Api.Identity;
 using Application.Abstractions.Services;
-using BillsBackend.Api.Contracts;
+using Api.Contracts;
 using Data.Contexts;
 using Domain.Abstractions.Filters;
 using Domain.Entities;

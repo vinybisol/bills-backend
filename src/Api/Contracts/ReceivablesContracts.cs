@@ -1,4 +1,4 @@
-namespace BillsBackend.Api.Contracts;
+namespace Api.Contracts;
 
 /// <summary>A single bill entry row within a person's panel in <c>GET /api/receivables/month</c>.</summary>
 /// <param name="EntryId">The bill entry id.</param>

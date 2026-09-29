@@ -1,6 +1,6 @@
 using Domain.Enums;
 
-namespace BillsBackend.Api.Contracts;
+namespace Api.Contracts;
 
 /// <summary>The payload returned by income read operations.</summary>
 /// <param name="Id">The internal income id.</param>

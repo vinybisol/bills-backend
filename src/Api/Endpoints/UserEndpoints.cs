@@ -1,6 +1,6 @@
 using Api.Identity;
 using Application.Abstractions.Services;
-using BillsBackend.Api.Contracts;
+using Api.Contracts;
 
 namespace Api.Endpoints;
 

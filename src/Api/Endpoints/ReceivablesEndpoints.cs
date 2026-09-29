@@ -1,7 +1,7 @@
 using Api.Identity;
 using Application.Abstractions.Services;
-using BillsBackend.Api.Contracts;
-using BillsBackend.Api.Domain;
+using Api.Contracts;
+using Domain.Calculations;
 using Data.Contexts;
 using Domain.Abstractions.Filters;
 using Domain.Entities;
@@ -68,17 +68,12 @@ internal static class ReceivablesEndpoints
                 var items = g
                     .OrderBy(e => e.Id)
                     .Select(e => new ReceivableItemDto(
-                        e.Id, billsById[e.BillId].Name,
-                        EntryCalculations.Receivable(
-                            EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot),
-                        e.Received))
+                        e.Id, billsById[e.BillId].Name, EntryAggregations.EffectiveReceivable(e), e.Received))
                     .ToList();
 
-                var totalDevido = items.Sum(i => i.Receivable);
-                var jaRecebido = items.Where(i => i.Received).Sum(i => i.Receivable);
-                var pendente = items.Where(i => !i.Received).Sum(i => i.Receivable);
+                var totals = EntryAggregations.SummarizeReceivables(g);
 
-                return new PersonReceivablesDto(g.Key, personsById[g.Key].Name, totalDevido, jaRecebido, pendente, items);
+                return new PersonReceivablesDto(g.Key, personsById[g.Key].Name, totals.Total, totals.Received, totals.Pending, items);
             })
             .OrderBy(p => p.Name)
             .ToList();
@@ -115,9 +110,7 @@ internal static class ReceivablesEndpoints
         if (entry.SplitRatioSnapshot == 1)
             return Results.BadRequest("This entry has no split; it is not a receivable.");
 
-        var receivedAt = req.ReceivedDate.HasValue
-            ? new DateTimeOffset(req.ReceivedDate.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
-            : timeProvider.GetUtcNow();
+        var receivedAt = EntryCalculations.ResolveEventInstant(req.ReceivedDate, timeProvider.GetUtcNow());
 
         entry.MarkReceived(receivedAt);
         await db.SaveChangesAsync(ct);
@@ -180,9 +173,7 @@ internal static class ReceivablesEndpoints
         if (entries.Count != entryIds.Count || entries.Any(e => e.SplitRatioSnapshot == 1))
             return Results.BadRequest("One or more entries are invalid, not owned by you, or not a receivable.");
 
-        var receivedAt = req.ReceivedDate.HasValue
-            ? new DateTimeOffset(req.ReceivedDate.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
-            : timeProvider.GetUtcNow();
+        var receivedAt = EntryCalculations.ResolveEventInstant(req.ReceivedDate, timeProvider.GetUtcNow());
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
@@ -229,29 +220,13 @@ internal static class ReceivablesEndpoints
             .Where(e => e.PersonId == personId.Value && e.SplitRatioSnapshot < 1)
             .ToListAsync(ct);
 
-        if (fromYear.HasValue && fromMonth.HasValue)
-        {
-            entries = entries
-                .Where(e => EntryCalculations.IsInForwardRange(e.RefYear, e.RefMonth, fromYear.Value, fromMonth.Value))
-                .ToList();
-        }
-
-        if (toYear.HasValue && toMonth.HasValue)
-        {
-            // Reuses IsInForwardRange the other way round: "entry is at or before (toYear, toMonth)".
-            entries = entries
-                .Where(e => EntryCalculations.IsInForwardRange(toYear.Value, toMonth.Value, e.RefYear, e.RefMonth))
-                .ToList();
-        }
-
         // Anything other than "received"/"pending" (including a missing or unrecognized value) is
         // treated as "all" — the simplest, most defensive default that never rejects a valid request.
-        entries = status switch
-        {
-            "received" => entries.Where(e => e.Received).ToList(),
-            "pending" => entries.Where(e => !e.Received).ToList(),
-            _ => entries,
-        };
+        entries = EntryAggregations
+            .FilterByReceivedStatus(
+                entries.Where(e => EntryCalculations.IsInPeriod(e.RefYear, e.RefMonth, fromYear, fromMonth, toYear, toMonth)),
+                status)
+            .ToList();
 
         var billIds = entries.Select(e => e.BillId).ToHashSet();
         var billsById = billIds.Count > 0
@@ -264,18 +239,15 @@ internal static class ReceivablesEndpoints
         var items = entries
             .Select(e => new ReceivablesHistoryItemDto(
                 e.Id, billsById[e.BillId].Name, e.RefYear, e.RefMonth,
-                EntryCalculations.Receivable(
-                    EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot),
+                EntryAggregations.EffectiveReceivable(e),
                 e.Received, e.ReceivedDate))
             .OrderByDescending(i => i.Year)
             .ThenByDescending(i => i.Month)
             .ToList();
 
-        var totalDevido = items.Sum(i => i.Receivable);
-        var totalRecebido = items.Where(i => i.Received).Sum(i => i.Receivable);
-        var totalPendente = items.Where(i => !i.Received).Sum(i => i.Receivable);
+        var receivableTotals = EntryAggregations.SummarizeReceivables(entries);
 
-        var totals = new ReceivablesHistoryTotalsDto(totalDevido, totalRecebido, totalPendente);
+        var totals = new ReceivablesHistoryTotalsDto(receivableTotals.Total, receivableTotals.Received, receivableTotals.Pending);
 
         return Results.Ok(new ReceivablesHistoryDto(person.Id, person.Name, totals, items));
     }
