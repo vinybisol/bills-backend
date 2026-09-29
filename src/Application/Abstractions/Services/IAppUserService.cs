@@ -1,9 +1,22 @@
+using Application.DTOs.Services;
+using Domain.Abstractions;
 using Domain.Entities;
 
 namespace Application.Abstractions.Services;
 
 public interface IAppUserService
 {
+    /// <summary>
+    /// Returns the profile of the authenticated user of the current request (the current owner,
+    /// already provisioned just-in-time by the endpoint filter).
+    /// </summary>
+    /// <param name="cancellationToken">The token to observe for cancellation.</param>
+    /// <returns>
+    /// The user's profile; <see cref="ErrorType.Unauthorized"/> when no owner was resolved for the
+    /// request, or <see cref="ErrorType.NotFound"/> when the owner no longer exists.
+    /// </returns>
+    Task<Result<AppUserDto>> GetCurrentAsync(CancellationToken cancellationToken);
+
     /// <summary>
     /// Looks up an <see cref="AppUser"/> by its external Firebase identifier.
     /// </summary>

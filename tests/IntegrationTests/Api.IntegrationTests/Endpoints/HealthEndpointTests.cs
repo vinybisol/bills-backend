@@ -46,6 +46,21 @@ public sealed class HealthEndpointTests : IntegrationTestBase
     }
 
     [Test]
+    public async Task GetHealth_ResponseBody_KeepsUserIdAndStatusContract()
+    {
+        // Arrange
+        using var client = CreateAuthenticatedClient();
+
+        // Act
+        using var response = await client.GetAsync("/api/v1/health");
+        using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        // Assert
+        var names = json.RootElement.EnumerateObject().Select(p => p.Name);
+        Assert.That(names, Is.EquivalentTo(new[] { "userId", "status" }));
+    }
+
+    [Test]
     public async Task GetHealth_WithUntrustedSignature_ReturnsUnauthorized()
     {
         // Arrange

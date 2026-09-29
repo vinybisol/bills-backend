@@ -93,6 +93,22 @@ public sealed class UserEndpointFilterTests
     }
 
     [Test]
+    public async Task InvokeAsync_AuthenticatedUser_PropagatesRequestAbortedToken()
+    {
+        // Arrange
+        using var cts = new CancellationTokenSource();
+        var context = ContextWith(new Claim("user_id", "uid-1"));
+        context.HttpContext.RequestAborted = cts.Token;
+        _provisioning.GetOrCreateAsync("uid-1", null, null, Arg.Any<CancellationToken>()).Returns(UserWithId(42L));
+
+        // Act
+        await _sut.InvokeAsync(context, _ => ValueTask.FromResult<object?>(null));
+
+        // Assert
+        await _provisioning.Received(1).GetOrCreateAsync("uid-1", null, null, cts.Token);
+    }
+
+    [Test]
     public async Task InvokeAsync_AuthenticatedUser_SetsCurrentOwnerBeforeCallingNext()
     {
         // Arrange

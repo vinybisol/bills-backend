@@ -1,6 +1,9 @@
 using Application.Abstractions.Exceptions;
 using Application.Abstractions.Repositories;
 using Application.Services;
+using Application.UnitTests.TestSupport;
+using Domain.Abstractions;
+using Domain.Abstractions.Filters;
 using Domain.Entities;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -14,6 +17,7 @@ public sealed class AppUserServiceTests
 
     private IAppUserRepository _repository = null!;
     private IUnitOfWork _unitOfWork = null!;
+    private ICurrentOwner _currentOwner = null!;
     private AppUserService _sut = null!;
 
     [SetUp]
@@ -21,10 +25,84 @@ public sealed class AppUserServiceTests
     {
         _repository = Substitute.For<IAppUserRepository>();
         _unitOfWork = Substitute.For<IUnitOfWork>();
-        _sut = new AppUserService(_repository, _unitOfWork);
+        _currentOwner = Substitute.For<ICurrentOwner>();
+        _sut = new AppUserService(_repository, _unitOfWork, _currentOwner);
     }
 
     private static AppUser NewUser(string uid = "uid-1") => AppUser.Provision(uid, "a@example.com", "Alice", FixedNow);
+
+    [Test]
+    public async Task GetCurrentAsync_OwnerExists_ReturnsProfile()
+    {
+        // Arrange
+        using var cts = new CancellationTokenSource();
+        _currentOwner.Id.Returns(42L);
+        _repository.FindByIdAsync(42L, cts.Token).Returns(EntityId.With(NewUser(), 42L));
+
+        // Act
+        var result = await _sut.GetCurrentAsync(cts.Token);
+
+        // Assert
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(result.IsSuccess, Is.True);
+            Assert.That(result.Value.Id, Is.EqualTo(42L));
+            Assert.That(result.Value.Name, Is.EqualTo("Alice"));
+            Assert.That(result.Value.Email, Is.EqualTo("a@example.com"));
+        }
+    }
+
+    [Test]
+    public async Task GetCurrentAsync_OwnerWithoutEmailOrName_ReturnsEmptyNameAndNullEmail()
+    {
+        // Arrange
+        _currentOwner.Id.Returns(7L);
+        _repository.FindByIdAsync(7L, Arg.Any<CancellationToken>())
+            .Returns(EntityId.With(AppUser.Provision("uid-7", null, null, FixedNow), 7L));
+
+        // Act
+        var result = await _sut.GetCurrentAsync(CancellationToken.None);
+
+        // Assert
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(result.Value.Name, Is.EqualTo(string.Empty));
+            Assert.That(result.Value.Email, Is.Null);
+        }
+    }
+
+    [Test]
+    public async Task GetCurrentAsync_OwnerNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        _currentOwner.Id.Returns(42L);
+        _repository.FindByIdAsync(42L, Arg.Any<CancellationToken>()).Returns((AppUser?)null);
+
+        // Act
+        var result = await _sut.GetCurrentAsync(CancellationToken.None);
+
+        // Assert
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(result.IsFailure, Is.True);
+            Assert.That(result.Error.Type, Is.EqualTo(ErrorType.NotFound));
+        }
+    }
+
+    [TestCase(0L)]
+    [TestCase(-1L)]
+    public async Task GetCurrentAsync_NoOwnerResolved_ReturnsUnauthorizedWithoutQuerying(long ownerId)
+    {
+        // Arrange
+        _currentOwner.Id.Returns(ownerId);
+
+        // Act
+        var result = await _sut.GetCurrentAsync(CancellationToken.None);
+
+        // Assert
+        Assert.That(result.Error.Type, Is.EqualTo(ErrorType.Unauthorized));
+        await _repository.DidNotReceiveWithAnyArgs().FindByIdAsync(default, default);
+    }
 
     [Test]
     public async Task FindByFirebaseUidAsync_UserExists_ReturnsUser()

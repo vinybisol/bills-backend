@@ -9,6 +9,29 @@ API do sistema de orçamento pessoal. Este arquivo define como os agentes devem 
 - Autenticação: validação de JWT do Firebase; identidade própria via `app_user` (ver schema)
 - Hospedagem: Azure Web App (F1)
 
+## Arquitetura
+
+Clean Architecture em 4 projetos (`src/`). Dependências apontam **para dentro**: `Api → Application → Domain` e `Data → Application/Domain`. `Domain` não depende de ninguém; `Application` não conhece EF Core; só `Api/Program.cs` (composition root) referencia `Data` (registro de DI + `IMigrationService`).
+
+| Camada | O que vai lá |
+|---|---|
+| `Domain` | Entidades (estado encapsulado, factories `Create`/`Provision`, métodos de comportamento), enums, `Result`/`Error`, `ICurrentOwner`, cálculos puros em `Domain/Calculations`. |
+| `Application` | `Abstractions/Services` (`IXService`), `Abstractions/Repositories` (`IXRepository`, `IUnitOfWork`), DTOs de saída em `DTOs/Services`, implementações `internal sealed` em `Services/`, registro em `DependencyInjection/Register.cs`. Regras de negócio e validação retornam `Result`/`Result<T>`. |
+| `Data` | `AppDbContext` (filtro global por `owner_id` via `ICurrentOwner`), migrations, repositórios EF `internal sealed` em `Repositories/`, `UnitOfWork`, registro em `DependencyInjection/Register.cs`. |
+| `Api` | Endpoints Minimal API finos em `Endpoints/<Feature>Endpoints.cs`, requests em `Contracts/`, `Filters/UserEndpointFilter` (resolve/provisiona o `app_user` e define o owner), `Extensions/ResultExtensions.ToHttpResult`. |
+
+**Padrão para nova feature** (siga `CategoryEndpoints`/`CategoryService`/`CategoryRepository`):
+1. Entidade/regra no `Domain` (+ testes em `Domain.UnitTests`).
+2. `IXRepository` em `Application/Abstractions/Repositories` + implementação em `Data/Repositories`; registre em `RegisterData`.
+3. `IXService` + `XService` (`internal sealed`, injeta `ICurrentOwner` quando precisa do owner) retornando `Result<Dto>`; registre em `RegisterApplications` (+ testes com NSubstitute em `Application.UnitTests`).
+4. Endpoint: `group.MapGroup("/x").AddEndpointFilter<UserEndpointFilter>()`, handler só recebe request/serviço/`CancellationToken` e devolve `result.ToHttpResult()`. Nunca leia claims do Firebase nem use `AppDbContext` no endpoint. Só endpoints intencionalmente anônimos (ex.: `SharedBillsEndpoint`) ficam sem o filtro.
+5. Testes de integração em `Api.IntegrationTests/Endpoints/XEndpointTests.cs`.
+
+**Contrato HTTP padronizado** (`ResultExtensions.ToHttpResult`):
+- Sucesso: `Result` → 204; `Result<T>` → 200 com o corpo; `Result<IEnumerable<T>>` → 200, ou **204 quando a lista é vazia**. Criação usa `Results.Created` no endpoint.
+- Falha: `ValidationError` → 400 `ValidationProblem` (erros agrupados por código); `NotFound` → 404, `Conflict` → 409 (ex.: editar/pagar lançamento congelado), `Unauthorized` → 401, `Forbidden` → 403 — todos como `ProblemDetails` (`title` = código, `detail` = mensagem).
+- Sem token / token sem uid → 401.
+
 ## Agente e skills
 
 - **Sempre** use o agente `csharp-dotnet-expert` para tarefas de código deste repo.
@@ -16,7 +39,13 @@ API do sistema de orçamento pessoal. Este arquivo define como os agentes devem 
 
 ## Testes (obrigatório)
 
-- Framework: **NUnit**.
+- Framework: **NUnit 4** + **NSubstitute** (mocks) + `Assert.That`, no **Microsoft.Testing.Platform (MTP)**. Versões centralizadas em `Directory.Packages.props` (CPM); configuração comum em `tests/Directory.Build.props` (e `tests/UnitTests/Directory.Build.props`).
+- Layout dos projetos de teste:
+  - `tests/UnitTests/Domain.UnitTests` — entidades e `Domain/Calculations`.
+  - `tests/UnitTests/Application.UnitTests` — serviços, com repositórios/`ICurrentOwner` substituídos via NSubstitute.
+  - `tests/UnitTests/Api.UnitTests` — `UserEndpointFilter`, `ResultExtensions`, claims do Firebase.
+  - `tests/UnitTests/Data.UnitTests` — utilitários da camada de dados (ex.: `NeonConnectionString`).
+  - `tests/IntegrationTests/Api.IntegrationTests` — endpoints ponta a ponta (JWT, filtro, banco real).
 - **Toda** tarefa que adiciona ou altera comportamento deve incluir:
   - **Testes unitários** da lógica (regras de negócio, cálculos de split, projeção, recálculo).
   - **Testes de integração** dos endpoints (incluindo autenticação e acesso ao banco).
@@ -24,15 +53,19 @@ API do sistema de orçamento pessoal. Este arquivo define como os agentes devem 
 
 ### Ciclo de teste rápido (iteração)
 
-Os testes de integração rodam contra um Postgres real — a suíte completa é lenta. **Durante o desenvolvimento, não rode `dotnet test` cheio a cada mudança.** Rode só o subconjunto relevante para encurtar o feedback:
+Os testes de integração rodam contra um Postgres real — a suíte completa é lenta. **Durante o desenvolvimento, não rode `dotnet test` cheio a cada mudança.** Rode só o subconjunto relevante para encurtar o feedback.
+
+> Com MTP (`global.json` → `"runner": "Microsoft.Testing.Platform"`), sempre aponte o projeto com `--project <caminho>` e ponha o filtro depois (`dotnet test --project <caminho> --filter ...`). `dotnet test --filter ...` **sem** `--project` roda na solução inteira: cada projeto sem teste correspondente reporta "Zero tests ran" (exit code 8) e o comando falha — além de subir o projeto de integração à toa.
 
 - Só os unitários (sem banco, segundos), um projeto por camada em `tests/UnitTests/`:
   `dotnet test --project tests/UnitTests/Domain.UnitTests`, `dotnet test --project tests/UnitTests/Application.UnitTests`, `dotnet test --project tests/UnitTests/Api.UnitTests`, `dotnet test --project tests/UnitTests/Data.UnitTests`
 - Só os de integração (um único projeto, precisa do Postgres): `dotnet test --project tests/IntegrationTests/Api.IntegrationTests`
 - Só a fixture da feature: `dotnet test --project tests/IntegrationTests/Api.IntegrationTests --filter FullyQualifiedName~ProjectionEndpointTests`
+- Várias fixtures: `dotnet test --project tests/IntegrationTests/Api.IntegrationTests --filter "FullyQualifiedName~MeEndpointTests|FullyQualifiedName~HealthEndpointTests"`
 - Por nome de teste: `dotnet test --project tests/IntegrationTests/Api.IntegrationTests --filter Name~Idempot`
+- Um serviço nos unitários: `dotnet test --project tests/UnitTests/Application.UnitTests --filter FullyQualifiedName~AppUserServiceTests`
 
-**Só antes de abrir o PR** rode a suíte completa (`dotnet test`) **uma vez**. PR só é aberto com a suíte inteira verde.
+**Só antes de abrir o PR** rode a suíte completa (`dotnet test`, na raiz — usa `BillsBackend.slnx`) **uma vez**. PR só é aberto com a suíte inteira verde.
 
 ### Isolamento dos testes de integração
 

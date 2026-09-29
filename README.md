@@ -28,22 +28,28 @@ Um backend simples e robusto para gerenciamento de orçamento pessoal, construí
 
 ## 🧪 Testes
 
-- Usa NUnit para unitários e testes de integração.
-- Unitários (NUnit 4 + NSubstitute, Microsoft.Testing.Platform): um projeto por camada em `tests/UnitTests/` (`Domain.UnitTests`, `Application.UnitTests`, `Api.UnitTests`, `Data.UnitTests`). Ex.: `dotnet test --project tests/UnitTests/Application.UnitTests`.
-- Integração (NUnit 4, Microsoft.Testing.Platform, PostgreSQL real): projeto único `tests/IntegrationTests/Api.IntegrationTests`. Ex.: `dotnet test --project tests/IntegrationTests/Api.IntegrationTests` (setup do banco em `CLAUDE.md`, seção "Setup local de testes").
+- NUnit 4 + NSubstitute no Microsoft.Testing.Platform (MTP, via `global.json`); versões centralizadas em `Directory.Packages.props`.
+- Unitários (sem banco): um projeto por camada em `tests/UnitTests/` (`Domain.UnitTests`, `Application.UnitTests`, `Api.UnitTests`, `Data.UnitTests`). Ex.: `dotnet test --project tests/UnitTests/Application.UnitTests`.
+- Integração (PostgreSQL real, Respawn por fixture, sem paralelismo): projeto único `tests/IntegrationTests/Api.IntegrationTests`. Ex.: `dotnet test --project tests/IntegrationTests/Api.IntegrationTests --filter FullyQualifiedName~MeEndpointTests` (setup do banco em `CLAUDE.md`, seção "Setup local de testes").
+- Com MTP, use sempre `--project` para filtrar; `dotnet test` na raiz roda a suíte completa.
 
-## 📁 Estrutura principal
+## 📁 Arquitetura
 
-- `src/Api` – endpoints e configuração da API.
-- `src/Application` – regras de negócio e serviços.
-- `src/Data` – EF Core, contexto e migrations.
-- `src/Domain` – entidades, enums e abstrações do domínio.
+Clean Architecture — dependências apontam para dentro (`Api` → `Application` → `Domain`; `Data` implementa as abstrações de `Application`):
+
+- `src/Domain` – entidades, enums, `Result`/`Error` e cálculos puros (`Calculations/`).
+- `src/Application` – serviços (regras de negócio) que retornam `Result`, abstrações de repositório/`IUnitOfWork` e DTOs.
+- `src/Data` – EF Core (`AppDbContext` com filtro global por owner), repositórios, `UnitOfWork` e migrations.
+- `src/Api` – endpoints Minimal API finos, contratos de request, `UserEndpointFilter` (JWT do Firebase → `app_user` provisionado just-in-time) e o mapeamento `Result` → HTTP (`ProblemDetails`/`ValidationProblem`).
+
+Detalhes e o padrão para novas features em `CLAUDE.md` (seção "Arquitetura").
 
 ## 📌 Documentação
 
 - `docs/api.md` — contratos e endpoints.
 - `docs/dominio.md` — regras e conceitos do domínio.
 - `docs/schema.md` — modelo de dados e schema.
+- `docs/decisoes.md` — decisões de arquitetura (por quê).
 
 ## 🛠️ Execução local
 
