@@ -26,7 +26,8 @@ API do sistema de orçamento pessoal. Este arquivo define como os agentes devem 
 
 Os testes de integração rodam contra um Postgres real — a suíte completa é lenta. **Durante o desenvolvimento, não rode `dotnet test` cheio a cada mudança.** Rode só o subconjunto relevante para encurtar o feedback:
 
-- Só os unitários (sem banco, segundos): `dotnet test tests/BillsBackend.UnitTests`
+- Só os unitários (sem banco, segundos), um projeto por camada em `tests/UnitTests/`:
+  `dotnet test --project tests/UnitTests/Domain.UnitTests`, `dotnet test --project tests/UnitTests/Application.UnitTests`, `dotnet test --project tests/UnitTests/Api.UnitTests`, `dotnet test --project tests/UnitTests/Data.UnitTests`
 - Só a fixture da feature: `dotnet test --filter FullyQualifiedName~ProjectionEndpointTests`
 - Por nome de teste: `dotnet test --filter Name~Idempot`
 

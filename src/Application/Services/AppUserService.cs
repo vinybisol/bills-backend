@@ -1,10 +1,8 @@
-using System.Runtime.CompilerServices;
 using Application.Abstractions.Exceptions;
 using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
 using Domain.Entities;
 
-[assembly: InternalsVisibleTo("Application.Tests")]
 namespace Application.Services;
 
 internal sealed class AppUserService(

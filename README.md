@@ -29,6 +29,7 @@ Um backend simples e robusto para gerenciamento de orçamento pessoal, construí
 ## 🧪 Testes
 
 - Usa NUnit para unitários e testes de integração.
+- Unitários (NUnit 4 + NSubstitute, Microsoft.Testing.Platform): um projeto por camada em `tests/UnitTests/` (`Domain.UnitTests`, `Application.UnitTests`, `Api.UnitTests`, `Data.UnitTests`). Ex.: `dotnet test --project tests/UnitTests/Application.UnitTests`.
 - Há suporte para rodar testes locais com PostgreSQL, incluindo integração com banco real.
 
 ## 📁 Estrutura principal
