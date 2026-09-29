@@ -1,140 +1,20 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using static Api.IntegrationTests.TestSupport.ProblemAssertions;
 
 namespace Api.IntegrationTests.Endpoints;
 
 /// <summary>
-/// Integration tests for <c>GET /api/entries</c>, covering entry enrichment with names,
-/// derived value calculations, owner isolation, authentication, and month validation.
+/// Integration tests for <c>GET /api/v1/entries</c>: entry enrichment with names (also for
+/// deactivated templates), derived values, totals and balances, owner isolation, authentication and
+/// query validation. Each test authenticates as a fresh Firebase uid.
 /// </summary>
 [TestFixture]
 public sealed class EntriesEndpointTests : IntegrationTestBase
 {
-    private static string Uid(string suffix) => $"firebase-entries-{suffix}";
+    private const string EntriesUri = "/api/v1/entries";
 
-    private HttpRequestMessage Req(HttpMethod method, string url, string uid) =>
-        new(method, url)
-        {
-            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", TestTokens.CreateValidToken(uid, email: $"{uid}@example.com")) }
-        };
-
-    private HttpRequestMessage ReqWithBody<T>(HttpMethod method, string url, string uid, T body)
-    {
-        var req = Req(method, url, uid);
-        req.Content = JsonContent.Create(body);
-        return req;
-    }
-
-    // Fetches default categories for the given uid; triggers user provisioning on first call.
-    private async Task<CategoryDto[]> GetDefaultCategoriesAsync(string uid)
-    {
-        using var req = Req(HttpMethod.Get, "/api/v1/categories", uid);
-        using var resp = await Client.SendAsync(req);
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
-        Assert.That(dtos, Is.Not.Empty, "Expected seeded default categories.");
-        return dtos!;
-    }
-
-    // Creates a person and returns their id.
-    private async Task<long> CreatePersonAsync(string uid, string name = "Parceiro")
-    {
-        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/persons", uid, new { name });
-        using var resp = await Client.SendAsync(req);
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        return (await resp.Content.ReadFromJsonAsync<PersonDto>())!.Id;
-    }
-
-    // Creates a recurring bill without a split and returns the DTO.
-    private async Task<BillDto> CreateRecurringBillAsync(
-        string uid, long categoryId, string name = "Aluguel", decimal amount = 1000m)
-    {
-        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
-            new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio = 1m, personId = (long?)null });
-        using var resp = await Client.SendAsync(req);
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        return (await resp.Content.ReadFromJsonAsync<BillDto>())!;
-    }
-
-    // Creates a recurring bill with a 50/50 split and returns the DTO.
-    private async Task<BillDto> CreateSplitBillAsync(
-        string uid, long categoryId, long personId,
-        string name = "Internet", decimal amount = 120m)
-    {
-        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
-            new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio = 0.5m, personId = (long?)personId });
-        using var resp = await Client.SendAsync(req);
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        return (await resp.Content.ReadFromJsonAsync<BillDto>())!;
-    }
-
-    // Creates a recurring bill with a caller-chosen split ratio and person; returns the DTO.
-    private async Task<BillDto> CreateBillAsync(
-        string uid, long categoryId, string name, decimal amount, decimal splitRatio, long? personId)
-    {
-        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/bills", uid,
-            new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio, personId });
-        using var resp = await Client.SendAsync(req);
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        return (await resp.Content.ReadFromJsonAsync<BillDto>())!;
-    }
-
-    // Creates a recurring income and returns the DTO.
-    private async Task<IncomeDto> CreateRecurringIncomeAsync(string uid, string name = "Salario", decimal amount = 5000m)
-    {
-        using var req = ReqWithBody(HttpMethod.Post, "/api/v1/incomes", uid,
-            new { name, kind = "recurring", defaultAmount = amount });
-        using var resp = await Client.SendAsync(req);
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        return (await resp.Content.ReadFromJsonAsync<IncomeDto>())!;
-    }
-
-    // Runs POST /api/projection/{year} and asserts success.
-    private async Task PostProjectionAsync(string uid, int year)
-    {
-        using var req = Req(HttpMethod.Post, $"/api/v1/projection/{year}", uid);
-        using var resp = await Client.SendAsync(req);
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-    }
-
-    // Calls GET /api/entries?year={year}&month={month} with the given uid.
-    private async Task<(HttpResponseMessage Response, MonthEntriesResponse? Body)> GetEntriesAsync(
-        string uid, int year, int month)
-    {
-        using var req = Req(HttpMethod.Get, $"/api/v1/entries?year={year}&month={month}", uid);
-        var resp = await Client.SendAsync(req);
-        if (!resp.IsSuccessStatusCode)
-            return (resp, null);
-        var body = await resp.Content.ReadFromJsonAsync<MonthEntriesResponse>();
-        return (resp, body);
-    }
-
-    // Marks a bill entry's split as received via POST /api/receivables/{entryId}/mark.
-    private async Task MarkReceivedAsync(string uid, long entryId)
-    {
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/receivables/{entryId}/mark", uid, new { receivedDate = (DateOnly?)null });
-        using var resp = await Client.SendAsync(req);
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-    }
-
-    // Pays a bill entry via POST /api/entries/bill/{id}/pay.
-    private async Task PayBillEntryAsync(string uid, long entryId, decimal actualAmount)
-    {
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/bill/{entryId}/pay", uid, new { actualAmount });
-        using var resp = await Client.SendAsync(req);
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-    }
-
-    // Marks an income entry as received via POST /api/entries/income/{id}/receive.
-    private async Task ReceiveIncomeEntryAsync(string uid, long entryId, decimal actualAmount)
-    {
-        using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/entries/income/{entryId}/receive", uid, new { actualAmount });
-        using var resp = await Client.SendAsync(req);
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-    }
-
-    // --- Tests ---
+    // --- Listing ---
 
     [Test]
     public async Task Get_ValidYearMonth_ReturnsBillsAndIncomes()
@@ -142,48 +22,49 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
         // Arrange
         const int year = 2025;
         const int month = 1;
-        var uid = Uid("valid");
-        var categories = await GetDefaultCategoriesAsync(uid);
-        await CreateRecurringBillAsync(uid, categories[0].Id, name: "Aluguel", amount: 1500m);
-        await CreateRecurringIncomeAsync(uid, name: "Salario", amount: 5000m);
-        await PostProjectionAsync(uid, year);
+        using var client = CreateAuthenticatedClient();
+        var categories = await GetDefaultCategoriesAsync(client);
+        await CreateBillAsync(client, categories[0].Id, "Aluguel", 1500m);
+        await CreateRecurringIncomeAsync(client, name: "Salario", amount: 5000m);
+        await PostProjectionAsync(client, year);
 
         // Act
-        var (resp, body) = await GetEntriesAsync(uid, year, month);
+        var (resp, body) = await GetEntriesAsync(client, year, month);
 
         // Assert
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(body, Is.Not.Null);
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(body!.Year, Is.EqualTo(year));
             Assert.That(body.Month, Is.EqualTo(month));
             Assert.That(body.Bills, Has.Length.EqualTo(1));
             Assert.That(body.Incomes, Has.Length.EqualTo(1));
-        });
+        }
 
         var bill = body!.Bills[0];
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(bill.Name, Is.EqualTo("Aluguel"));
             Assert.That(bill.PlannedAmount, Is.EqualTo(1500m));
             Assert.That(bill.ActualAmount, Is.Null);
             Assert.That(bill.SplitRatio, Is.EqualTo(1m));
+            Assert.That(bill.Person, Is.Null);
             Assert.That(bill.EffectiveAmount, Is.EqualTo(1500m));
             Assert.That(bill.MyShare, Is.EqualTo(1500m));
             Assert.That(bill.Receivable, Is.EqualTo(0m));
             Assert.That(bill.Paid, Is.False);
-        });
+        }
 
         var income = body.Incomes[0];
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(income.Name, Is.EqualTo("Salario"));
             Assert.That(income.PlannedAmount, Is.EqualTo(5000m));
             Assert.That(income.ActualAmount, Is.Null);
             Assert.That(income.EffectiveAmount, Is.EqualTo(5000m));
             Assert.That(income.Received, Is.False);
-        });
+        }
     }
 
     [Test]
@@ -191,25 +72,21 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
     {
         // Arrange
         const int year = 2025;
-        const int month = 1;
-        var uid = Uid("names");
-        var categories = await GetDefaultCategoriesAsync(uid);
-        // Use first category alphabetically; known name from the seeded defaults.
+        using var client = CreateAuthenticatedClient();
+        var categories = await GetDefaultCategoriesAsync(client);
         var firstCategory = categories[0];
-        var personId = await CreatePersonAsync(uid, name: "Esposa");
-        await CreateSplitBillAsync(uid, firstCategory.Id, personId, name: "Internet", amount: 200m);
-        await PostProjectionAsync(uid, year);
+        var personId = await CreatePersonAsync(client, name: "Esposa");
+        await CreateBillAsync(client, firstCategory.Id, "Internet", 200m, splitRatio: 0.5m, personId: personId);
+        await PostProjectionAsync(client, year);
 
         // Act
-        var (resp, body) = await GetEntriesAsync(uid, year, month);
+        var (resp, body) = await GetEntriesAsync(client, year, 1);
 
         // Assert
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That(body, Is.Not.Null);
         Assert.That(body!.Bills, Has.Length.EqualTo(1));
-
         var bill = body.Bills[0];
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(bill.Name, Is.EqualTo("Internet"));
             Assert.That(bill.Category, Is.EqualTo(firstCategory.Name));
@@ -218,8 +95,78 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
             Assert.That(bill.EffectiveAmount, Is.EqualTo(200m));
             Assert.That(bill.MyShare, Is.EqualTo(100m));
             Assert.That(bill.Receivable, Is.EqualTo(100m));
-        });
+        }
     }
+
+    [Test]
+    public async Task Get_DeactivatedTemplatesAndPerson_StillResolveNames()
+    {
+        // Arrange — soft-deleting moldes must not break the listing of their snapshotted entries
+        const int year = 2025;
+        using var client = CreateAuthenticatedClient();
+        var categories = await GetDefaultCategoriesAsync(client);
+        var personId = await CreatePersonAsync(client, name: "Esposa");
+        var bill = await CreateBillAsync(client, categories[0].Id, "Internet", 200m, splitRatio: 0.5m, personId: personId);
+        var income = await CreateRecurringIncomeAsync(client, name: "Salario", amount: 5000m);
+        await PostProjectionAsync(client, year);
+        await DeleteAsync(client, $"/api/v1/bills/{bill.Id}");
+        await DeleteAsync(client, $"/api/v1/incomes/{income.Id}");
+        await DeleteAsync(client, $"/api/v1/persons/{personId}");
+
+        // Act
+        var (resp, body) = await GetEntriesAsync(client, year, 1);
+
+        // Assert
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(body!.Bills.Select(b => (b.Name, b.Category, b.Person)),
+                Is.EqualTo(new[] { ("Internet", categories[0].Name, (string?)"Esposa") }));
+            Assert.That(body.Incomes.Select(i => i.Name), Is.EqualTo(new[] { "Salario" }));
+        }
+    }
+
+    [Test]
+    public async Task Get_Bills_SortedByCategoryThenName()
+    {
+        // Arrange
+        const int year = 2025;
+        using var client = CreateAuthenticatedClient();
+        var categories = (await GetDefaultCategoriesAsync(client)).OrderBy(c => c.Name).ToArray();
+        await CreateBillAsync(client, categories[1].Id, "Beta", 10m);
+        await CreateBillAsync(client, categories[0].Id, "Zeta", 10m);
+        await CreateBillAsync(client, categories[0].Id, "Alfa", 10m);
+        await PostProjectionAsync(client, year);
+
+        // Act
+        var (_, body) = await GetEntriesAsync(client, year, 1);
+
+        // Assert
+        Assert.That(body!.Bills.Select(b => b.Name), Is.EqualTo(new[] { "Alfa", "Zeta", "Beta" }));
+    }
+
+    [Test]
+    public async Task Get_NoEntries_Returns200WithEmptyListsAndZeroTotals()
+    {
+        // Arrange
+        using var client = CreateAuthenticatedClient();
+
+        // Act
+        var (resp, body) = await GetEntriesAsync(client, 2025, 1);
+
+        // Assert — the listing is an object (lists + totals), so it stays 200 even when empty
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(body!.Bills, Is.Empty);
+            Assert.That(body.Incomes, Is.Empty);
+            Assert.That(body.Totals.BillsPlanned, Is.Zero);
+            Assert.That(body.Totals.IncomesPlanned, Is.Zero);
+            Assert.That(body.Totals.SaldoRealizado, Is.Zero);
+        }
+    }
+
+    // --- Totals ---
 
     [Test]
     public async Task Get_Totals_SplitsReceivableIntoPendingAndReceived()
@@ -227,27 +174,27 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
         // Arrange — two split bills; only one entry is marked as received
         const int year = 2025;
         const int month = 1;
-        var uid = Uid("totals-split");
-        var categories = await GetDefaultCategoriesAsync(uid);
-        var personId = await CreatePersonAsync(uid, name: "Esposa");
-        await CreateSplitBillAsync(uid, categories[0].Id, personId, name: "Internet", amount: 200m); // receivable 100
-        await CreateSplitBillAsync(uid, categories[0].Id, personId, name: "Streaming", amount: 100m); // receivable 50
-        await PostProjectionAsync(uid, year);
+        using var client = CreateAuthenticatedClient();
+        var categories = await GetDefaultCategoriesAsync(client);
+        var personId = await CreatePersonAsync(client, name: "Esposa");
+        await CreateBillAsync(client, categories[0].Id, "Internet", 200m, splitRatio: 0.5m, personId: personId); // receivable 100
+        await CreateBillAsync(client, categories[0].Id, "Streaming", 100m, splitRatio: 0.5m, personId: personId); // receivable 50
+        await PostProjectionAsync(client, year);
 
-        var (_, before) = await GetEntriesAsync(uid, year, month);
+        var (_, before) = await GetEntriesAsync(client, year, month);
         var streamingEntry = before!.Bills.Single(b => b.Name == "Streaming");
-        await MarkReceivedAsync(uid, streamingEntry.Id);
+        await MarkReceivedAsync(client, streamingEntry.Id);
 
         // Act
-        var (resp, body) = await GetEntriesAsync(uid, year, month);
+        var (resp, body) = await GetEntriesAsync(client, year, month);
 
         // Assert — 50 already received (Streaming), 100 still pending (Internet); sum stays 150
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(body!.Totals.Received, Is.EqualTo(50m));
             Assert.That(body.Totals.Receivable, Is.EqualTo(100m));
-        });
+        }
     }
 
     [Test]
@@ -259,32 +206,32 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
         // Presente: split=0.0 (passes through me), planned=500, unpaid, unreceived.
         const int year = 2025;
         const int month = 1;
-        var uid = Uid("three-balances");
-        var categories = await GetDefaultCategoriesAsync(uid);
-        var personId = await CreatePersonAsync(uid, name: "Parceiro");
-        await CreateBillAsync(uid, categories[0].Id, "Aluguel", 1000m, splitRatio: 1.0m, personId: null);
-        await CreateBillAsync(uid, categories[0].Id, "Internet", 800m, splitRatio: 0.5m, personId: personId);
-        await CreateBillAsync(uid, categories[0].Id, "Presente", 500m, splitRatio: 0.0m, personId: personId);
-        await CreateRecurringIncomeAsync(uid, name: "Salario", amount: 5000m);
-        await CreateRecurringIncomeAsync(uid, name: "Freela", amount: 1000m);
-        await PostProjectionAsync(uid, year);
+        using var client = CreateAuthenticatedClient();
+        var categories = await GetDefaultCategoriesAsync(client);
+        var personId = await CreatePersonAsync(client, name: "Parceiro");
+        await CreateBillAsync(client, categories[0].Id, "Aluguel", 1000m);
+        await CreateBillAsync(client, categories[0].Id, "Internet", 800m, splitRatio: 0.5m, personId: personId);
+        await CreateBillAsync(client, categories[0].Id, "Presente", 500m, splitRatio: 0.0m, personId: personId);
+        await CreateRecurringIncomeAsync(client, name: "Salario", amount: 5000m);
+        await CreateRecurringIncomeAsync(client, name: "Freela", amount: 1000m);
+        await PostProjectionAsync(client, year);
 
-        var (_, before) = await GetEntriesAsync(uid, year, month);
+        var (_, before) = await GetEntriesAsync(client, year, month);
         var aluguel = before!.Bills.Single(b => b.Name == "Aluguel");
         var internet = before.Bills.Single(b => b.Name == "Internet");
         var salario = before.Incomes.Single(i => i.Name == "Salario");
 
-        await PayBillEntryAsync(uid, aluguel.Id, actualAmount: 1000m);
-        await PayBillEntryAsync(uid, internet.Id, actualAmount: 800m);
-        await MarkReceivedAsync(uid, internet.Id);
-        await ReceiveIncomeEntryAsync(uid, salario.Id, actualAmount: 5200m);
+        await PayBillEntryAsync(client, aluguel.Id, actualAmount: 1000m);
+        await PayBillEntryAsync(client, internet.Id, actualAmount: 800m);
+        await MarkReceivedAsync(client, internet.Id);
+        await ReceiveIncomeEntryAsync(client, salario.Id, actualAmount: 5200m);
 
         // Act
-        var (resp, body) = await GetEntriesAsync(uid, year, month);
+        var (resp, body) = await GetEntriesAsync(client, year, month);
 
         // Assert
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(body!.Totals.ReceivablePending, Is.EqualTo(500m)); // Presente: 500 x (1-0)
             Assert.That(body.Totals.ReceivableReceived, Is.EqualTo(400m)); // Internet: 800 x (1-0.5)
@@ -299,44 +246,44 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
             Assert.That(
                 body.Totals.SaldoPrevistoOtimista - body.Totals.SaldoPrevistoPiorCaso,
                 Is.EqualTo(body.Totals.ReceivablePending));
-        });
+        }
     }
+
+    // --- Owner isolation ---
 
     [Test]
     public async Task Get_OwnerIsolation_DoesNotSeeOtherUsersEntries()
     {
         // Arrange — user A creates bill + income and generates a projection
         const int year = 2025;
-        var uidA = Uid("isolate-a");
-        var uidB = Uid("isolate-b");
-        var categoriesA = await GetDefaultCategoriesAsync(uidA);
-        await CreateRecurringBillAsync(uidA, categoriesA[0].Id);
-        await CreateRecurringIncomeAsync(uidA);
-        await PostProjectionAsync(uidA, year);
+        using var clientA = CreateAuthenticatedClient();
+        using var clientB = CreateAuthenticatedClient();
+        var categoriesA = await GetDefaultCategoriesAsync(clientA);
+        await CreateBillAsync(clientA, categoriesA[0].Id, "Aluguel", 1000m);
+        await CreateRecurringIncomeAsync(clientA);
+        await PostProjectionAsync(clientA, year);
 
         // Act — user B queries the same year/month (B has no entries)
-        // Ensure B is provisioned (triggers default categories for B)
-        await GetDefaultCategoriesAsync(uidB);
-        var (resp, body) = await GetEntriesAsync(uidB, year, 1);
+        var (resp, body) = await GetEntriesAsync(clientB, year, 1);
 
-        // Assert — B sees empty lists; A's entries are invisible
+        // Assert — B sees empty lists and zero totals; A's entries are invisible
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That(body, Is.Not.Null);
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(body!.Bills, Is.Empty);
             Assert.That(body.Incomes, Is.Empty);
-        });
+            Assert.That(body.Totals.BillsPlanned, Is.Zero);
+            Assert.That(body.Totals.IncomesPlanned, Is.Zero);
+        }
     }
+
+    // --- Auth / validation ---
 
     [Test]
     public async Task Get_WithoutToken_ReturnsUnauthorized()
     {
-        // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/entries?year=2025&month=1");
-
         // Act
-        using var response = await Client.SendAsync(req);
+        using var response = await Client.GetAsync($"{EntriesUri}?year=2025&month=1");
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -344,17 +291,119 @@ public sealed class EntriesEndpointTests : IntegrationTestBase
 
     [TestCase(0)]
     [TestCase(13)]
-    public async Task Get_InvalidMonth_ReturnsBadRequest(int invalidMonth)
+    public async Task Get_InvalidMonth_ReturnsValidationProblem(int invalidMonth)
     {
-        // Arrange — must include a valid token since auth middleware runs before the handler
-        var uid = Uid($"bad-month-{invalidMonth}");
-        using var req = Req(HttpMethod.Get, $"/api/v1/entries?year=2025&month={invalidMonth}", uid);
+        // Arrange
+        using var client = CreateAuthenticatedClient();
 
         // Act
-        using var response = await Client.SendAsync(req);
+        using var response = await client.GetAsync($"{EntriesUri}?year=2025&month={invalidMonth}");
 
         // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        await AssertValidationProblemAsync(response, "month");
+    }
+
+    [TestCase(1999)]
+    [TestCase(2101)]
+    public async Task Get_YearOutOfRange_ReturnsValidationProblem(int invalidYear)
+    {
+        // Arrange
+        using var client = CreateAuthenticatedClient();
+
+        // Act
+        using var response = await client.GetAsync($"{EntriesUri}?year={invalidYear}&month=1");
+
+        // Assert
+        await AssertValidationProblemAsync(response, "year");
+    }
+
+    [Test]
+    public async Task Get_MissingYearAndMonth_ReturnsValidationProblem()
+    {
+        // Arrange
+        using var client = CreateAuthenticatedClient();
+
+        // Act
+        using var response = await client.GetAsync(EntriesUri);
+
+        // Assert
+        await AssertValidationProblemAsync(response, "year", "month");
+    }
+
+    // --- Helpers ---
+
+    // Fetches default categories; triggers user provisioning on first call.
+    private static async Task<CategoryDto[]> GetDefaultCategoriesAsync(HttpClient client)
+    {
+        using var resp = await client.GetAsync("/api/v1/categories");
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var dtos = await resp.Content.ReadFromJsonAsync<CategoryDto[]>();
+        Assert.That(dtos, Has.Length.GreaterThanOrEqualTo(2), "Expected seeded default categories.");
+        return dtos!;
+    }
+
+    private static async Task<long> CreatePersonAsync(HttpClient client, string name = "Parceiro")
+    {
+        using var resp = await client.PostAsJsonAsync("/api/v1/persons", new { name });
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        return (await resp.Content.ReadFromJsonAsync<PersonDto>())!.Id;
+    }
+
+    // Creates a recurring bill with the given split and returns the DTO.
+    private static async Task<BillDto> CreateBillAsync(
+        HttpClient client, long categoryId, string name, decimal amount, decimal splitRatio = 1m, long? personId = null)
+    {
+        using var resp = await client.PostAsJsonAsync("/api/v1/bills",
+            new { name, categoryId, kind = "recurring", defaultAmount = amount, splitRatio, personId });
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        return (await resp.Content.ReadFromJsonAsync<BillDto>())!;
+    }
+
+    private static async Task<IncomeDto> CreateRecurringIncomeAsync(HttpClient client, string name = "Salario", decimal amount = 5000m)
+    {
+        using var resp = await client.PostAsJsonAsync("/api/v1/incomes", new { name, kind = "recurring", defaultAmount = amount });
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        return (await resp.Content.ReadFromJsonAsync<IncomeDto>())!;
+    }
+
+    private static async Task PostProjectionAsync(HttpClient client, int year)
+    {
+        using var resp = await client.PostAsync($"/api/v1/projection/{year}", null);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    private static async Task DeleteAsync(HttpClient client, string uri)
+    {
+        using var resp = await client.DeleteAsync(uri);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+    }
+
+    private static async Task<(HttpResponseMessage Response, MonthEntriesResponse? Body)> GetEntriesAsync(
+        HttpClient client, int year, int month)
+    {
+        var resp = await client.GetAsync($"{EntriesUri}?year={year}&month={month}");
+        if (!resp.IsSuccessStatusCode)
+            return (resp, null);
+        return (resp, await resp.Content.ReadFromJsonAsync<MonthEntriesResponse>());
+    }
+
+    // Marks a bill entry's split as received via POST /api/v1/receivables/{entryId}/mark.
+    private static async Task MarkReceivedAsync(HttpClient client, long entryId)
+    {
+        using var resp = await client.PostAsJsonAsync($"/api/v1/receivables/{entryId}/mark", new { receivedDate = (DateOnly?)null });
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    private static async Task PayBillEntryAsync(HttpClient client, long entryId, decimal actualAmount)
+    {
+        using var resp = await client.PostAsJsonAsync($"{EntriesUri}/bill/{entryId}/pay", new { actualAmount });
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    private static async Task ReceiveIncomeEntryAsync(HttpClient client, long entryId, decimal actualAmount)
+    {
+        using var resp = await client.PostAsJsonAsync($"{EntriesUri}/income/{entryId}/receive", new { actualAmount });
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
     // --- Local DTOs for JSON deserialization ---
