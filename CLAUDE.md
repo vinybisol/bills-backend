@@ -29,8 +29,8 @@ Clean Architecture em 4 projetos (`src/`); detalhes, árvore de pastas e fluxo e
 
 **Contrato HTTP padronizado** (`ResultExtensions.ToHttpResult`):
 - Sucesso: `Result` → 204; `Result<T>` → 200 com o corpo; `Result<IEnumerable<T>>` → 200, ou **204 quando a lista é vazia**. Criação usa `Results.Created` no endpoint.
-- Falha: `ValidationError` → 400 `ValidationProblem` (erros agrupados por código); `NotFound` → 404, `Conflict` → 409 (ex.: editar/pagar lançamento congelado), `Unauthorized` → 401, `Forbidden` → 403 — todos como `ProblemDetails` (`title` = código, `detail` = mensagem).
-- Sem token / token sem uid → 401.
+- Falha: `ValidationError` → 400 `ValidationProblem` (erros agrupados por código); `NotFound` → 404, `Conflict` → 409 (ex.: editar/pagar lançamento congelado), `Unauthorized` → 401, `Forbidden` → 403 — todos como `ProblemDetails` RFC 9457 (`application/problem+json`; `title` = título padrão do status, `detail` = mensagem, extensão `code` = código do erro, `instance` + `traceId`).
+- Sem token / token sem uid → 401. Erros do framework (401, rota 404/405, 415, 400 de binding) e exceções não tratadas (500, só fora de Development) também saem como `ProblemDetails` (ver `docs/api.md` › "Contrato de erro").
 
 ## Agente e skills
 

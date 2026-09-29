@@ -210,14 +210,19 @@ public sealed class PersonAccessLinksServiceTests
         await _repository.DidNotReceiveWithAnyArgs().GetByPersonIdAndHashAsync(default, default!, default);
     }
 
-    [Test]
-    public async Task ValidateTokenAsync_EmptyToken_ReturnsInvalidOperationFailure()
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    public async Task ValidateTokenAsync_BlankToken_ReturnsValidationErrorOnTokenFieldWithoutLookup(string? token)
     {
         // Act
-        var result = await _sut.ValidateTokenAsync(string.Empty, CancellationToken.None);
+        var result = await _sut.ValidateTokenAsync(token, CancellationToken.None);
 
         // Assert
-        Assert.That(result.Error, Is.EqualTo(Error.InvalidOperation));
+        Assert.That(result.Error, Is.InstanceOf<ValidationError>());
+        var errors = ((ValidationError)result.Error).Errors;
+        Assert.That(errors.Select(e => e.Code), Is.EqualTo(new[] { "token" }));
+        await _repository.DidNotReceiveWithAnyArgs().GetByPersonIdAndHashAsync(default, default!, default);
     }
 
     [Test]
@@ -247,7 +252,7 @@ public sealed class PersonAccessLinksServiceTests
     }
 
     [Test]
-    public async Task ValidateTokenAsync_LinkNotFound_ReturnsFailure()
+    public async Task ValidateTokenAsync_LinkNotFound_ReturnsNotFoundFailure()
     {
         // Arrange
         _repository.GetByPersonIdAndHashAsync(PersonId, "HASH", Arg.Any<CancellationToken>())
@@ -256,8 +261,9 @@ public sealed class PersonAccessLinksServiceTests
         // Act
         var result = await _sut.ValidateTokenAsync(EncodeToken(PersonId, "HASH"), CancellationToken.None);
 
-        // Assert
+        // Assert — a real NotFound error (not Error.None, which Result.Failure rejects by throwing)
         Assert.That(result.IsFailure, Is.True);
+        Assert.That(result.Error.Type, Is.EqualTo(ErrorType.NotFound));
         await _repository.Received(1).GetByPersonIdAndHashAsync(PersonId, "HASH", Arg.Any<CancellationToken>());
     }
 

@@ -78,13 +78,14 @@ tests/
 ## Fluxo de uma requisição
 
 ```
-HTTP ──► JwtBearer (Firebase) ──► UserEndpointFilter ──► Endpoint ──► XService ──► IXRepository ──► AppDbContext
+HTTP ──► ExceptionHandler* ──► StatusCodePages ──► JwtBearer (Firebase) ──► UserEndpointFilter ──► Endpoint ──► XService ──► IXRepository ──► AppDbContext
                                       │                                  │
                                       │ provisiona app_user (JIT)        │ Result<T>
                                       │ ICurrentOwner.SetCurrentOwnerId  ▼
                                       └────────────────────────── ResultExtensions.ToHttpResult ──► resposta
 ```
 
+0. **Erros → ProblemDetails** (`Program.cs`): `AddProblemDetails` preenche `instance` (caminho) e `traceId` em todo `ProblemDetails`. `UseExceptionHandler()` (*só fora de Development*; em Development fica a página de exceção do desenvolvedor) transforma exceção não tratada em 500 `ProblemDetails` sem stack trace. `UseStatusCodePages()` (antes da autenticação) dá corpo `ProblemDetails` a 4xx/5xx sem corpo: 401 do `JwtBearer`/`UserEndpointFilter`, 404 de rota, 405, 415 e 400 de binding (JSON malformado, enum desconhecido).
 1. **Autenticação**: `JwtBearer` valida o token do Firebase (issuer/audience do projeto). Todo o grupo `/api/v1` exige autorização, exceto rotas marcadas `AllowAnonymous`.
 2. **`UserEndpointFilter`**: lê o `firebase_uid` das claims, chama `IUserProvisioningService.GetOrCreateAsync` (cria o `app_user` no primeiro acesso) e grava o id interno em `ICurrentOwner`. Sem uid → 401. É o **único** lugar da Api que lê claims.
 3. **Endpoint**: recebe request, serviço e `CancellationToken`; chama o serviço e devolve `result.ToHttpResult()` (ou `Results.Created` na criação).
@@ -102,13 +103,16 @@ HTTP ──► JwtBearer (Firebase) ──► UserEndpointFilter ──► Endpo
 | `Result<T>` sucesso | 200 + corpo |
 | `Result<IEnumerable<T>>` sucesso | 200, ou **204 se vazio** |
 | Criação (no endpoint) | 201 + `Location` |
-| `ValidationError` / `Error.Validation` | 400 `ValidationProblem` (`errors` por campo) |
+| `ValidationError` | 400 `ValidationProblem` (`errors` por campo) |
+| `Error.Validation` (erro simples, sem campo) | 400 `ProblemDetails` (`code` = `Error.Validation`, sem `errors`) |
 | `Error.NotFound` | 404 `ProblemDetails` |
 | `Error.Conflict` (duplicado, lançamento congelado) | 409 `ProblemDetails` |
 | `Error.Unauthorized` / `Error.Forbidden` | 401 / 403 `ProblemDetails` |
 | Outros | 500 `ProblemDetails` |
+| Exceção não tratada (exception handler, fora de Development) | 500 `ProblemDetails` genérico |
+| 4xx/5xx sem corpo do framework (status code pages) | `ProblemDetails` com o status |
 
-`ProblemDetails.title` = código do erro, `detail` = mensagem.
+Todas as respostas de erro são RFC 9457 (`application/problem+json`): `title` = título padrão do status, `detail` = mensagem do erro, extensão `code` = código do erro (`Error.Code`), `instance` = caminho, `traceId` = id de correlação; `ValidationProblem` também tem `errors` por campo (e `code` = `Error.Validation`). Contrato completo em `docs/api.md` › "Contrato de erro".
 
 ## Mapa das features
 

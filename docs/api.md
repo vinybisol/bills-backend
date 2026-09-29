@@ -4,6 +4,24 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
 
 Camadas e fluxo da requisição (filtro → serviço → repositório): ver `docs/arquitetura.md`. Mapeamento padrão `Result` → HTTP: 400 `ValidationProblem`, 404/409 `ProblemDetails`, listas vazias → 204, criação → 201 + `Location`. Exceção: `GET /api/v1/bills/shared` é **anônimo** (ver "Links de acesso").
 
+## Contrato de erro (RFC 9457)
+**Toda** resposta de erro (4xx/5xx) é `Content-Type: application/problem+json` no formato [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) — sejam erros de serviço, do framework ou exceções não tratadas.
+
+| Campo | Conteúdo |
+|---|---|
+| `type` | URI do tipo do problema (default do ASP.NET para o status, ex.: `https://tools.ietf.org/html/rfc9110#section-15.5.5`). |
+| `title` | Resumo legível **do status** (ex.: `Not Found`, `One or more validation errors occurred.`). **Não** é o código do erro. |
+| `status` | Status HTTP. |
+| `detail` | Mensagem da ocorrência (a `Error.Message` do serviço). Ausente em erros gerados pelo framework. |
+| `instance` | Caminho da requisição (ex.: `/api/v1/persons/access-links/42/revoke`). |
+| `traceId` | Id de correlação (W3C `Activity.Id`, ou `HttpContext.TraceIdentifier`) — use para achar a requisição nos logs. |
+| `code` | Código estável do erro para o cliente (ex.: `Error.NotFound`, `Error.Conflict`, `BillEntry.Frozen`, `Error.Validation`). Só em erros vindos dos serviços. |
+| `errors` | Só no 400 de validação (`ValidationProblem`): `{ "<campo>": ["mensagem", ...] }`. |
+
+- Erros do framework também têm corpo `ProblemDetails` (antes vinham **sem corpo**): 401 sem token/token inválido, 404 de rota inexistente, 405 método não suportado, 415 content-type não suportado e 400 de JSON malformado / enum desconhecido no binding.
+- 500 (exceção não tratada) → `ProblemDetails` genérico, **sem** mensagem de exceção nem stack trace (fora de Development; em Development continua a página de exceção do desenvolvedor).
+- ⚠️ **Breaking change para o frontend**: `title` deixou de ser o código do erro — leia o código em `code`.
+
 ## Infra
 - `GET /api/v1/health` → resolve/provisiona o app_user e confirma liveness autenticada.
 
@@ -34,7 +52,7 @@ Camadas e fluxo da requisição (filtro → serviço → repositório): ver `doc
 Link compartilhável que dá a uma pessoa acesso de leitura ao que ela deve. Só o **hash SHA-256** do segredo é persistido (`person_access_link.token_hash`); o token em claro só aparece na resposta da criação.
 - `POST /api/v1/persons/access-links` {id: personId} → 200 {id, token}. `token` = Base64Url de `{personId, token}`. 400 se `id ≤ 0`; 404 se a pessoa não existe/inativa/de outro owner; 409 se a pessoa já tem link.
 - `PUT /api/v1/persons/access-links/{id}/revoke` → 204; desativa o link e grava `revoke_at`. 404 se não existe/de outro owner.
-- `GET /api/v1/bills/shared?token=` — **anônimo** (sem JWT). 400 (texto puro) se `token` ausente; senão 200 com `true` (token válido) ou `false` (inválido/malformado/inexistente). Por enquanto só valida o token; ainda não devolve as contas.
+- `GET /api/v1/bills/shared?token=` — **anônimo** (sem JWT). 400 `ValidationProblem` com `errors.token` se `token` ausente/vazio/só espaços (validado no `PersonAccessLinksService`; antes era texto puro); senão 200 com `true` (token válido) ou `false` (inválido/malformado/inexistente). Por enquanto só valida o token; ainda não devolve as contas.
 
 ## Projeção
 - `POST /api/v1/projection/{year}` → gera 12 entries por molde **recorrente ativo** (bills e incomes; `one_off` e moldes desativados são ignorados). Cada entry leva **snapshot** de `plannedAmount` (e, em bills, `splitRatioSnapshot`/`personId`) — nunca referência ao molde. Idempotente: meses que já têm entry (por molde + ano + mês) são pulados; entries existentes (inclusive pagas) nunca são alteradas. Contrato padronizado (Result → HTTP):
@@ -73,4 +91,4 @@ Contrato padronizado (Result → HTTP). "A receber" vive dentro do `bill_entry` 
 - `GET /api/v1/bills/{billId}/history?fromYear=&fromMonth=&toYear=&toMonth=` → 200 header do molde {billId,name,category,splitRatio,person} + summary(avgEffective/minEffective/maxEffective/totalPaidMyShare) + items (com variation vs anterior). Resolve também moldes desativados. 404 ProblemDetails se não existe/de outro owner.
 
 ## Códigos comuns
-- 401 sem/invalid token · 404 recurso de outro owner · 400 validação · 409 imutabilidade/duplicado.
+- 401 sem/invalid token · 404 recurso de outro owner · 400 validação · 409 imutabilidade/duplicado · 500 erro inesperado — todos `application/problem+json` (ver "Contrato de erro").

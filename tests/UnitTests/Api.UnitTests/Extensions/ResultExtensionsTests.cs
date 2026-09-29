@@ -28,8 +28,12 @@ public sealed class ResultExtensionsTests
         {
             Assert.That(problem.StatusCode, Is.EqualTo(expectedStatus));
             Assert.That(problem.ProblemDetails.Status, Is.EqualTo(expectedStatus));
-            Assert.That(problem.ProblemDetails.Title, Is.EqualTo(error.Code));
+            Assert.That(problem.ProblemDetails.Title, Is.Not.Null.And.Not.Empty, "Default title for the status");
+            Assert.That(problem.ProblemDetails.Title, Is.Not.EqualTo(error.Code), "Code must not leak into title");
+            Assert.That(problem.ProblemDetails.Type, Is.Not.Null.And.Not.Empty, "Default RFC type URI for the status");
             Assert.That(problem.ProblemDetails.Detail, Is.EqualTo(error.Message));
+            Assert.That(problem.ProblemDetails.Extensions, Does.ContainKey(ResultExtensions.CodeExtension)
+                .WithValue(error.Code));
         }
     }
 
@@ -93,6 +97,27 @@ public sealed class ResultExtensionsTests
             ["Name"] = ["Nome obrigatório."],
             ["Amount"] = ["Valor deve ser positivo."],
         }));
+    }
+
+    [Test]
+    public void ToHttpResult_ValidationError_CarriesCodeExtensionAndMessageAsDetail()
+    {
+        // Arrange
+        var validation = new ValidationError([new Error("Name", "Nome obrigatório.", ErrorType.Validation)]);
+
+        // Act
+        var httpResult = Result.Failure(validation).ToHttpResult();
+
+        // Assert
+        var details = (httpResult as ProblemHttpResult)?.ProblemDetails as HttpValidationProblemDetails;
+        Assert.That(details, Is.Not.Null, "Expected a validation problem payload");
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(details!.Status, Is.EqualTo(StatusCodes.Status400BadRequest));
+            Assert.That(details.Title, Is.Not.EqualTo(validation.Code));
+            Assert.That(details.Detail, Is.EqualTo(validation.Message));
+            Assert.That(details.Extensions, Does.ContainKey(ResultExtensions.CodeExtension).WithValue("Error.Validation"));
+        }
     }
 
     [Test]
