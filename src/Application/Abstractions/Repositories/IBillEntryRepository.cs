@@ -26,4 +26,13 @@ public interface IBillEntryRepository
     /// Names resolve even when the template, category or person have since been deactivated.
     /// </summary>
     Task<IReadOnlyList<BillEntryWithNamesDto>> GetMonthWithNamesAsync(int year, int month, long ownerId, CancellationToken cancellationToken);
+
+    /// <summary>Returns the owner's tracked entries among <paramref name="ids"/>; unknown or foreign ids are simply absent.</summary>
+    Task<IReadOnlyList<BillEntry>> GetByIdsAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the owner's receivable entries (split ratio &lt; 1) of a person, read-only, with their
+    /// bill, category and person names (resolved even when since deactivated).
+    /// </summary>
+    Task<IReadOnlyList<BillEntryWithNamesDto>> GetReceivablesByPersonWithNamesAsync(long personId, long ownerId, CancellationToken cancellationToken);
 }

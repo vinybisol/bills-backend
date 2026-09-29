@@ -7,6 +7,22 @@ namespace Domain.UnitTests.Calculations;
 [TestFixture]
 public sealed class EntryAggregationsTests
 {
+    // --- IsReceivable ---
+
+    [TestCase(0.5, 5L, true)]
+    [TestCase(0, 5L, true)]
+    [TestCase(1, null, false)]
+    [TestCase(0.5, null, false)]
+    [TestCase(1, 5L, false)]
+    public void IsReceivable_SplitAndPerson_ReturnsExpected(decimal split, long? personId, bool expected)
+    {
+        // Arrange
+        var entry = BillEntry.Create(1L, 9L, 2026, 7, 100m, split, personId, Entries.PaidAt);
+
+        // Act / Assert
+        Assert.That(EntryAggregations.IsReceivable(entry), Is.EqualTo(expected));
+    }
+
     // --- EffectiveMyShare / EffectiveReceivable ---
 
     [TestCase(1, 100, 0)]

@@ -1,13 +1,14 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using static Api.IntegrationTests.TestSupport.ProblemAssertions;
 
 namespace Api.IntegrationTests.Endpoints;
 
 /// <summary>
-/// Integration tests for <c>GET /api/receivables/history</c>, covering item/total scoping to
-/// owner and person, period filtering, status filtering, unknown/other-owner person handling,
-/// and authentication.
+/// Integration tests for <c>GET /api/v1/receivables/history</c>, covering item/total scoping to
+/// owner and person, period filtering, status filtering, names of deactivated templates,
+/// validation, unknown/other-owner/deactivated person handling, and authentication.
 /// </summary>
 [TestFixture]
 public sealed class ReceivablesHistoryEndpointTests : IntegrationTestBase
@@ -66,6 +67,18 @@ public sealed class ReceivablesHistoryEndpointTests : IntegrationTestBase
         return (await resp.Content.ReadFromJsonAsync<BillEntryResponse>())!.Id;
     }
 
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req)
+    {
+        using (req)
+            return await Client.SendAsync(req);
+    }
+
+    private async Task DeleteAsync(string uid, string url)
+    {
+        using var resp = await SendAsync(Req(HttpMethod.Delete, url, uid));
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+    }
+
     private async Task MarkAsync(string uid, long entryId)
     {
         using var req = ReqWithBody(HttpMethod.Post, $"/api/v1/receivables/{entryId}/mark", uid, new { });
@@ -122,22 +135,67 @@ public sealed class ReceivablesHistoryEndpointTests : IntegrationTestBase
     [Test]
     public async Task Get_ExcludesOtherOwnersEntries()
     {
-        // Arrange
+        // Arrange — both owners have receivables in the same month
         var uidA = Uid("owner-a");
         var uidB = Uid("owner-b");
         var catIdA = await GetFirstCategoryIdAsync(uidA);
         var personA = await CreatePersonAsync(uidA, "Esposa");
         var billA = await CreateBillAsync(uidA, catIdA, "Aluguel", 1000m, 0.5m, personA);
-        await CreateBillEntryAsync(uidA, billA, 2026, 3, 1000m);
+        var entryA = await CreateBillEntryAsync(uidA, billA, 2026, 3, 1000m);
 
-        await GetFirstCategoryIdAsync(uidB); // provision B
+        var catIdB = await GetFirstCategoryIdAsync(uidB);
+        var personB = await CreatePersonAsync(uidB, "Esposa");
+        var billB = await CreateBillAsync(uidB, catIdB, "Aluguel", 700m, 0.5m, personB);
+        await CreateBillEntryAsync(uidB, billB, 2026, 3, 700m);
 
         // Act
         var (status, body) = await GetHistoryAsync(uidA, personA);
 
         // Assert
         Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That(body!.Items, Has.Length.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.Items.Select(i => i.EntryId), Is.EqualTo(new[] { entryA }));
+            Assert.That(body.Totals.TotalDevido, Is.EqualTo(500m));
+        });
+    }
+
+    [Test]
+    public async Task Get_DeactivatedBill_StillShowsItsName()
+    {
+        // Arrange
+        var uid = Uid("deactivated-bill");
+        var catId = await GetFirstCategoryIdAsync(uid);
+        var person = await CreatePersonAsync(uid, "Esposa");
+        var bill = await CreateBillAsync(uid, catId, "Academia", 120m, 0.5m, person);
+        await CreateBillEntryAsync(uid, bill, 2026, 4, 120m);
+        await DeleteAsync(uid, $"/api/v1/bills/{bill}");
+
+        // Act
+        var (status, body) = await GetHistoryAsync(uid, person);
+
+        // Assert
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(body!.Items.Select(i => (i.Bill, i.Receivable)), Is.EqualTo(new[] { ("Academia", 60m) }));
+    }
+
+    [Test]
+    public async Task Get_PersonWithoutEntries_ReturnsEmptyItemsAndZeroTotals()
+    {
+        // Arrange
+        var uid = Uid("no-entries");
+        var person = await CreatePersonAsync(uid, "Esposa");
+
+        // Act
+        var (status, body) = await GetHistoryAsync(uid, person);
+
+        // Assert
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.Items, Is.Empty);
+            Assert.That(body.Totals, Is.EqualTo(new ReceivablesHistoryTotalsResponse(0m, 0m, 0m)));
+        });
     }
 
     // --- Period filtering ---
@@ -216,7 +274,20 @@ public sealed class ReceivablesHistoryEndpointTests : IntegrationTestBase
         });
     }
 
-    // --- Unknown / other-owner person ---
+    // --- Validation / unknown / other-owner person ---
+
+    [Test]
+    public async Task Get_WithoutPersonId_ReturnsValidationProblem()
+    {
+        // Arrange
+        var uid = Uid("missing-person-id");
+
+        // Act
+        using var resp = await SendAsync(Req(HttpMethod.Get, "/api/v1/receivables/history", uid));
+
+        // Assert
+        await AssertValidationProblemAsync(resp, "personId");
+    }
 
     [Test]
     public async Task Get_UnknownPersonId_ReturnsNotFound()
@@ -225,10 +296,25 @@ public sealed class ReceivablesHistoryEndpointTests : IntegrationTestBase
         var uid = Uid("unknown-person");
 
         // Act
-        var (status, _) = await GetHistoryAsync(uid, personId: 999_999_999L);
+        using var resp = await SendAsync(Req(HttpMethod.Get, "/api/v1/receivables/history?personId=999999999", uid));
 
         // Assert
-        Assert.That(status, Is.EqualTo(HttpStatusCode.NotFound));
+        await AssertProblemAsync(resp, HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task Get_DeactivatedPerson_ReturnsNotFound()
+    {
+        // Arrange
+        var uid = Uid("deactivated-person");
+        var person = await CreatePersonAsync(uid, "Esposa");
+        await DeleteAsync(uid, $"/api/v1/persons/{person}");
+
+        // Act
+        using var resp = await SendAsync(Req(HttpMethod.Get, $"/api/v1/receivables/history?personId={person}", uid));
+
+        // Assert
+        await AssertProblemAsync(resp, HttpStatusCode.NotFound);
     }
 
     [Test]
@@ -241,10 +327,10 @@ public sealed class ReceivablesHistoryEndpointTests : IntegrationTestBase
         await GetFirstCategoryIdAsync(uidB); // provision B
 
         // Act — B tries to view A's person history
-        var (status, _) = await GetHistoryAsync(uidB, personA);
+        using var resp = await SendAsync(Req(HttpMethod.Get, $"/api/v1/receivables/history?personId={personA}", uidB));
 
         // Assert
-        Assert.That(status, Is.EqualTo(HttpStatusCode.NotFound));
+        await AssertProblemAsync(resp, HttpStatusCode.NotFound);
     }
 
     // --- Auth ---

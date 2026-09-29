@@ -1,13 +1,15 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using static Api.IntegrationTests.TestSupport.ProblemAssertions;
 
 namespace Api.IntegrationTests.Endpoints;
 
 /// <summary>
-/// Integration tests for the receivables month panel (<c>GET /api/receivables/month</c>) and the
-/// mark/unmark/mark-batch endpoints, covering per-person grouping, split exclusion, idempotency,
-/// the Paid/Received independence invariant, owner isolation, and authentication.
+/// Integration tests for the receivables month panel (<c>GET /api/v1/receivables/month</c>) and the
+/// mark/unmark/mark-batch endpoints, covering per-person grouping, split exclusion, names of
+/// deactivated templates/people, validation, idempotency, the Paid/Received independence invariant,
+/// all-or-nothing batches, owner isolation, and authentication (standardized error contract).
 /// </summary>
 [TestFixture]
 public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
@@ -72,6 +74,33 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
         using var resp = await Client.SendAsync(req);
         var body = resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<ReceivablesMonthResponse>() : null;
         return (resp.StatusCode, body);
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req)
+    {
+        using (req)
+            return await Client.SendAsync(req);
+    }
+
+    private Task<HttpResponseMessage> SendMarkAsync(string uid, long entryId) =>
+        SendAsync(ReqWithBody(HttpMethod.Post, $"/api/v1/receivables/{entryId}/mark", uid, new { }));
+
+    private Task<HttpResponseMessage> SendMarkBatchAsync(string uid, object body) =>
+        SendAsync(ReqWithBody(HttpMethod.Post, "/api/v1/receivables/mark-batch", uid, body));
+
+    private async Task DeleteAsync(string uid, string url)
+    {
+        using var resp = await SendAsync(Req(HttpMethod.Delete, url, uid));
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+    }
+
+    // Reads the entry through the month listing, which covers non-receivable entries too.
+    private async Task<bool> IsEntryReceivedAsync(string uid, long entryId, int year, int month)
+    {
+        using var resp = await SendAsync(Req(HttpMethod.Get, $"/api/v1/entries?year={year}&month={month}", uid));
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var body = await resp.Content.ReadFromJsonAsync<MonthEntriesResponse>();
+        return body!.Bills.Single(b => b.Id == entryId).Received;
     }
 
     private async Task<(HttpStatusCode Status, EntryResponse? Body)> MarkAsync(string uid, long entryId, DateOnly? receivedDate = null)
@@ -177,7 +206,50 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
         {
             Assert.That(bodyA!.ByPerson, Has.Length.EqualTo(1));
             Assert.That(bodyB!.ByPerson, Is.Empty);
+            Assert.That(bodyB.TotalPendenteGeral, Is.Zero);
         });
+    }
+
+    [Test]
+    public async Task GetPanel_DeactivatedBillAndPerson_StillShowsTheirNames()
+    {
+        // Arrange — names must resolve after soft delete, without leaking other owners' data
+        var uid = Uid("deactivated-names");
+        var catId = await GetFirstCategoryIdAsync(uid);
+        var person = await CreatePersonAsync(uid, "Irmão");
+        var bill = await CreateBillAsync(uid, catId, "Internet", 200m, 0.5m, person);
+        var entryId = await CreateBillEntryAsync(uid, bill, 2026, 10, 200m);
+        await DeleteAsync(uid, $"/api/v1/bills/{bill}");
+        await DeleteAsync(uid, $"/api/v1/persons/{person}");
+
+        // Act
+        var (status, body) = await GetPanelAsync(uid, 2026, 10);
+
+        // Assert
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.ByPerson, Has.Length.EqualTo(1));
+            Assert.That((body.ByPerson[0].PersonId, body.ByPerson[0].Name), Is.EqualTo((person, "Irmão")));
+            Assert.That(body.ByPerson[0].Items, Is.EqualTo(new[] { new ReceivableItemResponse(entryId, "Internet", 100m, false) }));
+        });
+    }
+
+    [TestCase("month=7", "year")]
+    [TestCase("year=1999&month=7", "year")]
+    [TestCase("year=2026", "month")]
+    [TestCase("year=2026&month=13", "month")]
+    [TestCase("year=2026&month=0", "month")]
+    public async Task GetPanel_InvalidPeriod_ReturnsValidationProblem(string query, string expectedField)
+    {
+        // Arrange
+        var uid = NewFirebaseUid();
+
+        // Act
+        using var resp = await SendAsync(Req(HttpMethod.Get, $"/api/v1/receivables/month?{query}", uid));
+
+        // Assert
+        await AssertValidationProblemAsync(resp, expectedField);
     }
 
     // --- Mark individual ---
@@ -205,7 +277,7 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
     }
 
     [Test]
-    public async Task Mark_FullSplitEntry_ReturnsBadRequest()
+    public async Task Mark_FullSplitEntry_ReturnsValidationProblemAndKeepsEntry()
     {
         // Arrange — split == 1.0 is not a receivable
         var uid = Uid("mark-full-split");
@@ -214,10 +286,24 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
         var entryId = await CreateBillEntryAsync(uid, bill, 2026, 7, 50m);
 
         // Act
-        var (status, _) = await MarkAsync(uid, entryId);
+        using var resp = await SendMarkAsync(uid, entryId);
 
         // Assert
-        Assert.That(status, Is.EqualTo(HttpStatusCode.BadRequest));
+        await AssertValidationProblemAsync(resp, "entryId");
+        Assert.That(await IsEntryReceivedAsync(uid, entryId, 2026, 7), Is.False);
+    }
+
+    [Test]
+    public async Task Mark_NonexistentEntry_ReturnsNotFound()
+    {
+        // Arrange
+        var uid = Uid("mark-missing");
+
+        // Act
+        using var resp = await SendMarkAsync(uid, 999_999_999L);
+
+        // Assert
+        await AssertProblemAsync(resp, HttpStatusCode.NotFound);
     }
 
     [Test]
@@ -234,10 +320,35 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
         await GetFirstCategoryIdAsync(uidB); // provision B
 
         // Act
-        var (status, _) = await MarkAsync(uidB, entryId);
+        using var resp = await SendMarkAsync(uidB, entryId);
 
         // Assert
-        Assert.That(status, Is.EqualTo(HttpStatusCode.NotFound));
+        await AssertProblemAsync(resp, HttpStatusCode.NotFound);
+        var (_, panel) = await GetPanelAsync(uidA, 2026, 7);
+        Assert.That(panel!.ByPerson[0].Items[0].Received, Is.False);
+    }
+
+    [Test]
+    public async Task Mark_WithoutBody_MarksReceivedNow()
+    {
+        // Arrange
+        var uid = Uid("mark-no-body");
+        var catId = await GetFirstCategoryIdAsync(uid);
+        var person = await CreatePersonAsync(uid, "Esposa");
+        var bill = await CreateBillAsync(uid, catId, "Aluguel", 1000m, 0.5m, person);
+        var entryId = await CreateBillEntryAsync(uid, bill, 2026, 7, 1000m);
+
+        // Act
+        using var resp = await SendAsync(Req(HttpMethod.Post, $"/api/v1/receivables/{entryId}/mark", uid));
+
+        // Assert
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var body = await resp.Content.ReadFromJsonAsync<EntryResponse>();
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.Received, Is.True);
+            Assert.That(body.ReceivedDate, Is.Not.Null);
+        });
     }
 
     [Test]
@@ -282,6 +393,41 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
             Assert.That(body!.Received, Is.False);
             Assert.That(body.ReceivedDate, Is.Null);
         });
+    }
+
+    [Test]
+    public async Task Unmark_NonexistentEntry_ReturnsNotFound()
+    {
+        // Arrange
+        var uid = Uid("unmark-missing");
+
+        // Act
+        using var resp = await SendAsync(Req(HttpMethod.Post, "/api/v1/receivables/999999999/unmark", uid));
+
+        // Assert
+        await AssertProblemAsync(resp, HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task Unmark_EntryBelongingToAnotherOwner_ReturnsNotFoundAndKeepsReceived()
+    {
+        // Arrange
+        var uidA = Uid("owner-a-unmark");
+        var uidB = Uid("owner-b-unmark");
+        var catId = await GetFirstCategoryIdAsync(uidA);
+        var person = await CreatePersonAsync(uidA, "Esposa");
+        var bill = await CreateBillAsync(uidA, catId, "Aluguel", 1000m, 0.5m, person);
+        var entryId = await CreateBillEntryAsync(uidA, bill, 2026, 7, 1000m);
+        await MarkAsync(uidA, entryId);
+        await GetFirstCategoryIdAsync(uidB); // provision B
+
+        // Act
+        using var resp = await SendAsync(Req(HttpMethod.Post, $"/api/v1/receivables/{entryId}/unmark", uidB));
+
+        // Assert
+        await AssertProblemAsync(resp, HttpStatusCode.NotFound);
+        var (_, panel) = await GetPanelAsync(uidA, 2026, 7);
+        Assert.That(panel!.ByPerson[0].Items[0].Received, Is.True);
     }
 
     // --- Paid/Received independence ---
@@ -385,12 +531,66 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
         var entryB = await CreateBillEntryAsync(uidB, billB, 2026, 7, 200m);
 
         // Act — A tries to batch-mark two of its own entries plus B's entry
-        var (status, _) = await MarkBatchAsync(uidA, [entryA1, entryA2, entryB]);
+        using var resp = await SendMarkBatchAsync(uidA, new { entryIds = new[] { entryA1, entryA2, entryB } });
 
         // Assert
-        Assert.That(status, Is.EqualTo(HttpStatusCode.BadRequest));
+        await AssertProblemAsync(resp, HttpStatusCode.NotFound);
         var (_, panel) = await GetPanelAsync(uidA, 2026, 7);
         Assert.That(panel!.ByPerson[0].Items.Any(i => i.Received), Is.False, "Nothing should have been marked.");
+        var (_, panelB) = await GetPanelAsync(uidB, 2026, 7);
+        Assert.That(panelB!.ByPerson[0].Items.Any(i => i.Received), Is.False, "B's entry must not be touched.");
+    }
+
+    [Test]
+    public async Task MarkBatch_AnyNonexistentId_ReturnsNotFoundAndMarksNothing()
+    {
+        // Arrange
+        var uid = Uid("batch-missing");
+        var catId = await GetFirstCategoryIdAsync(uid);
+        var person = await CreatePersonAsync(uid, "Esposa");
+        var bill = await CreateBillAsync(uid, catId, "Aluguel", 1000m, 0.5m, person);
+        var entry = await CreateBillEntryAsync(uid, bill, 2026, 7, 1000m);
+
+        // Act
+        using var resp = await SendMarkBatchAsync(uid, new { entryIds = new[] { entry, 999_999_999L } });
+
+        // Assert
+        await AssertProblemAsync(resp, HttpStatusCode.NotFound);
+        var (_, panel) = await GetPanelAsync(uid, 2026, 7);
+        Assert.That(panel!.ByPerson[0].Items[0].Received, Is.False, "Nothing should have been marked.");
+    }
+
+    [Test]
+    public async Task MarkBatch_DuplicateIds_MarksOnceAndCountsDistinct()
+    {
+        // Arrange
+        var uid = Uid("batch-duplicates");
+        var catId = await GetFirstCategoryIdAsync(uid);
+        var person = await CreatePersonAsync(uid, "Esposa");
+        var bill = await CreateBillAsync(uid, catId, "Aluguel", 1000m, 0.5m, person);
+        var entry = await CreateBillEntryAsync(uid, bill, 2026, 7, 1000m);
+
+        // Act
+        var (status, body) = await MarkBatchAsync(uid, [entry, entry], new DateOnly(2026, 7, 20));
+
+        // Assert
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(body!.Marked, Is.EqualTo(1));
+    }
+
+    [TestCase("empty")]
+    [TestCase("missing")]
+    public async Task MarkBatch_NoIds_ReturnsValidationProblem(string variant)
+    {
+        // Arrange
+        var uid = NewFirebaseUid();
+        object body = variant == "empty" ? new { entryIds = Array.Empty<long>() } : new { receivedDate = "2026-07-01" };
+
+        // Act
+        using var resp = await SendMarkBatchAsync(uid, body);
+
+        // Assert
+        await AssertValidationProblemAsync(resp, "entryIds");
     }
 
     [Test]
@@ -406,35 +606,27 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
         var fullyMineEntry = await CreateBillEntryAsync(uid, fullyMineBill, 2026, 7, 50m);
 
         // Act
-        var (status, _) = await MarkBatchAsync(uid, [sharedEntry, fullyMineEntry]);
+        using var resp = await SendMarkBatchAsync(uid, new { entryIds = new[] { sharedEntry, fullyMineEntry } });
 
         // Assert
-        Assert.That(status, Is.EqualTo(HttpStatusCode.BadRequest));
+        await AssertValidationProblemAsync(resp, "entryIds");
         var (_, panel) = await GetPanelAsync(uid, 2026, 7);
         Assert.That(panel!.ByPerson[0].Items.Any(i => i.Received), Is.False, "Nothing should have been marked.");
+        Assert.That(await IsEntryReceivedAsync(uid, fullyMineEntry, 2026, 7), Is.False);
     }
 
     // --- Auth ---
 
-    [Test]
-    public async Task GetPanel_WithoutToken_ReturnsUnauthorized()
+    [TestCase("GET", "/api/v1/receivables/month?year=2026&month=7")]
+    [TestCase("POST", "/api/v1/receivables/1/mark")]
+    [TestCase("POST", "/api/v1/receivables/1/unmark")]
+    [TestCase("POST", "/api/v1/receivables/mark-batch")]
+    public async Task Endpoints_WithoutToken_ReturnUnauthorized(string method, string url)
     {
         // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/receivables/month?year=2026&month=7");
-
-        // Act
-        using var resp = await Client.SendAsync(req);
-
-        // Assert
-        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
-    }
-
-    [Test]
-    public async Task Mark_WithoutToken_ReturnsUnauthorized()
-    {
-        // Arrange
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/v1/receivables/1/mark");
-        req.Content = JsonContent.Create(new { });
+        using var req = new HttpRequestMessage(new HttpMethod(method), url);
+        if (method == "POST")
+            req.Content = JsonContent.Create(new { entryIds = new[] { 1L } });
 
         // Act
         using var resp = await Client.SendAsync(req);
@@ -465,4 +657,8 @@ public sealed class ReceivablesMonthEndpointTests : IntegrationTestBase
         int Year, int Month, PersonReceivablesResponse[] ByPerson, decimal TotalPendenteGeral);
 
     private sealed record MarkBatchResponse(int Marked);
+
+    private sealed record MonthBillEntryResponse(long Id, bool Received);
+
+    private sealed record MonthEntriesResponse(MonthBillEntryResponse[] Bills);
 }

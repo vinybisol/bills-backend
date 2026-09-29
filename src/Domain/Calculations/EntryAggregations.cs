@@ -22,6 +22,13 @@ public readonly record struct ReceivableTotals(decimal Total, decimal Received, 
 /// <summary>Pure aggregations over collections of bill and income entries.</summary>
 public static class EntryAggregations
 {
+    /// <summary>
+    /// Whether the entry is a receivable ("a receber"): part of it is owed by another person
+    /// (split ratio below 1 and a person set).
+    /// </summary>
+    public static bool IsReceivable(BillEntry e) =>
+        e.SplitRatioSnapshot < 1 && e.PersonId.HasValue;
+
     /// <summary>The owner's share of an entry's effective amount.</summary>
     public static decimal EffectiveMyShare(BillEntry e) =>
         EntryCalculations.MyShare(EntryCalculations.EffectiveAmount(e.PlannedAmount, e.ActualAmount), e.SplitRatioSnapshot);

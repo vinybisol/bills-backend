@@ -20,6 +20,7 @@ public static class RegisterApplications
         services.AddScoped<IPersonService, PersonService>();
         services.AddScoped<IPersonAccessLinksService, PersonAccessLinksService>();
         services.AddScoped<IProjectionService, ProjectionService>();
+        services.AddScoped<IReceivablesService, ReceivablesService>();
         services.AddScoped<IUserProvisioningService, UserProvisioningService>();
     }
 }

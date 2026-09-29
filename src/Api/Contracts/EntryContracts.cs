@@ -33,14 +33,3 @@ internal sealed record CreateBillEntryRequest(long BillId, int Year, int Month, 
 /// <param name="Month">The reference month (1–12).</param>
 /// <param name="PlannedAmount">The planned amount (≥ 0); falls back to the template's DefaultAmount when null.</param>
 internal sealed record CreateIncomeEntryRequest(long IncomeId, int Year, int Month, decimal? PlannedAmount);
-
-/// <summary>
-/// The bill entry payload returned by <c>/api/v1/receivables/{entryId}/mark|unmark</c>. Same shape as
-/// <see cref="Application.DTOs.Services.BillEntryDto"/>; kept until the receivables endpoints are migrated.
-/// </summary>
-internal sealed record BillEntryCreatedDto(
-    long Id, long BillId, int RefYear, int RefMonth,
-    decimal PlannedAmount, decimal? ActualAmount,
-    decimal SplitRatioSnapshot, long? PersonId,
-    bool Paid, DateTimeOffset? PaidDate,
-    bool Received, DateTimeOffset? ReceivedDate);

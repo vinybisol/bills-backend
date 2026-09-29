@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Application.Abstractions.Repositories;
 using Application.DTOs.Services;
 using Data.Contexts;
@@ -42,11 +43,23 @@ internal sealed class BillEntryRepository(AppDbContext db) : IBillEntryRepositor
     // IgnoreQueryFilters + explicit owner checks: entries snapshot a template/category/person that
     // may have been deactivated since, and the listing must still show their names. IgnoreQueryFilters
     // in a subquery disables the global filters for the WHOLE query, so the root must also filter by owner.
-    public async Task<IReadOnlyList<BillEntryWithNamesDto>> GetMonthWithNamesAsync(int year, int month, long ownerId, CancellationToken ct)
+    public Task<IReadOnlyList<BillEntryWithNamesDto>> GetMonthWithNamesAsync(int year, int month, long ownerId, CancellationToken ct) =>
+        GetWithNamesAsync(e => e.RefYear == year && e.RefMonth == month, ownerId, ct);
+
+    public async Task<IReadOnlyList<BillEntry>> GetByIdsAsync(IReadOnlyCollection<long> ids, CancellationToken ct) => await _entity
+        .Where(e => ids.Contains(e.Id))
+        .ToListAsync(ct);
+
+    public Task<IReadOnlyList<BillEntryWithNamesDto>> GetReceivablesByPersonWithNamesAsync(long personId, long ownerId, CancellationToken ct) =>
+        GetWithNamesAsync(e => e.PersonId == personId && e.SplitRatioSnapshot < 1, ownerId, ct);
+
+    private async Task<IReadOnlyList<BillEntryWithNamesDto>> GetWithNamesAsync(
+        Expression<Func<BillEntry, bool>> filter, long ownerId, CancellationToken ct)
     {
         var rows = await _entity
             .AsNoTracking()
-            .Where(e => e.OwnerId == ownerId && e.RefYear == year && e.RefMonth == month)
+            .Where(e => e.OwnerId == ownerId)
+            .Where(filter)
             .Select(e => new
             {
                 Entry = e,

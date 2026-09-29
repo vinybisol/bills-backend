@@ -50,10 +50,12 @@ Contrato padronizado (Result → HTTP). Todas as rotas: 401 sem token válido; l
 - `GET /api/v1/dashboard/year?year=` → months[12] + byCategory + totals.
 
 ## A receber
-- `GET /api/v1/receivables/month?year=&month=` → byPerson (totalDevido/jaRecebido/pendente + items) + totalPendenteGeral.
-- `POST /api/v1/receivables/{entryId}/mark` {receivedDate?} / `/unmark`.
-- `POST /api/v1/receivables/mark-batch` {entryIds,receivedDate?} → {marked}.
-- `GET /api/v1/receivables/history?personId=&fromYear=&fromMonth=&toYear=&toMonth=&status=` → totals + items.
+Contrato padronizado (Result → HTTP). "A receber" vive dentro do `bill_entry` (`personId`, `received`, `receivedDate`); só lançamentos com `splitRatioSnapshot < 1` (e `personId`) são recebíveis. `received` (a pessoa me pagou de volta) é independente de `paid`: nenhuma rota abaixo altera `paid`/`paidDate`, e lançamento pago **não** bloqueia marcar/desmarcar. Todas as rotas: 401 sem token válido; lançamento/pessoa inexistente ou de outro owner → 404 ProblemDetails; validação → 400 ValidationProblem com `errors` por campo.
+- `GET /api/v1/receivables/month?year=&month=` → **200 sempre** (objeto; sem recebíveis: `byPerson: []`, `totalPendenteGeral: 0`) com {year, month, byPerson[{personId, name, totalDevido, jaRecebido, pendente, items[{entryId, bill, receivable, received}]}], totalPendenteGeral}. Pessoas ordenadas por nome, itens por id; nomes de molde/pessoa resolvidos mesmo se desativados. 400 `year` (ausente ou fora de 2000–2100) / `month` (ausente ou fora de 1–12).
+- `POST /api/v1/receivables/{entryId}/mark` {receivedDate?} (corpo opcional) → 200 com o DTO do bill entry {id, billId, refYear, refMonth, plannedAmount, actualAmount, splitRatioSnapshot, personId, paid, paidDate, received, receivedDate}. `receivedDate` omitido = agora (UTC), informado = meia-noite UTC do dia. Idempotente (remarcar reaplica a data). 400 `errors.entryId` se o lançamento não é recebível (split = 1).
+- `POST /api/v1/receivables/{entryId}/unmark` → 200 com o DTO; limpa `received`/`receivedDate`; idempotente.
+- `POST /api/v1/receivables/mark-batch` {entryIds, receivedDate?} → 200 {marked} (quantidade de ids **distintos**). **Tudo-ou-nada** (uma única transação): se algum id não existir/for de outro owner → 404 ProblemDetails (lista os ids); se algum não for recebível → 400 `errors.entryIds`; em ambos os casos nada é marcado. 400 `errors.entryIds` se a lista vier ausente ou vazia.
+- `GET /api/v1/receivables/history?personId=&fromYear=&fromMonth=&toYear=&toMonth=&status=` → **200 sempre** {personId, name, totals{totalDevido, totalRecebido, totalPendente}, items[{entryId, bill, year, month, receivable, received, receivedDate}]}; itens do mais recente ao mais antigo; totais sobre o recorte filtrado. Período: um limite só vale com ano **e** mês. `status` = `received` | `pending`; qualquer outro valor (ou ausente) = todos. 400 `errors.personId` se ausente; 404 se a pessoa não existe, está desativada ou é de outro owner.
 
 ## Históricos
 - `GET /api/v1/bills/{billId}/history?fromYear=&fromMonth=&toYear=&toMonth=` → 200 header do molde {billId,name,category,splitRatio,person} + summary(avgEffective/minEffective/maxEffective/totalPaidMyShare) + items (com variation vs anterior). Resolve também moldes desativados. 404 ProblemDetails se não existe/de outro owner.
