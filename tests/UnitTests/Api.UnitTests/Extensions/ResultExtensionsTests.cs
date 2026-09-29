@@ -95,6 +95,34 @@ public sealed class ResultExtensionsTests
         }));
     }
 
+    [Test]
+    public void ToHttpResult_ValidationErrorWithRepeatedCodes_AggregatesMessagesUnderSameKey()
+    {
+        // Arrange
+        var validation = new ValidationError(
+        [
+            Error.Validation("Nome obrigatório."),
+            Error.Validation("Valor deve ser positivo."),
+            new Error("Kind", "Tipo inválido.", ErrorType.Validation),
+        ]);
+
+        // Act
+        var httpResult = Result.Failure(validation).ToHttpResult();
+
+        // Assert
+        var details = (httpResult as ProblemHttpResult)?.ProblemDetails as HttpValidationProblemDetails;
+        Assert.That(details, Is.Not.Null, "Expected a validation problem payload");
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(((IStatusCodeHttpResult)httpResult).StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
+            Assert.That(details!.Errors, Is.EquivalentTo(new Dictionary<string, string[]>
+            {
+                ["Error.Validation"] = ["Nome obrigatório.", "Valor deve ser positivo."],
+                ["Kind"] = ["Tipo inválido."],
+            }));
+        }
+    }
+
     // --- Result<IEnumerable<T>> ---
 
     [Test]

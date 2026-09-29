@@ -37,6 +37,7 @@ public static class RegisterData
     {
         services.AddScoped<IAppUserRepository, AppUserRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IIncomeRepository, IncomeRepository>();
         services.AddScoped<IPersonRepository, PersonRepository>();
         services.AddScoped<IPersonAccessLinksRepository, PersonAccessLinksRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();

@@ -32,7 +32,9 @@ public static class ResultExtensions
     {
         if (error is ValidationError ve)
             return Results.ValidationProblem(
-                ve.Errors.ToDictionary(e => e.Code, e => new[] { e.Message }));
+                ve.Errors
+                    .GroupBy(e => e.Code)
+                    .ToDictionary(g => g.Key, g => g.Select(e => e.Message).ToArray()));
 
         var statusCode = error.Type switch
         {

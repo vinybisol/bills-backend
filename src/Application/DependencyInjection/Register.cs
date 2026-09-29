@@ -12,6 +12,7 @@ public static class RegisterApplications
     {
         services.AddScoped<IAppUserService, AppUserService>();
         services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<IIncomeService, IncomeService>();
         services.AddScoped<IPersonService, PersonService>();
         services.AddScoped<IPersonAccessLinksService, PersonAccessLinksService>();
         services.AddScoped<IUserProvisioningService, UserProvisioningService>();

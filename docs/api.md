@@ -11,7 +11,12 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
 ## Cadastros (soft delete)
 - `/api/v1/categories` — GET, POST, PUT `/{id}`, DELETE `/{id}` (desativa)
 - `/api/v1/persons` — idem
-- `/api/v1/incomes` — idem (molde: kind, default_amount)
+- `/api/v1/incomes` — idem (molde: kind, default_amount). Contrato padronizado (Result → HTTP):
+  - `POST` {name, kind: `recurring`|`one_off`, defaultAmount ≥ 0} → 201 + `Location: /api/v1/incomes/{id}` + {id,name,kind,defaultAmount}.
+  - `GET` → 200 com a lista (ordenada por nome, só ativos) ou **204 se vazia**.
+  - `PUT /{id}` {name,kind,defaultAmount} → 200 com o DTO atualizado; 404 (ProblemDetails) se não existe/inativo/de outro owner.
+  - `DELETE /{id}` → 204 (soft delete, `active=false`); 404 (ProblemDetails) se não existe/já inativo/de outro owner.
+  - Validação → 400 `application/problem+json` (ValidationProblem) com `errors` por campo: `name` (vazio), `kind` (valor fora do enum), `defaultAmount` (negativo). `kind` string desconhecido → 400 no binding.
 - `/api/v1/bills` — idem (molde: category_id, kind, default_amount, split_ratio, person_id). Regra: split<1 exige person_id; =1 proíbe.
 
 ## Projeção
