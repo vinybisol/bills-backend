@@ -11,7 +11,7 @@ API do sistema de orçamento pessoal. Este arquivo define como os agentes devem 
 
 ## Arquitetura
 
-Clean Architecture em 4 projetos (`src/`). Dependências apontam **para dentro**: `Api → Application → Domain` e `Data → Application/Domain`. `Domain` não depende de ninguém; `Application` não conhece EF Core; só `Api/Program.cs` (composition root) referencia `Data` (registro de DI + `IMigrationService`).
+Clean Architecture em 4 projetos (`src/`); detalhes, árvore de pastas e fluxo em `docs/arquitetura.md`. Dependências apontam **para dentro**: `Api → Application → Domain` e `Data → Application/Domain`. `Domain` não depende de ninguém; `Application` não conhece EF Core; só `Api/Program.cs` (composition root) referencia `Data` (registro de DI + `IMigrationService`).
 
 | Camada | O que vai lá |
 |---|---|
@@ -136,6 +136,8 @@ No **CI**, os testes rodam contra um **service container** de PostgreSQL (ver `.
 
 ## Documentação (ler sob demanda)
 
+- `docs/arquitetura.md` — árvore de pastas, fluxo da requisição, mapa por feature, passo a passo para nova feature.
+- `docs/testes.md` — layout dos projetos de teste, infra de integração, exemplos e comandos MTP.
 - `docs/dominio.md` — conceitos, regras e fluxos completos.
 - `docs/schema.md` — tabelas, colunas, constraints (SQL completo em `docs/schema.sql`).
 - `docs/api.md` — endpoints e contratos.

@@ -2,6 +2,8 @@
 
 Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorization: Bearer <firebase-jwt>`. `owner_id` resolvido do token. Derivados (`effective`, `myShare`, `receivable`) calculados na resposta, não persistidos.
 
+Camadas e fluxo da requisição (filtro → serviço → repositório): ver `docs/arquitetura.md`. Mapeamento padrão `Result` → HTTP: 400 `ValidationProblem`, 404/409 `ProblemDetails`, listas vazias → 204, criação → 201 + `Location`. Exceção: `GET /api/v1/bills/shared` é **anônimo** (ver "Links de acesso").
+
 ## Infra
 - `GET /api/v1/health` → resolve/provisiona o app_user e confirma liveness autenticada.
 
@@ -9,8 +11,11 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
 - `GET /api/v1/me` → perfil do app_user (id, name, email). Provisiona se novo.
 
 ## Cadastros (soft delete)
-- `/api/v1/categories` — GET, POST, PUT `/{id}`, DELETE `/{id}` (desativa)
-- `/api/v1/persons` — idem
+- `/api/v1/categories` — {name}. Nome único por owner.
+  - `POST` → 201 + `Location: /api/v1/categories/{id}` + {id,name}. `GET` → 200 (ordenado por nome, só ativas) ou **204 se vazia**. `PUT /{id}` → 200 com o DTO. `DELETE /{id}` → 204 (soft delete).
+  - 404 ProblemDetails se não existe/inativa/de outro owner; 409 se o nome já existe.
+  - Nome vazio → 400. ⚠️ Ainda responde **texto puro** (`"Name is required."`) no endpoint, não `ValidationProblem` — pendente de padronização.
+- `/api/v1/persons` — {name}. Mesmo contrato de categorias (201/200/204/404/409); nome vazio → 400 `ProblemDetails` (`Error.Validation`, sem `errors` por campo).
 - `/api/v1/incomes` — idem (molde: kind, default_amount). Contrato padronizado (Result → HTTP):
   - `POST` {name, kind: `recurring`|`one_off`, defaultAmount ≥ 0} → 201 + `Location: /api/v1/incomes/{id}` + {id,name,kind,defaultAmount}.
   - `GET` → 200 com a lista (ordenada por nome, só ativos) ou **204 se vazia**.
@@ -24,6 +29,12 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
   - `DELETE /{id}` → 204 (soft delete, `active=false`); 404 (ProblemDetails) se não existe/já inativo/de outro owner.
   - Validação → 400 ValidationProblem com `errors` por campo: `name` (vazio), `kind` (fora do enum), `defaultAmount` (negativo), `splitRatio` (fora de [0,1]), `personId` (split<1 exige; =1 proíbe). Validação roda antes de qualquer acesso ao banco.
   - `categoryId`/`personId` inexistente, inativo ou de outro owner → 404 (ProblemDetails) em POST/PUT.
+
+## Links de acesso (Fase 2, parcial)
+Link compartilhável que dá a uma pessoa acesso de leitura ao que ela deve. Só o **hash SHA-256** do segredo é persistido (`person_access_link.token_hash`); o token em claro só aparece na resposta da criação.
+- `POST /api/v1/persons/access-links` {id: personId} → 200 {id, token}. `token` = Base64Url de `{personId, token}`. 400 se `id ≤ 0`; 404 se a pessoa não existe/inativa/de outro owner; 409 se a pessoa já tem link.
+- `PUT /api/v1/persons/access-links/{id}/revoke` → 204; desativa o link e grava `revoke_at`. 404 se não existe/de outro owner.
+- `GET /api/v1/bills/shared?token=` — **anônimo** (sem JWT). 400 (texto puro) se `token` ausente; senão 200 com `true` (token válido) ou `false` (inválido/malformado/inexistente). Por enquanto só valida o token; ainda não devolve as contas.
 
 ## Projeção
 - `POST /api/v1/projection/{year}` → gera 12 entries por molde **recorrente ativo** (bills e incomes; `one_off` e moldes desativados são ignorados). Cada entry leva **snapshot** de `plannedAmount` (e, em bills, `splitRatioSnapshot`/`personId`) — nunca referência ao molde. Idempotente: meses que já têm entry (por molde + ano + mês) são pulados; entries existentes (inclusive pagas) nunca são alteradas. Contrato padronizado (Result → HTTP):

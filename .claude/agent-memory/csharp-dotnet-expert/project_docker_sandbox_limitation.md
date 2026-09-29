@@ -34,7 +34,7 @@ Postgres is unreachable — always attempt
 `dotnet test --project tests/IntegrationTests/Api.IntegrationTests --filter FullyQualifiedName~<NewFixture>` (short
 timeout, e.g. 60-90s) for real evidence before reporting a blocker. If it actually times out /
 fails at `OneTimeSetUp` with an Npgsql connection-refused error, then report that specific error
-as the blocker, run `dotnet test tests/BillsBackend.UnitTests` plus `dotnet build` on the whole
+as the blocker, run the unit projects (`dotnet test --project tests/UnitTests/<Layer>.UnitTests`) plus `dotnet build` on the whole
 solution as the fallback verification, and say so explicitly in the final report rather than
 silently skipping or claiming a full green run. This matches [[project-stack-and-testing]]'s test
 layout. Don't attempt to route around a real blocker with `sg`, `newgrp`, or interactive `sudo`.

@@ -46,6 +46,8 @@ Detalhes e o padrão para novas features em `CLAUDE.md` (seção "Arquitetura").
 
 ## 📌 Documentação
 
+- `docs/arquitetura.md` — camadas, árvore de pastas, fluxo da requisição, mapa feature → endpoint/serviço/repositório, como adicionar uma feature.
+- `docs/testes.md` — estrutura dos projetos de teste (NUnit/MTP), infra de integração, comandos.
 - `docs/api.md` — contratos e endpoints.
 - `docs/dominio.md` — regras e conceitos do domínio.
 - `docs/schema.md` — modelo de dados e schema.

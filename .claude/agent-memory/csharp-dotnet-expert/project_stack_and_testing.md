@@ -44,18 +44,16 @@ person templates they reference are fetched with `.IgnoreQueryFilters()` + manua
 `.Where(x => x.OwnerId == appUser.Id)`, because the template may have been soft-deactivated since
 the entry was created. See `GET /api/entries` and `GET /api/dashboard/month` for the pattern.
 
-**Testing**: unit tests in `tests/BillsBackend.UnitTests` (NUnit, no DB, run in ~200ms, ~198 tests
-as of 2026-07-05). `Microsoft.EntityFrameworkCore.InMemory` was removed from this project — no
-more spinning up a real (if in-memory) `AppDbContext`; services that need persistence are tested
-by mocking their narrow repository ports with **NSubstitute** (added 2026-07-05, first mocking lib
-in this repo). Most tests still reconstruct the same LINQ/domain logic the handler runs, over real
-domain objects built via `Create` factories, and assert on the result — no mocking needed there.
+**Testing** (see `docs/testes.md`): NUnit 4 + NSubstitute on Microsoft.Testing.Platform, one unit
+project per layer in `tests/UnitTests/{Domain,Application,Api,Data}.UnitTests` (no DB, seconds),
+folders mirroring `src/`. Services are tested by mocking their repository ports with NSubstitute;
+pure calculations live in `Domain/Calculations` and are tested directly.
 Integration tests in `tests/IntegrationTests/Api.IntegrationTests` use `IntegrationTestBase`
 (WebApplicationFactory + real Postgres via Respawn, reset once per fixture) with a unique Firebase
-uid per test method for isolation (`Uid(suffix)` helper), plain HTTP calls through
-`Client.SendAsync`, and local `private sealed record` DTOs per test file for response
-deserialization.
+uid per test (`NewFirebaseUid()` / `CreateAuthenticatedClient(...)`), and
+`ProblemAssertions` for 400/404/409 bodies.
 
-**Running tests**: `dotnet test tests/BillsBackend.UnitTests` is fast and self-contained. The full
+**Running tests**: `dotnet test --project tests/UnitTests/<Layer>.UnitTests` is fast and
+self-contained (with MTP always pass `--project` when using `--filter`). The full
 `dotnet test` (or anything under `tests/IntegrationTests/Api.IntegrationTests`) needs a real Postgres —
 see [[project-docker-sandbox-limitation]] for why that often can't run inside this sandbox.
