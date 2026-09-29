@@ -8,7 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 
-namespace BillsBackend.IntegrationTests;
+namespace Api.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// Hosts the API in-memory for integration tests, connecting to a real PostgreSQL database

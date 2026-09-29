@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
-namespace BillsBackend.IntegrationTests;
+namespace Api.IntegrationTests.Endpoints;
 
 /// <summary>
 /// Integration tests for the authenticated <c>GET /me</c> endpoint, exercising the full

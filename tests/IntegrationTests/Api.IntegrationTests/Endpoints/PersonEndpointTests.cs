@@ -1,319 +1,280 @@
 using System.Net;
 using System.Net.Http.Json;
 using Api.Contracts;
+using Api.IntegrationTests.TestSupport;
 using Application.DTOs.Services;
-using Bogus;
-using IntegrationCommon.TestData;
-using Microsoft.AspNetCore.Http;
 
 namespace Api.IntegrationTests.Endpoints;
 
-public sealed class PersonEndpointTests(IntegrationTestBase testBase) : IClassFixture<IntegrationTestBase>, IAsyncLifetime
+/// <summary>
+/// Integration tests for the <c>/api/v1/persons</c> endpoints. Each test authenticates as a
+/// fresh Firebase uid, so its persons are isolated by the owner filter.
+/// </summary>
+[TestFixture]
+public sealed class PersonEndpointTests : IntegrationTestBase
 {
-    private const string PERSONSURI = "/api/v1/persons";
-    private readonly Faker _faker = new();
-    private readonly CancellationToken ct = TestContext.Current.CancellationToken;
+    private const string PersonsUri = "/api/v1/persons";
 
-
-    public async ValueTask InitializeAsync()
+    [TestCase("", "GET")]
+    [TestCase("", "POST")]
+    [TestCase("/100", "PUT")]
+    [TestCase("/100", "DELETE")]
+    public async Task Endpoints_WithoutToken_ReturnUnauthorized(string uri, string method)
     {
-        await testBase.ResetDatabase();
+        // Arrange
+        using var request = new HttpRequestMessage(new HttpMethod(method), $"{PersonsUri}{uri}");
+
+        // Act
+        using var response = await Client.SendAsync(request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
-    public ValueTask DisposeAsync()
-    {
-        return ValueTask.CompletedTask;
-    }
-
-    [Theory]
-    [InlineData("", "GET")]
-    [InlineData("", "POST")]
-    [InlineData("/100", "PUT")]
-    [InlineData("/100", "DELETE")]
-    public async Task TestEndpoints_ShoulBeAutorizarion_Returns(string uri, string method)
-    {
-        //Arrange
-        var url = string.IsNullOrWhiteSpace(uri) ? PERSONSURI : $"{PERSONSURI}{uri}";
-        var httpMethod = new HttpMethod(method);
-        var httpRequest = new HttpRequestMessage(httpMethod, url);
-
-        //Act
-        var response = await testBase.ClientWithoutToken.SendAsync(httpRequest, ct);
-
-        //Assert
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-
-    }
-
-    [Fact]
+    [Test]
     public async Task CreatePerson_WithValidToken_ReturnsCreatedWithDto()
     {
         // Arrange
-        var person = new CreatePersonRequest(new Faker().Name.FirstName());
-        HttpContent httpContent = JsonContent.Create(person);
+        using var client = CreateAuthenticatedClient();
+        var person = new CreatePersonRequest(NewName());
 
-        //Act
-        var response = await testBase.Client.PostAsync(PERSONSURI, httpContent, ct);
+        // Act
+        using var response = await client.PostAsJsonAsync(PersonsUri, person);
 
         // Assert
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        var body = await response.Content.ReadFromJsonAsync<PersonDto>(ct);
-        Assert.NotNull(body);
-        Assert.NotNull(response.Headers.Location);
-
-        Assert.Multiple(
-            () => Assert.True(body.Id > 0, $"Expected Id greater than 0, but was {body.Id}"),
-            () => Assert.Equal(person.Name, body.Name),
-            () => Assert.Contains($"/persons/{body.Id}", response.Headers.Location!.ToString())
-        );
+        var body = await response.Content.ReadFromJsonAsync<PersonDto>();
+        Assert.That(body, Is.Not.Null);
+        Assert.That(response.Headers.Location, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.Id, Is.GreaterThan(0));
+            Assert.That(body.Name, Is.EqualTo(person.Name));
+            Assert.That(response.Headers.Location!.ToString(), Does.Contain($"/persons/{body.Id}"));
+        });
     }
 
-    [Theory]
-    [ClassData<InvalidStrings>]
-    public async Task CreatePerson_WithInvalidData_ReturnsBadRequest(string invalidStrings)
+    [TestCaseSource(typeof(InvalidStrings), nameof(InvalidStrings.Cases))]
+    public async Task CreatePerson_WithInvalidName_ReturnsBadRequest(string? invalidName)
     {
         // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        var person = new CreatePersonRequest(invalidStrings);
-        HttpContent httpContent = JsonContent.Create(person);
+        using var client = CreateAuthenticatedClient();
 
-        //Act
-        var response = await testBase.Client.PostAsync(PERSONSURI, httpContent, ct);
+        // Act
+        using var response = await client.PostAsJsonAsync(PersonsUri, new CreatePersonRequest(invalidName!));
 
         // Assert
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 
-        var body = await response.Content.ReadAsStringAsync(ct);
-        Assert.NotNull(body);
-        Assert.Multiple(
-            () => Assert.Null(response.Headers.Location),
-            () => Assert.Contains("Person name cannot be empty or null", body)
-        );
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Headers.Location, Is.Null);
+            Assert.That(body, Does.Contain("Person name cannot be empty or null"));
+        });
     }
 
-    [Fact]
-    public async Task CreatePerson_NameAlreadyExists_ReturnsBadRequest()
+    [Test]
+    public async Task CreatePerson_NameAlreadyExists_ReturnsConflict()
     {
         // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        var name = _faker.Name.FirstName();
-        await CreateDummyPerson(name);
-        var person = new CreatePersonRequest(name);
-        HttpContent httpContent = JsonContent.Create(person);
+        using var client = CreateAuthenticatedClient();
+        var name = NewName();
+        await CreatePersonAsync(client, name);
 
-        //Act
-        var response = await testBase.Client.PostAsync(PERSONSURI, httpContent, ct);
+        // Act
+        using var response = await client.PostAsJsonAsync(PersonsUri, new CreatePersonRequest(name));
 
         // Assert
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
 
-        var body = await response.Content.ReadAsStringAsync(ct);
-        Assert.NotNull(body);
-        Assert.Multiple(
-            () => Assert.Null(response.Headers.Location),
-            () => Assert.Contains("A person with that name already exists", body)
-        );
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Headers.Location, Is.Null);
+            Assert.That(body, Does.Contain("A person with that name already exists"));
+        });
     }
 
-    [Fact]
+    [Test]
     public async Task ListPersons_OnePerson_ReturnsPerson()
     {
         // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        var name = _faker.Name.FindName();
-        await CreateDummyPerson(name);
+        using var client = CreateAuthenticatedClient();
+        var name = NewName();
+        await CreatePersonAsync(client, name);
 
-        //Act
-        var response = await testBase.Client.GetAsync(PERSONSURI, ct);
+        // Act
+        using var response = await client.GetAsync(PersonsUri);
 
         // Assert
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
-        var body = await response.Content.ReadFromJsonAsync<PersonDto[]>(ct);
-        Assert.NotNull(body);
-        Assert.Multiple(
-            () => Assert.Null(response.Headers.Location),
-            () => Assert.Single(body),
-            () => Assert.Equal(name, body[0].Name)
-        );
+        var body = await response.Content.ReadFromJsonAsync<PersonDto[]>();
+        Assert.That(body, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Headers.Location, Is.Null);
+            Assert.That(body, Has.Length.EqualTo(1));
+            Assert.That(body![0].Name, Is.EqualTo(name));
+        });
     }
 
-    [Fact]
-    public async Task ListPersons_NewUser_ReturnsEmptyList()
+    [Test]
+    public async Task ListPersons_NewUser_ReturnsNoContent()
     {
-        // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        var uid = "new-user-id";
-        await CreateDummyPerson(uid: uid);
+        // Arrange — another user owns a person; the new user must not see it.
+        using (var otherClient = CreateAuthenticatedClient())
+        {
+            await CreatePersonAsync(otherClient, NewName());
+        }
 
-        //Act
-        var response = await testBase.Client.GetAsync(PERSONSURI, ct);
+        using var client = CreateAuthenticatedClient();
+
+        // Act
+        using var response = await client.GetAsync(PersonsUri);
 
         // Assert
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
 
-        var body = await response.Content.ReadAsStringAsync(ct);
-        Assert.Multiple(
-            () => Assert.Empty(body),
-            () => Assert.Null(response.Headers.Location)
-        );
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(body, Is.Empty);
+            Assert.That(response.Headers.Location, Is.Null);
+        });
     }
 
-    [Fact]
+    [Test]
     public async Task UpdatePerson_Rename_ReturnsOkWithUpdatedName()
     {
         // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        var name = _faker.Name.FindName();
-        var response = await CreateDummyPerson(name);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<PersonDto>(ct);
-        Assert.NotNull(body);
-        Assert.Equal(name, body.Name);
+        using var client = CreateAuthenticatedClient();
+        var created = await CreatePersonAsync(client, NewName());
+        var newName = NewName();
 
-        var updateName = _faker.Name.FindName();
-        var updateReq = JsonContent.Create(new UpdatePersonRequest(updateName));
-
-        //Act
-        var updateResponse = await testBase.Client.PutAsync($"{PERSONSURI}/{body.Id}", updateReq, ct);
+        // Act
+        using var response = await client.PutAsJsonAsync($"{PersonsUri}/{created.Id}", new UpdatePersonRequest(newName));
 
         // Assert
-        var updateBody = await updateResponse.Content.ReadFromJsonAsync<PersonDto>(ct);
-        Assert.NotNull(updateBody);
-        Assert.Multiple(
-            () => Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode),
-            () => Assert.Null(updateResponse.Headers.Location),
-            () => Assert.Equal(updateName, updateBody.Name)
-        );
+        var body = await response.Content.ReadFromJsonAsync<PersonDto>();
+        Assert.That(body, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(response.Headers.Location, Is.Null);
+            Assert.That(body!.Name, Is.EqualTo(newName));
+        });
     }
 
-    [Theory]
-    [ClassData<InvalidStrings>]
-    public async Task UpdatePerson_WithInvalidData_ReturnsBadRequest(string invalidStrings)
+    [TestCaseSource(typeof(InvalidStrings), nameof(InvalidStrings.Cases))]
+    public async Task UpdatePerson_WithInvalidName_ReturnsBadRequest(string? invalidName)
     {
         // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        var name = _faker.Name.FindName();
-        var response = await CreateDummyPerson(name);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<PersonDto>(ct);
-        Assert.NotNull(body);
-        Assert.Equal(name, body.Name);
+        using var client = CreateAuthenticatedClient();
+        var created = await CreatePersonAsync(client, NewName());
 
-        var updateReq = JsonContent.Create(new UpdatePersonRequest(invalidStrings));
-
-        //Act
-        var updateResponse = await testBase.Client.PutAsync($"{PERSONSURI}/{body.Id}", updateReq, ct);
+        // Act
+        using var response = await client.PutAsJsonAsync($"{PersonsUri}/{created.Id}", new UpdatePersonRequest(invalidName!));
 
         // Assert
-        var updateBody = await updateResponse.Content.ReadAsStringAsync(ct);
-        Assert.NotNull(updateBody);
-        Assert.Multiple(
-            () => Assert.Equal(HttpStatusCode.BadRequest, updateResponse.StatusCode),
-            () => Assert.Null(updateResponse.Headers.Location),
-            () => Assert.Contains("Person name cannot be empty ou null", updateBody)
-        );
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(response.Headers.Location, Is.Null);
+            Assert.That(body, Does.Contain("Person name cannot be empty ou null"));
+        });
     }
 
-    [Fact]
+    [Test]
     public async Task UpdatePerson_NotFound_ReturnsNotFound()
     {
         // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        var name = _faker.Name.FindName();
-        var req = JsonContent.Create(new UpdatePersonRequest(name));
+        using var client = CreateAuthenticatedClient();
 
-        //Act
-        var response = await testBase.Client.PutAsync($"{PERSONSURI}/{_faker.Database.Random.Int()}", req, ct);
+        // Act
+        using var response = await client.PutAsJsonAsync($"{PersonsUri}/{int.MaxValue}", new UpdatePersonRequest(NewName()));
 
         // Assert
-        var updateBody = await response.Content.ReadFromJsonAsync<PersonDto>(ct);
-        Assert.NotNull(updateBody);
-        Assert.Multiple(
-            () => Assert.Equal(HttpStatusCode.NotFound, response.StatusCode),
-            () => Assert.Null(response.Headers.Location)
-        );
+        var body = await response.Content.ReadFromJsonAsync<PersonDto>();
+        Assert.That(body, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+            Assert.That(response.Headers.Location, Is.Null);
+        });
     }
 
-    [Fact]
-    public async Task UpdatePerson_AlreadyExists_ReturnsConflict()
+    [Test]
+    public async Task UpdatePerson_NameAlreadyExists_ReturnsConflict()
     {
         // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        var name = _faker.Name.FindName();
-        var response = await CreateDummyPerson(name);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<PersonDto>(ct);
-        Assert.NotNull(body);
-        Assert.Equal(name, body.Name);
+        using var client = CreateAuthenticatedClient();
+        var name = NewName();
+        var created = await CreatePersonAsync(client, name);
 
-        var updateReq = JsonContent.Create(new UpdatePersonRequest(name));
-
-        //Act
-        var updateResponse = await testBase.Client.PutAsync($"{PERSONSURI}/{body.Id}", updateReq, ct);
+        // Act
+        using var response = await client.PutAsJsonAsync($"{PersonsUri}/{created.Id}", new UpdatePersonRequest(name));
 
         // Assert
-        var updateBody = await updateResponse.Content.ReadAsStringAsync(ct);
-        Assert.NotNull(updateBody);
-        Assert.Multiple(
-            () => Assert.Equal(HttpStatusCode.Conflict, updateResponse.StatusCode),
-            () => Assert.Null(updateResponse.Headers.Location),
-            () => Assert.Contains("A person with that name already exists.", updateBody)
-        );
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(response.Headers.Location, Is.Null);
+            Assert.That(body, Does.Contain("A person with that name already exists."));
+        });
     }
 
-    [Fact]
+    [Test]
     public async Task DeletePerson_NotFound_ReturnsNotFound()
     {
         // Arrange
-        var ct = TestContext.Current.CancellationToken;
+        using var client = CreateAuthenticatedClient();
 
-        //Act
-        var response = await testBase.Client.DeleteAsync($"{PERSONSURI}/{_faker.Database.Random.Int()}", ct);
+        // Act
+        using var response = await client.DeleteAsync($"{PersonsUri}/{int.MaxValue}");
 
         // Assert
-        var body = await response.Content.ReadAsStringAsync(ct);
-        Assert.NotNull(body);
-        Assert.Multiple(
-            () => Assert.Equal(HttpStatusCode.NotFound, response.StatusCode),
-            () => Assert.Null(response.Headers.Location)
-        );
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+            Assert.That(response.Headers.Location, Is.Null);
+        });
     }
 
-    [Fact]
+    [Test]
     public async Task DeletePerson_DeactivatedPerson_DisappearsFromList()
     {
         // Arrange
-        var ct = TestContext.Current.CancellationToken;
-        var name = _faker.Name.FindName();
-        var response = await CreateDummyPerson(name);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<PersonDto>(ct);
-        Assert.NotNull(body);
-        Assert.Equal(name, body.Name);
+        using var client = CreateAuthenticatedClient();
+        var created = await CreatePersonAsync(client, NewName());
 
-        //Act
-        var deleteResponse = await testBase.Client.DeleteAsync($"{PERSONSURI}/{body.Id}", ct);
-        var listResponse = await testBase.Client.GetAsync(PERSONSURI, ct);
+        // Act
+        using var deleteResponse = await client.DeleteAsync($"{PersonsUri}/{created.Id}");
+        using var listResponse = await client.GetAsync(PersonsUri);
 
         // Assert
-        Assert.Multiple(
-            () => Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode),
-            () => Assert.Equal(HttpStatusCode.NoContent, listResponse.StatusCode),
-            () => Assert.Null(deleteResponse.Headers.Location)
-        );
+        Assert.Multiple(() =>
+        {
+            Assert.That(deleteResponse.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+            Assert.That(listResponse.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+            Assert.That(deleteResponse.Headers.Location, Is.Null);
+        });
     }
 
-    private async Task<HttpResponseMessage> CreateDummyPerson(string? name = null, string? uid = null)
+    private static string NewName() => $"Person {Guid.NewGuid():N}";
+
+    private static async Task<PersonDto> CreatePersonAsync(HttpClient client, string name)
     {
-        var ct = TestContext.Current.CancellationToken;
-        var nameOfPerson = name ?? _faker.Name.FirstName();
-        var person = new CreatePersonRequest(nameOfPerson);
-        HttpContent httpContent = JsonContent.Create(person);
-        if (string.IsNullOrWhiteSpace(uid))
-            return await testBase.Client.PostAsync(PERSONSURI, httpContent, ct);
-        else
-            return await testBase.ClientWithUid(uid).PostAsync(PERSONSURI, httpContent, ct);
+        using var response = await client.PostAsJsonAsync(PersonsUri, new CreatePersonRequest(name));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+
+        var body = await response.Content.ReadFromJsonAsync<PersonDto>();
+        Assert.That(body, Is.Not.Null);
+        Assert.That(body!.Name, Is.EqualTo(name));
+        return body;
     }
 }

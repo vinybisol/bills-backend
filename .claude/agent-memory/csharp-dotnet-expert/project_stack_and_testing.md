@@ -50,12 +50,12 @@ more spinning up a real (if in-memory) `AppDbContext`; services that need persis
 by mocking their narrow repository ports with **NSubstitute** (added 2026-07-05, first mocking lib
 in this repo). Most tests still reconstruct the same LINQ/domain logic the handler runs, over real
 domain objects built via `Create` factories, and assert on the result — no mocking needed there.
-Integration tests in `tests/BillsBackend.IntegrationTests` use `IntegrationTestBase`
+Integration tests in `tests/IntegrationTests/Api.IntegrationTests` use `IntegrationTestBase`
 (WebApplicationFactory + real Postgres via Respawn, reset once per fixture) with a unique Firebase
 uid per test method for isolation (`Uid(suffix)` helper), plain HTTP calls through
 `Client.SendAsync`, and local `private sealed record` DTOs per test file for response
 deserialization.
 
 **Running tests**: `dotnet test tests/BillsBackend.UnitTests` is fast and self-contained. The full
-`dotnet test` (or anything under `tests/BillsBackend.IntegrationTests`) needs a real Postgres —
+`dotnet test` (or anything under `tests/IntegrationTests/Api.IntegrationTests`) needs a real Postgres —
 see [[project-docker-sandbox-limitation]] for why that often can't run inside this sandbox.

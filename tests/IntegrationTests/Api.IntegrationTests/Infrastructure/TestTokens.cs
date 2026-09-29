@@ -1,9 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
-namespace Api.IntegrationTests.Factories;
+namespace Api.IntegrationTests.Infrastructure;
 
 /// <summary>
 /// Mints and describes the JWTs used by the integration tests.
@@ -14,7 +13,6 @@ namespace Api.IntegrationTests.Factories;
 /// suite never depends on Firebase. The test host is configured to validate against this
 /// same key in <see cref="CustomWebApplicationFactory"/>.
 /// </remarks>
-[ExcludeFromCodeCoverage]
 public static class TestTokens
 {
     /// <summary>The project id used as both issuer suffix and audience in tests.</summary>

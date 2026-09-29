@@ -5,7 +5,7 @@ using Data.Contexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace BillsBackend.IntegrationTests;
+namespace Api.IntegrationTests.Endpoints;
 
 /// <summary>
 /// Integration tests for <c>POST /api/entries/bill</c>, <c>POST /api/entries/income</c>,

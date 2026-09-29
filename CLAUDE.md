@@ -28,14 +28,19 @@ Os testes de integração rodam contra um Postgres real — a suíte completa é
 
 - Só os unitários (sem banco, segundos), um projeto por camada em `tests/UnitTests/`:
   `dotnet test --project tests/UnitTests/Domain.UnitTests`, `dotnet test --project tests/UnitTests/Application.UnitTests`, `dotnet test --project tests/UnitTests/Api.UnitTests`, `dotnet test --project tests/UnitTests/Data.UnitTests`
-- Só a fixture da feature: `dotnet test --filter FullyQualifiedName~ProjectionEndpointTests`
-- Por nome de teste: `dotnet test --filter Name~Idempot`
+- Só os de integração (um único projeto, precisa do Postgres): `dotnet test --project tests/IntegrationTests/Api.IntegrationTests`
+- Só a fixture da feature: `dotnet test --project tests/IntegrationTests/Api.IntegrationTests --filter FullyQualifiedName~ProjectionEndpointTests`
+- Por nome de teste: `dotnet test --project tests/IntegrationTests/Api.IntegrationTests --filter Name~Idempot`
 
 **Só antes de abrir o PR** rode a suíte completa (`dotnet test`) **uma vez**. PR só é aberto com a suíte inteira verde.
 
 ### Isolamento dos testes de integração
 
 Cada teste usa um `firebase_uid` (e portanto um `owner_id`) **distinto**; o filtro global por owner isola os dados sem precisar limpar o banco entre testes. Por isso o reset do banco (Respawn) roda **uma vez por fixture** (no `[OneTimeSetUp]`), não por teste. Ao criar uma nova fixture de integração, herde de `IntegrationTestBase` ou siga esse mesmo padrão — **nunca** adicione um `[SetUp]` que reseta o banco a cada teste.
+
+- Todos os testes de integração vivem em **um único projeto**: `tests/IntegrationTests/Api.IntegrationTests` (NUnit no Microsoft.Testing.Platform). Infra compartilhada em `Infrastructure/` (`CustomWebApplicationFactory`, `TestTokens`, `IntegrationTestBase`); uma fixture por feature em `Endpoints/<Feature>EndpointTests.cs`; dados de `TestCaseSource` em `TestSupport/`.
+- Para um uid único por teste, use `CreateAuthenticatedClient()` (gera um uid via `NewFirebaseUid()`) ou passe um uid próprio e distinto em `TestTokens.CreateValidToken(...)`.
+- O assembly é `[assembly: NonParallelizable]` (ver `AssemblyInfo.cs`): as fixtures rodam em sequência, porque o Respawn de uma fixture apagaria os dados de outra em execução. Não adicione `[Parallelizable]` nem crie outro projeto de integração apontando para o mesmo banco.
 
 ## Git flow
 
@@ -87,7 +92,7 @@ Os testes de integração precisam de um PostgreSQL (banco `bills_test`). A conn
 docker compose up -d
 dotnet user-secrets set "ConnectionStrings:NeonTest" \
   "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres" \
-  --project tests/BillsBackend.IntegrationTests
+  --project tests/IntegrationTests/Api.IntegrationTests
 dotnet test
 ```
 > Use o formato **key-value** (acima), não a URI `postgresql://...`: assim `NeonConnectionString.Normalize` devolve a string intacta e não força `SSL Mode=Require`, que o Postgres local não tem.

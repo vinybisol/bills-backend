@@ -1,36 +1,9 @@
 <Project>
-  <!-- Chain to any Directory.Build.props higher up the tree (none today, but keep the chain intact). -->
-  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))"
-          Condition="'$([MSBuild]::GetPathOfFileAbove(`Directory.Build.props`, `$(MSBuildThisFileDirectory)../`))' != ''" />
+  <!-- Common test settings (NUnit on MTP, coverage) live in tests/Directory.Build.props. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
-  <!--
-    Shared settings for every unit test project under tests/UnitTests.
-    NUnit 4 on Microsoft.Testing.Platform (MTP): the NUnit3TestAdapter package provides the
-    MTP runner when EnableNUnitRunner=true, so no Microsoft.NET.Test.Sdk / VSTest is involved.
-  -->
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
-    <IsTestProject>true</IsTestProject>
-    <OutputType>Exe</OutputType>
-    <EnableNUnitRunner>true</EnableNUnitRunner>
-  </PropertyGroup>
-
+  <!-- Unit-test-only bits: pure in-memory tests with mocks, no database or host. -->
   <ItemGroup>
-    <PackageReference Include="NUnit" />
-    <PackageReference Include="NUnit3TestAdapter" />
-    <PackageReference Include="NUnit.Analyzers">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
     <PackageReference Include="NSubstitute" />
-    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Include="NUnit.Framework" />
   </ItemGroup>
 </Project>

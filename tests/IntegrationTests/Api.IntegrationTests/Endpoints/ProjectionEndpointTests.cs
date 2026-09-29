@@ -6,7 +6,7 @@ using Domain.Abstractions.Filters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace BillsBackend.IntegrationTests;
+namespace Api.IntegrationTests.Endpoints;
 
 /// <summary>
 /// Integration tests for <c>POST /api/projection/{year}</c>, covering entry generation,
