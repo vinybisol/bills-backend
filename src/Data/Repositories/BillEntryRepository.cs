@@ -46,6 +46,9 @@ internal sealed class BillEntryRepository(AppDbContext db) : IBillEntryRepositor
     public Task<IReadOnlyList<BillEntryWithNamesDto>> GetMonthWithNamesAsync(int year, int month, long ownerId, CancellationToken ct) =>
         GetWithNamesAsync(e => e.RefYear == year && e.RefMonth == month, ownerId, ct);
 
+    public Task<IReadOnlyList<BillEntryWithNamesDto>> GetYearWithNamesAsync(int year, long ownerId, CancellationToken ct) =>
+        GetWithNamesAsync(e => e.RefYear == year, ownerId, ct);
+
     public async Task<IReadOnlyList<BillEntry>> GetByIdsAsync(IReadOnlyCollection<long> ids, CancellationToken ct) => await _entity
         .Where(e => ids.Contains(e.Id))
         .ToListAsync(ct);
@@ -68,6 +71,7 @@ internal sealed class BillEntryRepository(AppDbContext db) : IBillEntryRepositor
                     .Select(b => new
                     {
                         b.Name,
+                        b.CategoryId,
                         Category = db.Categories.IgnoreQueryFilters()
                             .Where(c => c.Id == b.CategoryId && c.OwnerId == ownerId)
                             .Select(c => c.Name)
@@ -82,7 +86,8 @@ internal sealed class BillEntryRepository(AppDbContext db) : IBillEntryRepositor
             .ToListAsync(ct);
 
         return rows
-            .Select(r => new BillEntryWithNamesDto(r.Entry, r.Bill?.Name ?? string.Empty, r.Bill?.Category ?? string.Empty, r.Person))
+            .Select(r => new BillEntryWithNamesDto(
+                r.Entry, r.Bill?.Name ?? string.Empty, r.Bill?.CategoryId ?? 0, r.Bill?.Category ?? string.Empty, r.Person))
             .ToList();
     }
 }

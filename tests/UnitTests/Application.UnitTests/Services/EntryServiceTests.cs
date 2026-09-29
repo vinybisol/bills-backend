@@ -131,9 +131,9 @@ public sealed class EntryServiceTests
     {
         // Arrange
         GivenBills(
-            new(Bill(1, 10m), "Zeta", "Moradia", null),
-            new(Bill(2, 10m), "Alpha", "Moradia", null),
-            new(Bill(3, 10m), "Beta", "Lazer", null));
+            new(Bill(1, 10m), "Zeta", 1L, "Moradia", null),
+            new(Bill(2, 10m), "Alpha", 1L, "Moradia", null),
+            new(Bill(3, 10m), "Beta", 2L, "Lazer", null));
 
         // Act
         var result = await _sut.GetMonthAsync(2026, 3, CancellationToken.None);
@@ -147,7 +147,7 @@ public sealed class EntryServiceTests
     {
         // Arrange
         var entry = Bill(1, 200m, split: 0.5m, actual: 180m, paid: true, received: true);
-        GivenBills(new BillEntryWithNamesDto(entry, "Luz", "Moradia", "Ana"));
+        GivenBills(new BillEntryWithNamesDto(entry, "Luz", 1L, "Moradia", "Ana"));
 
         // Act
         var result = await _sut.GetMonthAsync(2026, 3, CancellationToken.None);
@@ -162,7 +162,7 @@ public sealed class EntryServiceTests
     public async Task GetMonthAsync_BillWithoutPerson_HidesPersonName()
     {
         // Arrange — a stale name must never leak when the snapshot has no person
-        GivenBills(new BillEntryWithNamesDto(Bill(1, 50m), "Netflix", "Lazer", "Stale"));
+        GivenBills(new BillEntryWithNamesDto(Bill(1, 50m), "Netflix", 2L, "Lazer", "Stale"));
 
         // Act
         var result = await _sut.GetMonthAsync(2026, 3, CancellationToken.None);
@@ -195,9 +195,9 @@ public sealed class EntryServiceTests
     {
         // Arrange
         GivenBills(
-            new(Bill(1, 200m, split: 0.5m, actual: 180m, paid: true, received: true), "Luz", "Moradia", "Ana"),   // eff 180, share 90, recv 90 received
-            new(Bill(2, 100m, split: 0.5m), "Água", "Moradia", "Ana"),                                              // eff 100, share 50, recv 50 pending
-            new(Bill(3, 300m, actual: 320m, paid: true), "Aluguel", "Moradia", null));                             // eff 320, share 320
+            new(Bill(1, 200m, split: 0.5m, actual: 180m, paid: true, received: true), "Luz", 1L, "Moradia", "Ana"),   // eff 180, share 90, recv 90 received
+            new(Bill(2, 100m, split: 0.5m), "Água", 1L, "Moradia", "Ana"),                                              // eff 100, share 50, recv 50 pending
+            new(Bill(3, 300m, actual: 320m, paid: true), "Aluguel", 1L, "Moradia", null));                             // eff 320, share 320
         GivenIncomes(
             new(Income(1, 1000m, actual: 1100m, received: true), "Salário"),
             new(Income(2, 300m), "Freela"));

@@ -1,12 +1,13 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using static Api.IntegrationTests.TestSupport.ProblemAssertions;
 
 namespace Api.IntegrationTests.Endpoints;
 
 /// <summary>
-/// Integration tests for <c>GET /api/dashboard/month</c>, covering the month summary,
-/// per-category breakdown, ordering, owner isolation, and authentication.
+/// Integration tests for <c>GET /api/v1/dashboard/month</c>, covering the month summary,
+/// per-category breakdown, ordering, owner isolation, deactivated templates, validation, and authentication.
 /// </summary>
 [TestFixture]
 public sealed class DashboardMonthEndpointTests : IntegrationTestBase
@@ -297,33 +298,82 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
         });
     }
 
-    // --- Validation ---
-
-    [TestCase(0)]
-    [TestCase(13)]
-    public async Task Get_MonthOutOfRange_ReturnsBadRequest(int invalidMonth)
+    [Test]
+    public async Task Get_OtherOwnerHasEntriesInSameMonth_DoesNotLeakIntoTotals()
     {
-        // Arrange
-        var uid = Uid($"bad-month-{invalidMonth}");
+        // Arrange — both owners have data in the month; each must only see their own.
+        var uidA = Uid("isolate-both-a");
+        var uidB = Uid("isolate-both-b");
+        var categoriesA = await GetCategoriesAsync(uidA);
+        var categoriesB = await GetCategoriesAsync(uidB);
+        var billA = await CreateOneOffBillAsync(uidA, categoriesA[0].Id, "Luz", 150m);
+        var billB = await CreateOneOffBillAsync(uidB, categoriesB[0].Id, "Luz", 700m);
+        var incomeB = await CreateOneOffIncomeAsync(uidB, "Salario", 3000m);
+        await CreateBillEntryAsync(uidA, billA.Id, 2026, 8, 150m);
+        await CreateBillEntryAsync(uidB, billB.Id, 2026, 8, 700m);
+        await CreateIncomeEntryAsync(uidB, incomeB.Id, 2026, 8, 3000m);
 
         // Act
-        var (status, _) = await GetDashboardAsync(uid, 2026, invalidMonth);
+        var (status, body) = await GetDashboardAsync(uidA, 2026, 8);
 
         // Assert
-        Assert.That(status, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.Summary.PlannedExpense, Is.EqualTo(150m));
+            Assert.That(body.Summary.PlannedIncome, Is.EqualTo(0m));
+            Assert.That(body.Summary.BillsTotal, Is.EqualTo(1));
+            Assert.That(body.ByCategory.Select(c => c.CategoryId), Is.EqualTo(new[] { categoriesA[0].Id }));
+        });
     }
 
+    // --- Deactivated templates ---
+
     [Test]
-    public async Task Get_MissingYearOrMonth_ReturnsBadRequest()
+    public async Task Get_DeactivatedBillAndCategory_StillCountedAndNamed()
     {
-        // Arrange
-        var uid = Uid("missing-params");
+        // Arrange — entries snapshot their values; soft-deleting the template/category must not drop them.
+        var uid = Uid("deactivated");
+        var categories = await GetCategoriesAsync(uid);
+        var bill = await CreateOneOffBillAsync(uid, categories[0].Id, "Academia", 120m);
+        await CreateBillEntryAsync(uid, bill.Id, 2026, 9, 120m);
+        await DeleteAsync(uid, $"/api/v1/bills/{bill.Id}");
+        await DeleteAsync(uid, $"/api/v1/categories/{categories[0].Id}");
 
         // Act
-        var (status, _) = await GetDashboardAsync(uid, year: null, month: 5);
+        var (status, body) = await GetDashboardAsync(uid, 2026, 9);
 
         // Assert
-        Assert.That(status, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.Summary.PlannedExpense, Is.EqualTo(120m));
+            Assert.That(body.ByCategory, Has.Length.EqualTo(1));
+            Assert.That((body.ByCategory[0].CategoryId, body.ByCategory[0].Category),
+                Is.EqualTo((categories[0].Id, categories[0].Name)));
+        });
+    }
+
+    // --- Validation ---
+
+    [TestCase("month=5", "year")]
+    [TestCase("year=1999&month=5", "year")]
+    [TestCase("year=2101&month=5", "year")]
+    [TestCase("year=2026", "month")]
+    [TestCase("year=2026&month=0", "month")]
+    [TestCase("year=2026&month=13", "month")]
+    [TestCase("", "year", "month")]
+    public async Task Get_InvalidPeriod_ReturnsValidationProblem(string query, params string[] expectedFields)
+    {
+        // Arrange
+        var uid = NewFirebaseUid();
+
+        // Act
+        using var req = Req(HttpMethod.Get, $"/api/v1/dashboard/month?{query}", uid);
+        using var resp = await Client.SendAsync(req);
+
+        // Assert
+        await AssertValidationProblemAsync(resp, expectedFields);
     }
 
     // --- Auth ---
@@ -341,7 +391,30 @@ public sealed class DashboardMonthEndpointTests : IntegrationTestBase
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
+    [Test]
+    public async Task Get_WithInvalidToken_ReturnsUnauthorized()
+    {
+        // Arrange
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/dashboard/month?year=2026&month=1")
+        {
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", "not-a-jwt") }
+        };
+
+        // Act
+        using var resp = await Client.SendAsync(req);
+
+        // Assert
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
     // --- Local helpers / DTOs for JSON deserialization ---
+
+    private async Task DeleteAsync(string uid, string url)
+    {
+        using var req = Req(HttpMethod.Delete, url, uid);
+        using var resp = await Client.SendAsync(req);
+        Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+    }
 
     private async Task<long> CreatePersonAsync(string uid, string name = "Esposa")
     {

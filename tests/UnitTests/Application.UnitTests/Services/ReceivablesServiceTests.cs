@@ -66,7 +66,7 @@ public sealed class ReceivablesServiceTests
         _repository.GetReceivablesByPersonWithNamesAsync(PersonId, OwnerId, Arg.Any<CancellationToken>()).Returns(rows);
 
     private static BillEntryWithNamesDto Row(BillEntry entry, string name = "Aluguel", string? person = "Esposa") =>
-        new(entry, name, "Moradia", person);
+        new(entry, name, 1L, "Moradia", person);
 
     private static void AssertValidationFailure(Result result, params string[] expectedCodes)
     {

@@ -99,7 +99,12 @@ public sealed record IncomeEntryDto(
 /// Read-side row of a month's bill entry together with the names it is displayed with. Names are
 /// resolved even when the template, category or person have since been deactivated.
 /// </summary>
-public sealed record BillEntryWithNamesDto(BillEntry Entry, string Name, string Category, string? Person);
+/// <param name="Entry">The bill entry.</param>
+/// <param name="Name">The bill template name.</param>
+/// <param name="CategoryId">The id of the template's category.</param>
+/// <param name="Category">The category name.</param>
+/// <param name="Person">The name of the person owing the split, or <see langword="null"/>.</param>
+public sealed record BillEntryWithNamesDto(BillEntry Entry, string Name, long CategoryId, string Category, string? Person);
 
 /// <summary>
 /// Read-side row of a month's income entry together with its template name (resolved even when

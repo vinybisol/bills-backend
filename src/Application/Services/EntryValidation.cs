@@ -16,15 +16,20 @@ internal static class EntryValidation
 
     public static void AddPeriodErrors(List<Error> errors, int? year, int? month)
     {
-        if (year is null)
-            errors.Add(new Error(YearField, "Year is required.", ErrorType.Validation));
-        else if (year is < MinYear or > MaxYear)
-            errors.Add(new Error(YearField, $"Year must be between {MinYear} and {MaxYear}.", ErrorType.Validation));
+        AddYearErrors(errors, year);
 
         if (month is null)
             errors.Add(new Error(MonthField, "Month is required.", ErrorType.Validation));
         else if (month is < 1 or > 12)
             errors.Add(new Error(MonthField, "Month must be between 1 and 12.", ErrorType.Validation));
+    }
+
+    public static void AddYearErrors(List<Error> errors, int? year)
+    {
+        if (year is null)
+            errors.Add(new Error(YearField, "Year is required.", ErrorType.Validation));
+        else if (year is < MinYear or > MaxYear)
+            errors.Add(new Error(YearField, $"Year must be between {MinYear} and {MaxYear}.", ErrorType.Validation));
     }
 
     public static void AddNonNegativeError(List<Error> errors, decimal? amount, string field)

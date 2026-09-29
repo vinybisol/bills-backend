@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Application.Abstractions.Repositories;
 using Application.DTOs.Services;
 using Data.Contexts;
@@ -31,11 +32,19 @@ internal sealed class IncomeEntryRepository(AppDbContext db) : IIncomeEntryRepos
 
     // IgnoreQueryFilters + explicit owner checks: the template may have been deactivated since. IgnoreQueryFilters
     // in a subquery disables the global filters for the WHOLE query, so the root must also filter by owner.
-    public async Task<IReadOnlyList<IncomeEntryWithNameDto>> GetMonthWithNameAsync(int year, int month, long ownerId, CancellationToken ct)
+    public Task<IReadOnlyList<IncomeEntryWithNameDto>> GetMonthWithNameAsync(int year, int month, long ownerId, CancellationToken ct) =>
+        GetWithNameAsync(e => e.RefYear == year && e.RefMonth == month, ownerId, ct);
+
+    public Task<IReadOnlyList<IncomeEntryWithNameDto>> GetYearWithNameAsync(int year, long ownerId, CancellationToken ct) =>
+        GetWithNameAsync(e => e.RefYear == year, ownerId, ct);
+
+    private async Task<IReadOnlyList<IncomeEntryWithNameDto>> GetWithNameAsync(
+        Expression<Func<IncomeEntry, bool>> filter, long ownerId, CancellationToken ct)
     {
         var rows = await _entity
             .AsNoTracking()
-            .Where(e => e.OwnerId == ownerId && e.RefYear == year && e.RefMonth == month)
+            .Where(e => e.OwnerId == ownerId)
+            .Where(filter)
             .Select(e => new
             {
                 Entry = e,
