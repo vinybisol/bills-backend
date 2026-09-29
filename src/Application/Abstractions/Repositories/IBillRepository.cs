@@ -10,6 +10,9 @@ public interface IBillRepository
     Task<Bill?> GetByIdAsync(long id, CancellationToken cancellationToken);
     Task<IEnumerable<BillDto>> GetAllByNameAsync(IPagedQuery<Bill> pagedQuery, CancellationToken cancellationToken);
 
+    /// <summary>Returns the owner's active recurring bill templates, read-only.</summary>
+    Task<IReadOnlyList<Bill>> GetRecurringAsync(CancellationToken cancellationToken);
+
     /// <summary>
     /// Resolves the history header of an owner's bill, including deactivated templates (history must
     /// still resolve after a soft delete). Returns <see langword="null"/> when the bill does not exist

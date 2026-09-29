@@ -1,12 +1,6 @@
-using Api.Identity;
+using Api.Extensions;
+using Api.Filters;
 using Application.Abstractions.Services;
-using Api.Contracts;
-using Data.Contexts;
-using Domain.Abstractions.Filters;
-using Domain.Calculations;
-using Domain.Entities;
-using Domain.Enums;
-using Microsoft.EntityFrameworkCore;
 
 namespace Api.Endpoints;
 
@@ -14,93 +8,18 @@ internal static class ProjectionEndpoints
 {
     public static RouteGroupBuilder MapProjectionEndpoints(this RouteGroupBuilder group)
     {
-        group.MapPost("/projection/{year:int}", CreateProjection);
+        group.MapPost("/projection/{year:int}", CreateProjection)
+            .AddEndpointFilter<UserEndpointFilter>();
         return group;
     }
 
-    // Generates annual projected entries for every active recurring bill and income template
-    // owned by the authenticated user. Idempotent: existing entries (identified by bill/income
-    // id + year + month) are skipped, so calling the endpoint twice for the same year is safe.
     private static async Task<IResult> CreateProjection(
         int year,
-        System.Security.Claims.ClaimsPrincipal user,
-        IUserProvisioningService provisioning,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
-        TimeProvider timeProvider,
+        IProjectionService projectionService,
         CancellationToken ct)
     {
-        if (year < 2000 || year > 2100)
-            return Results.BadRequest("Year must be between 2000 and 2100.");
+        var result = await projectionService.ProjectYearAsync(year, ct);
 
-        var firebaseUid = user.GetFirebaseUid();
-        if (string.IsNullOrWhiteSpace(firebaseUid))
-            return Results.Unauthorized();
-
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.SetCurrentOwnerId(appUser.Id);
-
-        // Fetch only recurring active bill/income templates (global query filter applies active + owner_id).
-        var recurringBills = await db.Bills
-            .Where(b => b.Kind == BillKindEnum.Recurring)
-            .ToListAsync(ct);
-
-        var recurringIncomes = await db.Incomes
-            .Where(i => i.Kind == IncomeKindEnum.Recurring)
-            .ToListAsync(ct);
-
-        // Fetch already-created entries for the year so subsequent calls are idempotent.
-        var existingBillEntries = await db.BillEntries
-            .Where(e => e.RefYear == year)
-            .Select(e => new { e.BillId, e.RefMonth })
-            .ToListAsync(ct);
-
-        var existingIncomeEntries = await db.IncomeEntries
-            .Where(e => e.RefYear == year)
-            .Select(e => new { e.IncomeId, e.RefMonth })
-            .ToListAsync(ct);
-
-        // ValueTuple structural equality, so Contains checks are O(1) via HashSet.
-        var existingBillSet = existingBillEntries
-            .Select(e => (e.BillId, e.RefMonth))
-            .ToHashSet();
-
-        var existingIncomeSet = existingIncomeEntries
-            .Select(e => (e.IncomeId, e.RefMonth))
-            .ToHashSet();
-
-        var now = timeProvider.GetUtcNow();
-        int billEntriesCreated = 0, incomeEntriesCreated = 0, skipped = 0;
-
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-
-        foreach (var bill in recurringBills)
-        {
-            var missingMonths = ProjectionCalculations.MissingMonths(bill.Id, existingBillSet).ToList();
-            skipped += ProjectionCalculations.MonthsPerYear - missingMonths.Count;
-
-            foreach (var month in missingMonths)
-            {
-                db.BillEntries.Add(BillEntry.Create(appUser.Id, bill.Id, year, month, bill.DefaultAmount, bill.SplitRatio, bill.PersonId, now));
-                billEntriesCreated++;
-            }
-        }
-
-        foreach (var income in recurringIncomes)
-        {
-            var missingMonths = ProjectionCalculations.MissingMonths(income.Id, existingIncomeSet).ToList();
-            skipped += ProjectionCalculations.MonthsPerYear - missingMonths.Count;
-
-            foreach (var month in missingMonths)
-            {
-                db.IncomeEntries.Add(IncomeEntry.Create(appUser.Id, income.Id, year, month, income.DefaultAmount, now));
-                incomeEntriesCreated++;
-            }
-        }
-
-        await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
-
-        return Results.Ok(new ProjectionResult(year, billEntriesCreated, incomeEntriesCreated, skipped));
+        return result.ToHttpResult();
     }
 }

@@ -40,6 +40,7 @@ public static class RegisterData
         services.AddScoped<IBillEntryRepository, BillEntryRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IIncomeRepository, IncomeRepository>();
+        services.AddScoped<IIncomeEntryRepository, IncomeEntryRepository>();
         services.AddScoped<IPersonRepository, PersonRepository>();
         services.AddScoped<IPersonAccessLinksRepository, PersonAccessLinksRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();

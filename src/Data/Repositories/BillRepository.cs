@@ -3,6 +3,7 @@ using Application.Abstractions.Repositories.Strategies;
 using Application.DTOs.Services;
 using Data.Contexts;
 using Domain.Entities;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Data.Repositories;
@@ -22,6 +23,12 @@ internal sealed class BillRepository(AppDbContext db) : IBillRepository
         .Skip(pagedQuery.Skip)
         .Take(pagedQuery.Take)
         .Select(b => new BillDto(b.Id, b.Name, b.CategoryId, b.Kind, b.DefaultAmount, b.SplitRatio, b.PersonId))
+        .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Bill>> GetRecurringAsync(CancellationToken ct) => await _entity
+        .AsNoTracking()
+        .Where(b => b.Kind == BillKindEnum.Recurring)
+        .OrderBy(b => b.Id)
         .ToListAsync(ct);
 
     // IgnoreQueryFilters + explicit owner checks: a deactivated template (or its deactivated

@@ -26,7 +26,11 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
   - `categoryId`/`personId` inexistente, inativo ou de outro owner → 404 (ProblemDetails) em POST/PUT.
 
 ## Projeção
-- `POST /api/v1/projection/{year}` → gera 12 entries por molde recorrente ativo. Idempotente. Resp: {billEntriesCreated, incomeEntriesCreated, skipped}.
+- `POST /api/v1/projection/{year}` → gera 12 entries por molde **recorrente ativo** (bills e incomes; `one_off` e moldes desativados são ignorados). Cada entry leva **snapshot** de `plannedAmount` (e, em bills, `splitRatioSnapshot`/`personId`) — nunca referência ao molde. Idempotente: meses que já têm entry (por molde + ano + mês) são pulados; entries existentes (inclusive pagas) nunca são alteradas. Contrato padronizado (Result → HTTP):
+  - 200 {year, billEntriesCreated, incomeEntriesCreated, skipped} (também quando nada é criado).
+  - 400 ValidationProblem com `errors.year` se `year` fora de **2000–2100**; nada é persistido. `year` não numérico → 404 (constraint de rota `{year:int}`).
+  - 409 ProblemDetails se uma projeção/lançamento concorrente inserir o mesmo mês entre a leitura e a gravação (nada é persistido; repetir a chamada é seguro).
+  - 401 sem token válido.
 
 ## Lançamentos
 - `GET /api/v1/entries?year=&month=` → bills[], incomes[], totals (com derivados). `totals.receivable` = a receber **pendente** (bill entries com `received=false`, alias de `receivablePending`); `totals.received` = já recebido no mês (alias de `receivableReceived`). `received + receivable` = total a receber do mês. `totals.paidFull` = valor cheio (não myShare) dos bill entries pagos. Três saldos: `saldoPrevistoOtimista` (= `saldoPrevisto`, assume que todo pendente será recebido) = incomesPlanned − mySharePlanned; `saldoPrevistoPiorCaso` = saldoPrevistoOtimista − receivablePending (assume que o pendente nunca será pago); `saldoRealizado` (= `saldoReal`) = (incomesReceived + receivableReceived) − paidFull. Nota: `saldoReal` mudou de semântica — antes era baseado no myShare dos bills pagos, agora usa o valor cheio pago (`paidFull`).

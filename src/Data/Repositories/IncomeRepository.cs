@@ -3,6 +3,7 @@ using Application.Abstractions.Repositories.Strategies;
 using Application.DTOs.Services;
 using Data.Contexts;
 using Domain.Entities;
+using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace Data.Repositories;
@@ -22,5 +23,11 @@ internal sealed class IncomeRepository(AppDbContext db) : IIncomeRepository
         .Skip(pagedQuery.Skip)
         .Take(pagedQuery.Take)
         .Select(i => new IncomeDto(i.Id, i.Name, i.Kind, i.DefaultAmount))
+        .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Income>> GetRecurringAsync(CancellationToken ct) => await _entity
+        .AsNoTracking()
+        .Where(i => i.Kind == IncomeKindEnum.Recurring)
+        .OrderBy(i => i.Id)
         .ToListAsync(ct);
 }
