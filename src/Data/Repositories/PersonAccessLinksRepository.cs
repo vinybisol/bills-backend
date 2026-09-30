@@ -20,6 +20,6 @@ internal sealed class PersonAccessLinksRepository(AppDbContext db) : IPersonAcce
     public async Task<PersonAccessLink?> GetByPersonIdAsync(long personId, CancellationToken ct)
         => await _entity.FirstOrDefaultAsync(f => f.PersonId == personId, ct);
 
-    public async Task<PersonAccessLink?> GetByPersonIdAndHashAsync(long personId, string computedHash, CancellationToken ct)
-        => await _entity.IgnoreQueryFilters().FirstOrDefaultAsync(f => f.PersonId == personId && f.TokenHash == computedHash, ct);
+    public async Task<PersonAccessLink?> GetByTokenIdAsync(Guid tokenId, CancellationToken ct)
+        => await _entity.IgnoreQueryFilters().FirstOrDefaultAsync(f => f.TokenId == tokenId, ct);
 }

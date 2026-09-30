@@ -4,7 +4,7 @@
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
-      "launchBrowser": true,
+      "launchBrowser": false,
       "launchUrl": "http://localhost:7211/openapi/v1.json",
       "applicationUrl": "http://localhost:7211",
       "environmentVariables": {
@@ -14,7 +14,7 @@
     "PRODUCTION": {
       "commandName": "Project",
       "dotnetRunMessages": true,
-      "launchBrowser": true,
+      "launchBrowser": false,
       "launchUrl": "http://localhost:7211/openapi/v1.json",
       "applicationUrl": "http://localhost:7211",
       "environmentVariables": {
@@ -25,7 +25,7 @@
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
-      "launchBrowser": true,
+      "launchBrowser": false,
       "applicationUrl": "https://localhost:7160;http://localhost:7211",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"

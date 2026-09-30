@@ -190,12 +190,16 @@ public sealed class AppDbContext(
                 .HasColumnName("person_id")
                 .IsRequired();
 
+            entity.Property(p => p.TokenId)
+                .HasColumnName("token_id")
+                .IsRequired();
+
             entity.Property(p => p.Active)
                 .HasColumnName("active")
                 .IsRequired();
 
-            entity.Property(p => p.TokenHash)
-                .HasColumnName("token_hash")
+            entity.Property(p => p.ExpiresAt)
+                .HasColumnName("issued_at")
                 .IsRequired();
 
             entity.Property(p => p.RevokeAt)
@@ -207,9 +211,12 @@ public sealed class AppDbContext(
                 .IsRequired();
 
             entity.HasOne(p => p.Person)
-            .WithMany(p => p.PersonAccessLinks)
-            .HasForeignKey(k => k.PersonId)
-            .OnDelete(DeleteBehavior.Restrict);
+                .WithMany(p => p.PersonAccessLinks)
+                .HasForeignKey(k => k.PersonId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => e.TokenId)
+                .IsUnique();
 
             // Restricts all Person reads to the current owner's active rows.
             // currentOwner.Id is evaluated at query-execution time from the scoped service.

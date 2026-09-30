@@ -8,5 +8,5 @@ public interface IPersonAccessLinksRepository
     Task<PersonAccessLink?> GetByIdAsync(long id, CancellationToken cancellationToken);
     Task<PersonAccessLink?> GetByPersonIdAsync(long personId, CancellationToken cancellationToken);
     Task<bool> ExistsByPersonIdAsync(long personId, CancellationToken cancellationToken);
-    Task<PersonAccessLink?> GetByPersonIdAndHashAsync(long personId, string hash, CancellationToken cancellationToken);
+    Task<PersonAccessLink?> GetByTokenIdAsync(Guid tokenId, CancellationToken cancellationToken);
 }

@@ -1,3 +1,3 @@
 namespace Application.DTOs.Services;
 
-internal sealed record PesonAccessLinkTokenDto(long PersonId, string Token);
+public sealed record PesonAccessLinkTokenDto(long PersonId, Guid TokenId, DateTimeOffset? IssuedAt);

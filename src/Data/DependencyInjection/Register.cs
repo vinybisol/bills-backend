@@ -12,14 +12,14 @@ namespace Data.DependencyInjection;
 [ExcludeFromCodeCoverage]
 public static class RegisterData
 {
-    public static void Register(IServiceCollection services, AppOptions options)
+    public static void Register(IServiceCollection services, AppSettings options)
     {
         ResolveContexts(services, options);
         ResolveRepositores(services);
         ResolveServices(services);
     }
 
-    private static void ResolveContexts(IServiceCollection services, AppOptions options)
+    private static void ResolveContexts(IServiceCollection services, AppSettings options)
     {
         // --- Database: PostgreSQL (Neon). Connection string is supplied via configuration
         // (user-secrets locally, environment / GitHub Secrets in CI/CD) and must use the

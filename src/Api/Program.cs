@@ -25,6 +25,12 @@ builder.Services
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<SharedPagesOptions>()
+    .Bind(builder.Configuration.GetSection(SharedPagesOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 // --- Identity services ---
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<ICurrentOwner, CurrentOwner>();
@@ -57,7 +63,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddOpenApi();
 builder.Services.AddCors();
 
-var options = builder.Configuration.Get<AppOptions>()
+var options = builder.Configuration.Get<AppSettings>()
     ?? throw new Exception();
 
 RegisterApplications.Register(builder.Services);
