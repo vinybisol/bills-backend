@@ -4,7 +4,10 @@ using Domain.Abstractions.Filters;
 
 namespace Api.Filters;
 
-
+/// <summary>
+/// Resolves (and just-in-time provisions) the internal <c>app_user</c> from the Firebase token
+/// and sets it as the current owner before the endpoint runs; returns 401 when the token has no uid.
+/// </summary>
 public sealed class UserEndpointFilter(
     IUserProvisioningService provisioning,
     ICurrentOwner currentOwner) : IEndpointFilter
@@ -16,7 +19,7 @@ public sealed class UserEndpointFilter(
         if (string.IsNullOrWhiteSpace(firebaseUid))
             return Results.Unauthorized();
 
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), CancellationToken.None);
+        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), context.HttpContext.RequestAborted);
         currentOwner.SetCurrentOwnerId(appUser.Id);
 
         var result = await next(context);

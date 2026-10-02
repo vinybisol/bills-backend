@@ -1,10 +1,7 @@
-using Api.Identity;
+using Api.Contracts;
+using Api.Extensions;
+using Api.Filters;
 using Application.Abstractions.Services;
-using BillsBackend.Api.Contracts;
-using Data.Contexts;
-using Domain.Abstractions.Filters;
-using Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace Api.Endpoints;
 
@@ -12,118 +9,59 @@ internal static class IncomeEndpoints
 {
     public static RouteGroupBuilder MapIncomeEndpoints(this RouteGroupBuilder group)
     {
-        group.MapPost("/incomes", CreateIncome);
-        group.MapGet("/incomes", ListIncomes);
-        group.MapPut("/incomes/{id:long}", UpdateIncome);
-        group.MapDelete("/incomes/{id:long}", DeleteIncome);
+        var incomeGroup = group
+            .MapGroup("/incomes")
+            .AddEndpointFilter<UserEndpointFilter>();
+
+        incomeGroup.MapPost("", CreateIncome);
+        incomeGroup.MapGet("", ListIncomes);
+        incomeGroup.MapPut("/{id:long}", UpdateIncome);
+        incomeGroup.MapDelete("/{id:long}", DeleteIncome);
         return group;
     }
 
     private static async Task<IResult> CreateIncome(
+        HttpRequest httpRequest,
         CreateIncomeRequest req,
-        System.Security.Claims.ClaimsPrincipal user,
-        IUserProvisioningService provisioning,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
-        TimeProvider timeProvider,
+        IIncomeService incomeService,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Name))
-            return Results.BadRequest("Name is required.");
+        var result = await incomeService.CreateAsync(req.Name, req.Kind, req.DefaultAmount, ct);
 
-        if (req.DefaultAmount < 0)
-            return Results.BadRequest("Default amount must be zero or greater.");
+        if (result.IsFailure)
+            return result.ToHttpResult();
 
-        var firebaseUid = user.GetFirebaseUid();
-        if (string.IsNullOrWhiteSpace(firebaseUid))
-            return Results.Unauthorized();
-
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.SetCurrentOwnerId(appUser.Id);
-
-        var income = Income.Create(appUser.Id, req.Name, req.Kind, req.DefaultAmount, timeProvider.GetUtcNow());
-        db.Incomes.Add(income);
-        await db.SaveChangesAsync(ct);
-
-        return Results.Created($"/api/v1/incomes/{income.Id}", new IncomeDto(income.Id, income.Name, income.Kind, income.DefaultAmount));
+        var income = result.Value;
+        return Results.Created($"{httpRequest.Path.Value}/{income.Id}", income);
     }
 
     private static async Task<IResult> ListIncomes(
-        System.Security.Claims.ClaimsPrincipal user,
-        IUserProvisioningService provisioning,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
+        IIncomeService incomeService,
         CancellationToken ct)
     {
-        var firebaseUid = user.GetFirebaseUid();
-        if (string.IsNullOrWhiteSpace(firebaseUid))
-            return Results.Unauthorized();
+        var result = await incomeService.GetAllByNameAsync(ct);
 
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.SetCurrentOwnerId(appUser.Id);
-
-        var incomes = await db.Incomes
-            .OrderBy(i => i.Name)
-            .Select(i => new IncomeDto(i.Id, i.Name, i.Kind, i.DefaultAmount))
-            .ToListAsync(ct);
-
-        return Results.Ok(incomes);
+        return result.ToHttpResult();
     }
 
     private static async Task<IResult> UpdateIncome(
         long id,
         UpdateIncomeRequest req,
-        System.Security.Claims.ClaimsPrincipal user,
-        IUserProvisioningService provisioning,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
+        IIncomeService incomeService,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Name))
-            return Results.BadRequest("Name is required.");
+        var result = await incomeService.UpdateAsync(id, req.Name, req.Kind, req.DefaultAmount, ct);
 
-        if (req.DefaultAmount < 0)
-            return Results.BadRequest("Default amount must be zero or greater.");
-
-        var firebaseUid = user.GetFirebaseUid();
-        if (string.IsNullOrWhiteSpace(firebaseUid))
-            return Results.Unauthorized();
-
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.SetCurrentOwnerId(appUser.Id);
-
-        var income = await db.Incomes.FirstOrDefaultAsync(i => i.Id == id, ct);
-        if (income is null)
-            return Results.NotFound();
-
-        income.Update(req.Name, req.Kind, req.DefaultAmount);
-        await db.SaveChangesAsync(ct);
-
-        return Results.Ok(new IncomeDto(income.Id, income.Name, income.Kind, income.DefaultAmount));
+        return result.ToHttpResult();
     }
 
     private static async Task<IResult> DeleteIncome(
         long id,
-        System.Security.Claims.ClaimsPrincipal user,
-        IUserProvisioningService provisioning,
-        ICurrentOwner currentOwner,
-        AppDbContext db,
+        IIncomeService incomeService,
         CancellationToken ct)
     {
-        var firebaseUid = user.GetFirebaseUid();
-        if (string.IsNullOrWhiteSpace(firebaseUid))
-            return Results.Unauthorized();
+        var result = await incomeService.DeleteByIdAsync(id, ct);
 
-        var appUser = await provisioning.GetOrCreateAsync(firebaseUid, user.GetEmail(), user.GetName(), ct);
-        currentOwner.SetCurrentOwnerId(appUser.Id);
-
-        var income = await db.Incomes.FirstOrDefaultAsync(i => i.Id == id, ct);
-        if (income is null)
-            return Results.NotFound();
-
-        income.Deactivate();
-        await db.SaveChangesAsync(ct);
-
-        return Results.NoContent();
+        return result.ToHttpResult();
     }
 }

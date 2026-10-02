@@ -14,11 +14,15 @@ internal sealed class CategoryService(
     TimeProvider timeProvider,
     IUnitOfWork unitOfWork) : ICategoryService
 {
+    internal const string NameField = "name";
+
     public async Task<Result<CategoryDto>> CreateCategoryAsync(string name, CancellationToken cancellationToken)
     {
-        var trimmedName = name?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmedName))
-            return Error.Validation("Category name cannot be empty ou null");
+        var validation = Validate(name);
+        if (validation is not null)
+            return validation;
+
+        var trimmedName = name.Trim();
 
         if (await repository.ExistsByNameAsync(trimmedName, cancellationToken))
             return Error.Conflict("A category with that name already exists.");
@@ -40,9 +44,11 @@ internal sealed class CategoryService(
 
     public async Task<Result<CategoryDto>> UpdateAsync(long id, string name, CancellationToken ct)
     {
-        var trimmedName = name?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmedName))
-            return Error.Validation("Category name cannot be empty ou null");
+        var validation = Validate(name);
+        if (validation is not null)
+            return validation;
+
+        var trimmedName = name.Trim();
 
         var category = await repository.GetByIdAsync(id, ct);
         if (category is null)
@@ -78,5 +84,13 @@ internal sealed class CategoryService(
         category.Deactivate();
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success();
+    }
+
+    private static ValidationError? Validate(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return new ValidationError([new Error(NameField, "Category name cannot be empty or null.", ErrorType.Validation)]);
+
+        return null;
     }
 }

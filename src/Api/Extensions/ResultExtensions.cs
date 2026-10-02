@@ -28,11 +28,23 @@ public static class ResultExtensions
         return list.Count == 0 ? Results.NoContent() : Results.Ok(list);
     }
 
+    /// <summary>Name of the ProblemDetails extension carrying the stable, machine-readable error code.</summary>
+    public const string CodeExtension = "code";
+
+    // RFC 9457: "title" is the human-readable summary of the problem *type* (the framework default
+    // for the status), "detail" is this occurrence's message, and the stable error code travels
+    // in the "code" extension member so clients never parse the title.
     private static IResult Problem(Error error)
     {
+        var extensions = new Dictionary<string, object?> { [CodeExtension] = error.Code };
+
         if (error is ValidationError ve)
             return Results.ValidationProblem(
-                ve.Errors.ToDictionary(e => e.Code, e => new[] { e.Message }));
+                ve.Errors
+                    .GroupBy(e => e.Code)
+                    .ToDictionary(g => g.Key, g => g.Select(e => e.Message).ToArray()),
+                detail: ve.Message,
+                extensions: extensions);
 
         var statusCode = error.Type switch
         {
@@ -44,6 +56,6 @@ public static class ResultExtensions
             _ => StatusCodes.Status500InternalServerError
         };
 
-        return Results.Problem(statusCode: statusCode, title: error.Code, detail: error.Message);
+        return Results.Problem(statusCode: statusCode, detail: error.Message, extensions: extensions);
     }
 }

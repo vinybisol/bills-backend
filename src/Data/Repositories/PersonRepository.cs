@@ -14,6 +14,8 @@ internal sealed class PersonRepository(AppDbContext db) : IPersonRepository
 
     public async Task<bool> ExistsByNameAsync(string name, CancellationToken ct) => await _entity.AnyAsync(f => f.Name == name, ct);
 
+    public async Task<bool> ExistsByIdAsync(long id, CancellationToken ct) => await _entity.AnyAsync(f => f.Id == id, ct);
+
     public async Task<IEnumerable<PersonDto>> GetAllByNameAsync(IPagedQuery<Person> pagedQuery, CancellationToken ct) => await _entity
          .AsNoTracking()
           .OrderBy(pagedQuery.OrderBy)

@@ -1,27 +1,24 @@
-<Project Sdk="Microsoft.NET.Sdk ">
+<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- NUnit/MTP/coverage settings are inherited from tests/Directory.Build.props. -->
   <PropertyGroup>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <OutputType>Exe</OutputType>
     <RootNamespace>Api.IntegrationTests</RootNamespace>
-     <UserSecretsId>b0ff660b-1fda-458f-9d68-baea5fa2507d</UserSecretsId>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Holds ConnectionStrings:NeonTest locally (CI uses the ConnectionStrings__NeonTest env var). -->
+    <UserSecretsId>b0ff660b-1fda-458f-9d68-baea5fa2507d</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
-    <Using Include="Xunit" />
-  </ItemGroup>
-
-  <ItemGroup>    
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
-    <PackageReference Include="Respawn" Version="7.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <PackageReference Include="Respawn" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../src/Api/Api.csproj" />
-    <ProjectReference Include="../../../src/Data/Data.csproj" />
-    <ProjectReference Include="../IntegrationCommon/IntegrationCommon.csproj" />
+    <Using Include="Api.IntegrationTests.Infrastructure" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Api\Api.csproj" />
   </ItemGroup>
 
 </Project>

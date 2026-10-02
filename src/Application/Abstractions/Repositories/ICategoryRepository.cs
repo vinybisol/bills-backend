@@ -19,4 +19,5 @@ public interface ICategoryRepository
     Task<Category?> GetByIdAsync(long id, CancellationToken cancellationToken);
     Task<IEnumerable<CategoryDto>> GetAllByNameAsync(IPagedQuery<Category> pagedQuery, CancellationToken cancellationToken);
     Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
+    Task<bool> ExistsByIdAsync(long id, CancellationToken cancellationToken);
 }

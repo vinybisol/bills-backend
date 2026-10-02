@@ -63,8 +63,13 @@ internal sealed class PersonAccessLinksService(
         return Result.Success();
     }
 
-    public async Task<Result> ValidateTokenAsync(string token, CancellationToken ct)
+    private const string TokenField = "token";
+
+    public async Task<Result> ValidateTokenAsync(string? token, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(token))
+            return new ValidationError([new Error(TokenField, "The token cannot be null nor empty.", ErrorType.Validation)]);
+
         try
         {
             var json = Base64Url.DecodeFromChars(token);
@@ -78,7 +83,7 @@ internal sealed class PersonAccessLinksService(
 
             var personAccessLink = await repository.GetByPersonIdAndHashAsync(pesonAccessLinkTokenDto.PersonId, pesonAccessLinkTokenDto.Token, ct);
             if (personAccessLink is null)
-                return Result.Failure(Error.None);
+                return Result.Failure(Error.NotFound(nameof(PersonAccessLink)));
 
             return Result.Success();
         }

@@ -36,7 +36,11 @@ public static class RegisterData
     private static void ResolveRepositores(IServiceCollection services)
     {
         services.AddScoped<IAppUserRepository, AppUserRepository>();
+        services.AddScoped<IBillRepository, BillRepository>();
+        services.AddScoped<IBillEntryRepository, BillEntryRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IIncomeRepository, IncomeRepository>();
+        services.AddScoped<IIncomeEntryRepository, IncomeEntryRepository>();
         services.AddScoped<IPersonRepository, PersonRepository>();
         services.AddScoped<IPersonAccessLinksRepository, PersonAccessLinksRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
