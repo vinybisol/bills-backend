@@ -6,8 +6,7 @@ public sealed class PersonAccessLink
     public long OwnerId { get; private set; }
     public long PersonId { get; private set; }
     public Guid TokenId { get; private set; }
-    public bool Active { get; private set; }
-    public DateTimeOffset RevokeAt { get; private set; }
+    public DateTimeOffset? RevokeAt { get; private set; }
     public DateTimeOffset? ExpiresAt { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public Person Person { get; private set; } = null!;
@@ -18,7 +17,6 @@ public sealed class PersonAccessLink
         OwnerId = ownerId;
         PersonId = personId;
         TokenId = tokenId;
-        Active = true;
         ExpiresAt = expiresAt;
         CreatedAt = createdAt;
     }
@@ -35,7 +33,6 @@ public sealed class PersonAccessLink
 
     public void Revoke(DateTimeOffset revokeAt)
     {
-        Active = false;
         RevokeAt = revokeAt;
     }
 }

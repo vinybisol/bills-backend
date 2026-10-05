@@ -1,5 +1,7 @@
 using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
+using Application.DTOs;
+using Application.DTOs.Services.PesonAccess;
 using Domain.Abstractions;
 using Domain.Abstractions.Filters;
 using Domain.Entities;
@@ -23,10 +25,8 @@ internal sealed class PersonAccessLinksService(
         if (person is null)
             return Error.NotFound(nameof(Person));
 
-        var personAccessLinkExists = await repository.ExistsByPersonIdAsync(personId, ct);
-        if (personAccessLinkExists)
-            return Error.Conflict(nameof(PersonAccessLink));
-
+        if (expiresAt.HasValue && expiresAt.Value <= timeProvider.GetUtcNow())
+            return Error.Validation("Token with worng expire time");
 
         var sharedPagesTokenRes = sharedPagesTokenService.Issue(personId, expiresAt);
 
@@ -46,11 +46,21 @@ internal sealed class PersonAccessLinksService(
         return sharedPagesToken.Token;
     }
 
+    public async Task<Result<IReadOnlyCollection<PesonAccessLinkDto>>> GetAllAsync(CancellationToken ct)
+    {
+        var pagedQuery = new PagedQueryDto<PersonAccessLink, DateTimeOffset>(1000, 0, c => c.CreatedAt);
+        var result = await repository.GetAllAsync(pagedQuery, ct);
+        return Result.Success(result);
+    }
+
     public async Task<Result> RevokeAsync(long id, CancellationToken ct)
     {
         var personAccessLink = await repository.GetByIdAsync(id, ct);
         if (personAccessLink is null)
             return Error.NotFound(nameof(PersonAccessLink));
+
+        if (personAccessLink.RevokeAt.HasValue)
+            return Result.Success();
 
         personAccessLink.Revoke(timeProvider.GetUtcNow());
 
@@ -70,7 +80,7 @@ internal sealed class PersonAccessLinksService(
         if (personAccessLink is null)
             return Result.Failure(Error.Forbidden());
 
-        if (personAccessLink.Active is false)
+        if (personAccessLink.RevokeAt <= timeProvider.GetUtcNow())
             return Result.Failure(Error.Forbidden());
 
         return Result.Success();

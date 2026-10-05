@@ -360,7 +360,7 @@ public sealed class CategoryServiceTest
         CancellationToken cancellationToken)
     {
         // Arrange
-        repoMock.Setup(r => r.GetAllByNameAsync(
+        repoMock.Setup(r => r.GetAllAsync(
                 It.Is<PagedQueryDto<Category>>(pq => pq.Take == 1000 && pq.Skip == 0),
                 cancellationToken))
             .ReturnsAsync(categories);
@@ -373,7 +373,7 @@ public sealed class CategoryServiceTest
         {
             Assert.True(result.IsSuccess);
             Assert.Equal(categories.Count, result.Value.Count());
-            repoMock.Verify(r => r.GetAllByNameAsync(
+            repoMock.Verify(r => r.GetAllAsync(
                 It.IsAny<PagedQueryDto<Category>>(), cancellationToken), Times.Once);
         });
     }
@@ -387,7 +387,7 @@ public sealed class CategoryServiceTest
     {
         // Arrange
         var emptyList = new List<CategoryDto>();
-        repoMock.Setup(r => r.GetAllByNameAsync(
+        repoMock.Setup(r => r.GetAllAsync(
                 It.IsAny<PagedQueryDto<Category>>(),
                 cancellationToken))
             .ReturnsAsync(emptyList);
@@ -411,7 +411,7 @@ public sealed class CategoryServiceTest
     CancellationToken cancellationToken)
     {
         // Arrange
-        repoMock.Setup(r => r.GetAllByNameAsync(
+        repoMock.Setup(r => r.GetAllAsync(
                 It.IsAny<PagedQueryDto<Category>>(),
                 cancellationToken))
             .ReturnsAsync((IEnumerable<CategoryDto>)null!);
@@ -437,7 +437,7 @@ public sealed class CategoryServiceTest
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        repoMock.Setup(r => r.GetAllByNameAsync(
+        repoMock.Setup(r => r.GetAllAsync(
                 It.IsAny<PagedQueryDto<Category>>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new OperationCanceledException());

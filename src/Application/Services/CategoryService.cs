@@ -60,9 +60,9 @@ internal sealed class CategoryService(
 
     public async Task<Result<IEnumerable<CategoryDto>>> GetAllByNameAsync(CancellationToken ct)
     {
-        var pagedQuery = new PagedQueryDto<Category>(1000, 0, c => c.Name);
+        var pagedQuery = new PagedQueryDto<Category, string>(1000, 0, c => c.Name);
 
-        var result = await repository.GetAllByNameAsync(pagedQuery, ct);
+        var result = await repository.GetAllAsync(pagedQuery, ct);
         if (result is null)
             return Result.Success(Enumerable.Empty<CategoryDto>());
 

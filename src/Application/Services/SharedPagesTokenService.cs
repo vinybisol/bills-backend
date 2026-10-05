@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Application.Abstractions.Services;
 using Application.DTOs.Factories;
-using Application.DTOs.Services;
+using Application.DTOs.Services.PesonAccess;
 using Domain.Abstractions;
 using Domain.Infrastructures;
 using Microsoft.Extensions.Options;
@@ -36,41 +36,36 @@ public class SharedPagesTokenService(
 
     public Result<PesonAccessLinkTokenDto> Validate(string token)
     {
-        try
-        {
-            var secret = sharedPagesOptions.Value.Secret;
-            var secretBytes = Encoding.UTF8.GetBytes(secret);
+        var secret = sharedPagesOptions.Value.Secret;
+        var secretBytes = Encoding.UTF8.GetBytes(secret);
 
-            var parts = token.Split('.');
-            var payload = parts[0];
-            var signature = parts[1];
+        var parts = token.Split('.');
+        if (parts.Length != 2)
+            return Error.Validation("token is not a valid format");
 
-            var payloadBytes = Base64Url.DecodeFromChars(payload);
+        var payload = parts[0];
+        var signature = parts[1];
 
-            var sigToValidata = HMACSHA256.HashData(secretBytes, payloadBytes);
-            var newSignature = Convert.ToHexStringLower(sigToValidata);
+        var payloadBytes = Base64Url.DecodeFromChars(payload);
 
-            var assinaturaValida = CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(signature),
-                Convert.FromHexString(newSignature)
-            );
-            if (assinaturaValida is false)
-                return Error.InvalidOperation;
+        var sigToValidata = HMACSHA256.HashData(secretBytes, payloadBytes);
+        var newSignature = Convert.ToHexStringLower(sigToValidata);
 
-            var pesonAccessLinkTokenDto = JsonSerializer.Deserialize<PesonAccessLinkTokenDto>(payloadBytes);
-
-            if (pesonAccessLinkTokenDto is null)
-                return Error.InvalidOperation;
-
-            if (pesonAccessLinkTokenDto.IssuedAt < timeProvider.GetUtcNow())
-                return Error.InvalidOperation;
-
-            return pesonAccessLinkTokenDto;
-        }
-        catch (Exception e)
-        {
-            _ = e;
+        var assinaturaValida = CryptographicOperations.FixedTimeEquals(
+            Convert.FromHexString(signature),
+            Convert.FromHexString(newSignature)
+        );
+        if (assinaturaValida is false)
             return Error.InvalidOperation;
-        }
+
+        var pesonAccessLinkTokenDto = JsonSerializer.Deserialize<PesonAccessLinkTokenDto>(payloadBytes);
+
+        if (pesonAccessLinkTokenDto is null)
+            return Error.InvalidOperation;
+
+        if (pesonAccessLinkTokenDto.ExpiresAt < timeProvider.GetUtcNow())
+            return Error.InvalidOperation;
+
+        return pesonAccessLinkTokenDto;
     }
 }

@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BillsBackend.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260920134915_Update person access link")]
-    partial class Updatepersonaccesslink
+    [Migration("20261005224106_Add person link share")]
+    partial class Addpersonlinkshare
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -355,17 +355,13 @@ namespace BillsBackend.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<bool>("Active")
-                        .HasColumnType("boolean")
-                        .HasColumnName("active");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<DateTimeOffset>("IssuedAt")
+                    b.Property<DateTimeOffset?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("issued_at");
+                        .HasColumnName("expires_at");
 
                     b.Property<long>("OwnerId")
                         .HasColumnType("bigint")
@@ -375,7 +371,7 @@ namespace BillsBackend.Api.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("person_id");
 
-                    b.Property<DateTimeOffset>("RevokeAt")
+                    b.Property<DateTimeOffset?>("RevokeAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revoke_at");
 

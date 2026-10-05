@@ -33,9 +33,9 @@ internal sealed class PersonService(
 
     public async Task<Result<IEnumerable<PersonDto>>> GetAllByNameAsync(CancellationToken ct)
     {
-        var pagedQuery = new PagedQueryDto<Person>(1000, 0, c => c.Name);
+        var pagedQuery = new PagedQueryDto<Person, string>(1000, 0, c => c.Name);
 
-        var result = await repository.GetAllByNameAsync(pagedQuery, ct);
+        var result = await repository.GetAllAsync(pagedQuery, ct);
         if (result is null)
             return Result.Success(Enumerable.Empty<PersonDto>());
 

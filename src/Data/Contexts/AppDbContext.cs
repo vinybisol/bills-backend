@@ -194,17 +194,11 @@ public sealed class AppDbContext(
                 .HasColumnName("token_id")
                 .IsRequired();
 
-            entity.Property(p => p.Active)
-                .HasColumnName("active")
-                .IsRequired();
-
             entity.Property(p => p.ExpiresAt)
-                .HasColumnName("issued_at")
-                .IsRequired();
+                .HasColumnName("expires_at");
 
             entity.Property(p => p.RevokeAt)
-            .HasColumnName("revoke_at")
-            .IsRequired();
+            .HasColumnName("revoke_at");
 
             entity.Property(p => p.CreatedAt)
                 .HasColumnName("created_at")
@@ -220,7 +214,7 @@ public sealed class AppDbContext(
 
             // Restricts all Person reads to the current owner's active rows.
             // currentOwner.Id is evaluated at query-execution time from the scoped service.
-            entity.HasQueryFilter(p => p.Active && p.OwnerId == currentOwner.Id);
+            entity.HasQueryFilter(p => p.OwnerId == currentOwner.Id);
         });
 
         modelBuilder.Entity<Income>(entity =>
