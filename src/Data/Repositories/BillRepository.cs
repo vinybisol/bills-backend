@@ -16,7 +16,7 @@ internal sealed class BillRepository(AppDbContext db) : IBillRepository
 
     public async Task<Bill?> GetByIdAsync(long id, CancellationToken ct) => await _entity.FirstOrDefaultAsync(f => f.Id == id, ct);
 
-    public async Task<IEnumerable<BillDto>> GetAllByNameAsync(IPagedQuery<Bill> pagedQuery, CancellationToken ct) => await _entity
+    public async Task<IEnumerable<BillDto>> GetAllByNameAsync(IPagedQuery<Bill, string> pagedQuery, CancellationToken ct) => await _entity
         .AsNoTracking()
         .OrderBy(pagedQuery.OrderBy)
         .ThenBy(b => b.Id)

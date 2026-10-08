@@ -219,7 +219,7 @@ public sealed class CategoryServiceTests
     {
         // Arrange
         IEnumerable<CategoryDto> categories = [new CategoryDto(1L, "Lazer"), new CategoryDto(2L, "Moradia")];
-        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Category>>(), Arg.Any<CancellationToken>()).Returns(categories);
+        _repository.GetAllAsync(Arg.Any<IPagedQuery<Category, string>>(), Arg.Any<CancellationToken>()).Returns(categories);
 
         // Act
         var result = await _sut.GetAllByNameAsync(CancellationToken.None);
@@ -235,8 +235,8 @@ public sealed class CategoryServiceTests
         await _sut.GetAllByNameAsync(CancellationToken.None);
 
         // Assert
-        await _repository.Received(1).GetAllByNameAsync(
-            Arg.Is<IPagedQuery<Category>>(q => q.Take == 1000 && q.Skip == 0),
+        await _repository.Received(1).GetAllAsync(
+            Arg.Is<IPagedQuery<Category, string>>(q => q.Take == 1000 && q.Skip == 0),
             Arg.Any<CancellationToken>());
     }
 
@@ -244,7 +244,7 @@ public sealed class CategoryServiceTests
     public async Task GetAllByNameAsync_RepositoryReturnsNull_ReturnsEmptySuccess()
     {
         // Arrange
-        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Category>>(), Arg.Any<CancellationToken>())
+        _repository.GetAllAsync(Arg.Any<IPagedQuery<Category, string>>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IEnumerable<CategoryDto>>(null!));
 
         // Act

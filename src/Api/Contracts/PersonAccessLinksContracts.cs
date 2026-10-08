@@ -1,3 +1,3 @@
 namespace Api.Contracts;
 
-internal sealed record CreateAccessLinkRequest(long Id);
+internal sealed record CreateAccessLinkRequest(long PersonId, DateTimeOffset? ExpireAt);

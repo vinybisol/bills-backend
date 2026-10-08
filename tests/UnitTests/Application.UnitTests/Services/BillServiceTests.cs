@@ -252,8 +252,8 @@ public sealed class BillServiceTests
     {
         // Arrange
         BillDto[] bills = [new(1, "Aluguel", CategoryId, BillKindEnum.Recurring, 1500m, 1m, null)];
-        IPagedQuery<Bill>? query = null;
-        _repository.GetAllByNameAsync(Arg.Do<IPagedQuery<Bill>>(q => query = q), Arg.Any<CancellationToken>()).Returns(bills);
+        IPagedQuery<Bill, string>? query = null;
+        _repository.GetAllByNameAsync(Arg.Do<IPagedQuery<Bill, string>>(q => query = q), Arg.Any<CancellationToken>()).Returns(bills);
 
         // Act
         var result = await _sut.GetAllByNameAsync(CancellationToken.None);
@@ -273,7 +273,7 @@ public sealed class BillServiceTests
     public async Task GetAllByNameAsync_RepositoryReturnsNull_ReturnsEmpty()
     {
         // Arrange
-        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Bill>>(), Arg.Any<CancellationToken>())
+        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Bill, string>>(), Arg.Any<CancellationToken>())
             .Returns((IEnumerable<BillDto>)null!);
 
         // Act

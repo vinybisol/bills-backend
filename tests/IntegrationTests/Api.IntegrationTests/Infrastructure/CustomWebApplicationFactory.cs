@@ -41,6 +41,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             cfg.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Firebase:ProjectId"] = TestTokens.ProjectId,
+                ["SharedPages:Secret"] = TestTokens.ProjectId,
             });
         });
 

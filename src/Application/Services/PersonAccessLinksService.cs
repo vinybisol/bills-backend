@@ -1,10 +1,7 @@
-using System.Buffers.Text;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
-using Application.DTOs.Services;
+using Application.DTOs;
+using Application.DTOs.Services.PesonAccess;
 using Domain.Abstractions;
 using Domain.Abstractions.Filters;
 using Domain.Entities;
@@ -16,9 +13,10 @@ internal sealed class PersonAccessLinksService(
     IPersonAccessLinksRepository repository,
     IUnitOfWork unitOfWork,
     ICurrentOwner currentOwner,
+    ISharedPagesTokenService sharedPagesTokenService,
     TimeProvider timeProvider) : IPersonAccessLinksService
 {
-    public async Task<Result<PersonAccessLinkDto>> CreateAsync(long personId, CancellationToken ct)
+    public async Task<Result<string>> CreateAsync(long personId, DateTimeOffset? expiresAt, CancellationToken ct)
     {
         if (personId <= 0)
             return Error.Validation("Person id cannot be less or equals zero");
@@ -27,27 +25,32 @@ internal sealed class PersonAccessLinksService(
         if (person is null)
             return Error.NotFound(nameof(Person));
 
-        var personAccessLinkExists = await repository.ExistsByPersonIdAsync(personId, ct);
-        if (personAccessLinkExists)
-            return Error.Conflict(nameof(PersonAccessLink));
+        if (expiresAt.HasValue && expiresAt.Value <= timeProvider.GetUtcNow())
+            return Error.Validation("Token with worng expire time");
 
-        var plainToken = Convert.ToBase64String(
-            RandomNumberGenerator.GetBytes(32));
+        var sharedPagesTokenRes = sharedPagesTokenService.Issue(personId, expiresAt);
 
-        var tokenHash = Convert.ToHexString(
-            SHA256.HashData(
-                Encoding.UTF8.GetBytes(plainToken)));
+        if (sharedPagesTokenRes.IsFailure)
+            return Error.InvalidOperation;
 
-        var accessToken = new PesonAccessLinkTokenDto(personId, tokenHash);
+        var sharedPagesToken = sharedPagesTokenRes.Value;
+        var personAccessLink = PersonAccessLink.Create(
+            currentOwner.Id, person.Id,
+            sharedPagesToken.TokenId,
+            sharedPagesToken.ExpiresAt,
+            timeProvider.GetUtcNow());
 
-        var encodedToken = Base64Url.EncodeToString(JsonSerializer.SerializeToUtf8Bytes(accessToken));
-
-        var personAccessLink = PersonAccessLink.Create(currentOwner.Id, person.Id, tokenHash, timeProvider.GetUtcNow());
         repository.Add(personAccessLink);
 
         await unitOfWork.SaveChangesAsync(ct);
+        return sharedPagesToken.Token;
+    }
 
-        return Result.Create(new PersonAccessLinkDto(personAccessLink.Id, encodedToken));
+    public async Task<Result<IReadOnlyCollection<PesonAccessLinkDto>>> GetAllAsync(CancellationToken ct)
+    {
+        var pagedQuery = new PagedQueryDto<PersonAccessLink, DateTimeOffset>(1000, 0, c => c.CreatedAt);
+        var result = await repository.GetAllAsync(pagedQuery, ct);
+        return Result.Success(result);
     }
 
     public async Task<Result> RevokeAsync(long id, CancellationToken ct)
@@ -55,6 +58,9 @@ internal sealed class PersonAccessLinksService(
         var personAccessLink = await repository.GetByIdAsync(id, ct);
         if (personAccessLink is null)
             return Error.NotFound(nameof(PersonAccessLink));
+
+        if (personAccessLink.RevokeAt.HasValue)
+            return Result.Success();
 
         personAccessLink.Revoke(timeProvider.GetUtcNow());
 
@@ -65,31 +71,20 @@ internal sealed class PersonAccessLinksService(
 
     private const string TokenField = "token";
 
-    public async Task<Result> ValidateTokenAsync(string? token, CancellationToken ct)
+    public async Task<Result> ValidateTokenAsync(string token, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(token))
-            return new ValidationError([new Error(TokenField, "The token cannot be null nor empty.", ErrorType.Validation)]);
+        var tokenResult = sharedPagesTokenService.Validate(token);
+        if (tokenResult.IsFailure)
+            return tokenResult;
 
-        try
-        {
-            var json = Base64Url.DecodeFromChars(token);
-            var pesonAccessLinkTokenDto = JsonSerializer.Deserialize<PesonAccessLinkTokenDto>(json);
+        var pesonAccessLinkTokenDto = tokenResult.Value;
+        var personAccessLink = await repository.GetByTokenIdAsync(pesonAccessLinkTokenDto.TokenId, ct);
+        if (personAccessLink is null)
+            return Result.Failure(Error.Forbidden());
 
-            if (pesonAccessLinkTokenDto is null)
-                return Result.Failure(Error.InvalidOperation);
+        if (personAccessLink.RevokeAt <= timeProvider.GetUtcNow())
+            return Result.Failure(Error.Forbidden());
 
-            if (string.IsNullOrWhiteSpace(pesonAccessLinkTokenDto.Token))
-                return Result.Failure(Error.InvalidOperation);
-
-            var personAccessLink = await repository.GetByPersonIdAndHashAsync(pesonAccessLinkTokenDto.PersonId, pesonAccessLinkTokenDto.Token, ct);
-            if (personAccessLink is null)
-                return Result.Failure(Error.NotFound(nameof(PersonAccessLink)));
-
-            return Result.Success();
-        }
-        catch
-        {
-            return Result.Failure(Error.InvalidOperation);
-        }
+        return Result.Success();
     }
 }

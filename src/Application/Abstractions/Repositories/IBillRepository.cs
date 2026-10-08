@@ -8,7 +8,7 @@ public interface IBillRepository
 {
     void Add(Bill bill);
     Task<Bill?> GetByIdAsync(long id, CancellationToken cancellationToken);
-    Task<IEnumerable<BillDto>> GetAllByNameAsync(IPagedQuery<Bill> pagedQuery, CancellationToken cancellationToken);
+    Task<IEnumerable<BillDto>> GetAllByNameAsync(IPagedQuery<Bill, string> pagedQuery, CancellationToken cancellationToken);
 
     /// <summary>Returns the owner's active recurring bill templates, read-only.</summary>
     Task<IReadOnlyList<Bill>> GetRecurringAsync(CancellationToken cancellationToken);

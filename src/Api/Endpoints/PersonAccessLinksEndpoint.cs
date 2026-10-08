@@ -14,6 +14,7 @@ internal static class PersonAccessLinksEndpoint
         .AddEndpointFilter<UserEndpointFilter>();
 
         accessLinkGroup.MapPost("", CreateAccessLink);
+        accessLinkGroup.MapGet("/", GetAccessLink);
         accessLinkGroup.MapPut("/{id:long}/revoke", RevokeAccessLink);
 
         return group;
@@ -24,7 +25,17 @@ internal static class PersonAccessLinksEndpoint
         IPersonAccessLinksService service,
         CancellationToken ct)
     {
-        var result = await service.CreateAsync(createAccessLinkRequest.Id, ct);
+        var result = await service.CreateAsync(createAccessLinkRequest.PersonId, createAccessLinkRequest.ExpireAt, ct);
+
+        return result.ToHttpResult();
+    }
+
+    private static async Task<IResult> GetAccessLink(
+    IPersonAccessLinksService service,
+    CancellationToken ct)
+    {
+
+        var result = await service.GetAllAsync(ct);
 
         return result.ToHttpResult();
     }

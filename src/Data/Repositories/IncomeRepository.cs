@@ -16,7 +16,7 @@ internal sealed class IncomeRepository(AppDbContext db) : IIncomeRepository
 
     public async Task<Income?> GetByIdAsync(long id, CancellationToken ct) => await _entity.FirstOrDefaultAsync(f => f.Id == id, ct);
 
-    public async Task<IEnumerable<IncomeDto>> GetAllByNameAsync(IPagedQuery<Income> pagedQuery, CancellationToken ct) => await _entity
+    public async Task<IEnumerable<IncomeDto>> GetAllByNameAsync(IPagedQuery<Income, string> pagedQuery, CancellationToken ct) => await _entity
         .AsNoTracking()
         .OrderBy(pagedQuery.OrderBy)
         .ThenBy(i => i.Id)

@@ -17,7 +17,7 @@ public interface ICategoryRepository
     void Add(Category categories);
     void AddRange(IEnumerable<Category> categories);
     Task<Category?> GetByIdAsync(long id, CancellationToken cancellationToken);
-    Task<IEnumerable<CategoryDto>> GetAllByNameAsync(IPagedQuery<Category> pagedQuery, CancellationToken cancellationToken);
+    Task<IEnumerable<CategoryDto>> GetAllAsync(IPagedQuery<Category, string> pagedQuery, CancellationToken cancellationToken);
     Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
     Task<bool> ExistsByIdAsync(long id, CancellationToken cancellationToken);
 }

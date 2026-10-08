@@ -190,30 +190,31 @@ public sealed class AppDbContext(
                 .HasColumnName("person_id")
                 .IsRequired();
 
-            entity.Property(p => p.Active)
-                .HasColumnName("active")
+            entity.Property(p => p.TokenId)
+                .HasColumnName("token_id")
                 .IsRequired();
 
-            entity.Property(p => p.TokenHash)
-                .HasColumnName("token_hash")
-                .IsRequired();
+            entity.Property(p => p.ExpiresAt)
+                .HasColumnName("expires_at");
 
             entity.Property(p => p.RevokeAt)
-            .HasColumnName("revoke_at")
-            .IsRequired();
+            .HasColumnName("revoke_at");
 
             entity.Property(p => p.CreatedAt)
                 .HasColumnName("created_at")
                 .IsRequired();
 
             entity.HasOne(p => p.Person)
-            .WithMany(p => p.PersonAccessLinks)
-            .HasForeignKey(k => k.PersonId)
-            .OnDelete(DeleteBehavior.Restrict);
+                .WithMany(p => p.PersonAccessLinks)
+                .HasForeignKey(k => k.PersonId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => e.TokenId)
+                .IsUnique();
 
             // Restricts all Person reads to the current owner's active rows.
             // currentOwner.Id is evaluated at query-execution time from the scoped service.
-            entity.HasQueryFilter(p => p.Active && p.OwnerId == currentOwner.Id);
+            entity.HasQueryFilter(p => p.OwnerId == currentOwner.Id);
         });
 
         modelBuilder.Entity<Income>(entity =>

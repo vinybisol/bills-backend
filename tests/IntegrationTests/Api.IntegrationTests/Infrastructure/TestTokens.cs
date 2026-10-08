@@ -17,6 +17,7 @@ public static class TestTokens
 {
     /// <summary>The project id used as both issuer suffix and audience in tests.</summary>
     public const string ProjectId = "bills-test";
+    public const string Secret = "secret21secret21secret21secret21secret21secret21secret21";
 
     /// <summary>The issuer expected by the test host.</summary>
     public const string Issuer = $"https://securetoken.google.com/{ProjectId}";

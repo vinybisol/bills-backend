@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
@@ -6,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BillsBackend.Api.Migrations
 {
     /// <inheritdoc />
-    public partial class Addpersonaccesslink : Migration
+    public partial class Addpersonlinkshare : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -19,9 +20,9 @@ namespace BillsBackend.Api.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     owner_id = table.Column<long>(type: "bigint", nullable: false),
                     person_id = table.Column<long>(type: "bigint", nullable: false),
-                    active = table.Column<bool>(type: "boolean", nullable: false),
-                    token_hash = table.Column<string>(type: "text", nullable: false),
-                    revoke_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    token_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    revoke_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    expires_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
@@ -39,6 +40,12 @@ namespace BillsBackend.Api.Migrations
                 name: "IX_person_access_link_person_id",
                 table: "person_access_link",
                 column: "person_id");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_person_access_link_token_id",
+                table: "person_access_link",
+                column: "token_id",
+                unique: true);
         }
 
         /// <inheritdoc />

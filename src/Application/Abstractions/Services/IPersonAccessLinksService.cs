@@ -1,15 +1,13 @@
-using Application.DTOs.Services;
+using Application.DTOs.Services.PesonAccess;
 using Domain.Abstractions;
+using Domain.Entities;
 
 namespace Application.Abstractions.Services;
 
 public interface IPersonAccessLinksService
 {
-    /// <summary>
-    /// Checks a shared access token. A blank token is a <see cref="ValidationError"/> (field <c>token</c>);
-    /// any other failure (malformed/unknown token) means "not valid".
-    /// </summary>
-    Task<Result> ValidateTokenAsync(string? token, CancellationToken cancellationToken);
-    Task<Result<PersonAccessLinkDto>> CreateAsync(long personId, CancellationToken cancellationToken);
+    Task<Result> ValidateTokenAsync(string token, CancellationToken cancellationToken);
+    Task<Result<string>> CreateAsync(long personId, DateTimeOffset? expiresAt, CancellationToken cancellationToken);
     Task<Result> RevokeAsync(long id, CancellationToken cancellationToken);
+    Task<Result<IReadOnlyCollection<PesonAccessLinkDto>>> GetAllAsync(CancellationToken cancellationToken);
 }

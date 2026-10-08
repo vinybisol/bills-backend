@@ -35,7 +35,7 @@ internal sealed class IncomeService(
 
     public async Task<Result<IEnumerable<IncomeDto>>> GetAllByNameAsync(CancellationToken ct)
     {
-        var pagedQuery = new PagedQueryDto<Income>(1000, 0, i => i.Name);
+        var pagedQuery = new PagedQueryDto<Income, string>(1000, 0, i => i.Name);
 
         var result = await repository.GetAllByNameAsync(pagedQuery, ct);
         if (result is null)

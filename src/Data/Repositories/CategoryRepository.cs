@@ -25,7 +25,7 @@ internal sealed class CategoryRepository(AppDbContext db) : ICategoryRepository
     public async Task<Category?> GetByIdAsync(long id, CancellationToken ct) => await _entity.FirstOrDefaultAsync(f => f.Id == id, ct);
 
     /// <inheritdoc/>
-    public async Task<IEnumerable<CategoryDto>> GetAllByNameAsync(IPagedQuery<Category> pagedQuery, CancellationToken ct) => await _entity
+    public async Task<IEnumerable<CategoryDto>> GetAllAsync(IPagedQuery<Category, string> pagedQuery, CancellationToken ct) => await _entity
         .AsNoTracking()
         .OrderBy(pagedQuery.OrderBy)
         .Skip(pagedQuery.Skip)

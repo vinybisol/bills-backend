@@ -52,7 +52,7 @@ internal sealed class BillService(
 
     public async Task<Result<IEnumerable<BillDto>>> GetAllByNameAsync(CancellationToken ct)
     {
-        var pagedQuery = new PagedQueryDto<Bill>(1000, 0, b => b.Name);
+        var pagedQuery = new PagedQueryDto<Bill, string>(1000, 0, b => b.Name);
 
         var result = await repository.GetAllByNameAsync(pagedQuery, ct);
         if (result is null)

@@ -1,4 +1,6 @@
 using Application.Abstractions.Repositories;
+using Application.DTOs.Services.PesonAccess;
+using Application.Abstractions.Repositories.Strategies;
 using Data.Contexts;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +22,16 @@ internal sealed class PersonAccessLinksRepository(AppDbContext db) : IPersonAcce
     public async Task<PersonAccessLink?> GetByPersonIdAsync(long personId, CancellationToken ct)
         => await _entity.FirstOrDefaultAsync(f => f.PersonId == personId, ct);
 
-    public async Task<PersonAccessLink?> GetByPersonIdAndHashAsync(long personId, string computedHash, CancellationToken ct)
-        => await _entity.IgnoreQueryFilters().FirstOrDefaultAsync(f => f.PersonId == personId && f.TokenHash == computedHash, ct);
+    public async Task<PersonAccessLink?> GetByTokenIdAsync(Guid tokenId, CancellationToken ct)
+        => await _entity.IgnoreQueryFilters().FirstOrDefaultAsync(f => f.TokenId == tokenId, ct);
+
+    public async Task<IReadOnlyCollection<PesonAccessLinkDto>> GetAllAsync(IPagedQuery<PersonAccessLink, DateTimeOffset> pagedQuery, CancellationToken ct)
+        => await _entity
+            .AsNoTracking()
+            .OrderBy(pagedQuery.OrderBy)
+            .Skip(pagedQuery.Skip)
+            .Take(pagedQuery.Take)
+            .Select(s => new PesonAccessLinkDto(s.Id, s.PersonId, s.ExpiresAt, s.RevokeAt))
+            .ToListAsync(ct);
+
 }

@@ -352,13 +352,13 @@ namespace BillsBackend.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<bool>("Active")
-                        .HasColumnType("boolean")
-                        .HasColumnName("active");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
 
                     b.Property<long>("OwnerId")
                         .HasColumnType("bigint")
@@ -368,18 +368,20 @@ namespace BillsBackend.Api.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("person_id");
 
-                    b.Property<DateTimeOffset>("RevokeAt")
+                    b.Property<DateTimeOffset?>("RevokeAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revoke_at");
 
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("token_hash");
+                    b.Property<Guid>("TokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("token_id");
 
                     b.HasKey("Id");
 
                     b.HasIndex("PersonId");
+
+                    b.HasIndex("TokenId")
+                        .IsUnique();
 
                     b.ToTable("person_access_link", (string)null);
                 });

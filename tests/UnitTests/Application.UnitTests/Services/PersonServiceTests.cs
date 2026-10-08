@@ -141,7 +141,7 @@ public sealed class PersonServiceTests
     {
         // Arrange
         IEnumerable<PersonDto> people = [new PersonDto(1L, "Ana"), new PersonDto(2L, "Bruno")];
-        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Person>>(), Arg.Any<CancellationToken>()).Returns(people);
+        _repository.GetAllAsync(Arg.Any<IPagedQuery<Person, string>>(), Arg.Any<CancellationToken>()).Returns(people);
 
         // Act
         var result = await _sut.GetAllByNameAsync(CancellationToken.None);
@@ -158,9 +158,9 @@ public sealed class PersonServiceTests
     public async Task GetAllByNameAsync_Always_QueriesFirstPageOfOneThousandOrderedByName()
     {
         // Arrange
-        IPagedQuery<Person>? query = null;
-        _repository.GetAllByNameAsync(Arg.Do<IPagedQuery<Person>>(q => query = q), Arg.Any<CancellationToken>())
-            .Returns(Enumerable.Empty<PersonDto>());
+        IPagedQuery<Person, string>? query = null;
+        _repository.GetAllAsync(Arg.Do<IPagedQuery<Person, string>>(q => query = q), Arg.Any<CancellationToken>())
+            .Returns([]);
 
         // Act
         await _sut.GetAllByNameAsync(CancellationToken.None);
@@ -179,8 +179,8 @@ public sealed class PersonServiceTests
     public async Task GetAllByNameAsync_RepositoryReturnsEmpty_ReturnsEmptySuccess()
     {
         // Arrange
-        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Person>>(), Arg.Any<CancellationToken>())
-            .Returns(Enumerable.Empty<PersonDto>());
+        _repository.GetAllAsync(Arg.Any<IPagedQuery<Person, string>>(), Arg.Any<CancellationToken>())
+            .Returns([]);
 
         // Act
         var result = await _sut.GetAllByNameAsync(CancellationToken.None);
@@ -197,7 +197,7 @@ public sealed class PersonServiceTests
     public async Task GetAllByNameAsync_RepositoryReturnsNull_ReturnsEmptySuccess()
     {
         // Arrange
-        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Person>>(), Arg.Any<CancellationToken>())
+        _repository.GetAllAsync(Arg.Any<IPagedQuery<Person, string>>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IEnumerable<PersonDto>>(null!));
 
         // Act

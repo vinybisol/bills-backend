@@ -3,7 +3,7 @@ using Application.Abstractions.Repositories.Strategies;
 
 namespace Application.DTOs;
 
-public sealed record PagedQueryDto<T>(
+public sealed record PagedQueryDto<TIn, TResult>(
     int Take,
     int Skip,
-    Expression<Func<T, string>> OrderBy) : IPagedQuery<T>;
+    Expression<Func<TIn, TResult>> OrderBy) : IPagedQuery<TIn, TResult>;

@@ -9,6 +9,6 @@ public interface IPersonRepository
     void Add(Person person);
     Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken);
     Task<Person?> GetByIdAsync(long id, CancellationToken cancellationToken);
-    Task<bool> ExistsByIdAsync(long id, CancellationToken cancellationToken);
-    Task<IEnumerable<PersonDto>> GetAllByNameAsync(IPagedQuery<Person> pagedQuery, CancellationToken cancellationToken);
+    Task<IEnumerable<PersonDto>> GetAllAsync(IPagedQuery<Person, string> pagedQuery, CancellationToken cancellationToken);
+    Task<bool> ExistsByIdAsync(long id, CancellationToken ct);
 }

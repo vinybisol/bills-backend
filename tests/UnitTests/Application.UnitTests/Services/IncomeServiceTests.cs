@@ -175,7 +175,7 @@ public sealed class IncomeServiceTests
             new IncomeDto(1L, "Freela", IncomeKindEnum.OneOff, 100m),
             new IncomeDto(2L, "Salário", IncomeKindEnum.Recurring, 5000m),
         ];
-        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Income>>(), Arg.Any<CancellationToken>()).Returns(incomes);
+        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Income, string>>(), Arg.Any<CancellationToken>()).Returns(incomes);
 
         // Act
         var result = await _sut.GetAllByNameAsync(CancellationToken.None);
@@ -192,9 +192,9 @@ public sealed class IncomeServiceTests
     public async Task GetAllByNameAsync_Always_QueriesFirstPageOfOneThousandOrderedByName()
     {
         // Arrange
-        IPagedQuery<Income>? query = null;
-        _repository.GetAllByNameAsync(Arg.Do<IPagedQuery<Income>>(q => query = q), Arg.Any<CancellationToken>())
-            .Returns(Enumerable.Empty<IncomeDto>());
+        IPagedQuery<Income, string>? query = null;
+        _repository.GetAllByNameAsync(Arg.Do<IPagedQuery<Income, string>>(q => query = q), Arg.Any<CancellationToken>())
+            .Returns([]);
 
         // Act
         await _sut.GetAllByNameAsync(CancellationToken.None);
@@ -213,8 +213,8 @@ public sealed class IncomeServiceTests
     public async Task GetAllByNameAsync_RepositoryReturnsEmpty_ReturnsEmptySuccess()
     {
         // Arrange
-        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Income>>(), Arg.Any<CancellationToken>())
-            .Returns(Enumerable.Empty<IncomeDto>());
+        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Income, string>>(), Arg.Any<CancellationToken>())
+            .Returns([]);
 
         // Act
         var result = await _sut.GetAllByNameAsync(CancellationToken.None);
@@ -231,7 +231,7 @@ public sealed class IncomeServiceTests
     public async Task GetAllByNameAsync_RepositoryReturnsNull_ReturnsEmptySuccess()
     {
         // Arrange
-        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Income>>(), Arg.Any<CancellationToken>())
+        _repository.GetAllByNameAsync(Arg.Any<IPagedQuery<Income, string>>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IEnumerable<IncomeDto>>(null!));
 
         // Act

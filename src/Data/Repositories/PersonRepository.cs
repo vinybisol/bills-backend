@@ -11,12 +11,10 @@ internal sealed class PersonRepository(AppDbContext db) : IPersonRepository
 {
     private readonly DbSet<Person> _entity = db.Persons;
     public void Add(Person person) => _entity.Add(person);
-
     public async Task<bool> ExistsByNameAsync(string name, CancellationToken ct) => await _entity.AnyAsync(f => f.Name == name, ct);
+    public async Task<bool> ExistsByIdAsync(long id, CancellationToken ct) => await _entity.AnyAsync(a => a.Id == id, ct);
 
-    public async Task<bool> ExistsByIdAsync(long id, CancellationToken ct) => await _entity.AnyAsync(f => f.Id == id, ct);
-
-    public async Task<IEnumerable<PersonDto>> GetAllByNameAsync(IPagedQuery<Person> pagedQuery, CancellationToken ct) => await _entity
+    public async Task<IEnumerable<PersonDto>> GetAllAsync(IPagedQuery<Person, string> pagedQuery, CancellationToken ct) => await _entity
          .AsNoTracking()
           .OrderBy(pagedQuery.OrderBy)
            .Skip(pagedQuery.Skip)

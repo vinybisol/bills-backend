@@ -6,13 +6,13 @@ namespace Data.Contexts;
 
 public interface IMigrationService
 {
-    void RunMigration(AppOptions options);
+    void RunMigration(AppSettings options);
 }
 
 [ExcludeFromCodeCoverage]
 public sealed class MigrationService(AppDbContext db) : IMigrationService
 {
-    public void RunMigration(AppOptions options)
+    public void RunMigration(AppSettings options)
     {
         // Never auto-migrate when pointed at the production connection string — schema
         // changes against prod go through the deploy pipeline only.
