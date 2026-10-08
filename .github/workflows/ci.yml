@@ -157,7 +157,7 @@ jobs:
       # the design-time AppDbContextFactory (reads NEON_CONNECTION_STRING). Runs before
       # publish/deploy so the schema is ready by the time the new code starts serving.
       - name: Apply database migrations
-        run: dotnet ef database update --project src/Data/Data.csproj
+        run: dotnet ef database update --project src/Data/Data.csproj --configuration Release
         env:
           NEON_CONNECTION_STRING: ${{ secrets.NEON_CONNECTION_STRING }}
 
