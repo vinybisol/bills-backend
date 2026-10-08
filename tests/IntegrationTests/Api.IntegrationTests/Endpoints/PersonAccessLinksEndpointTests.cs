@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using Api.Contracts;
 using Application.DTOs.Services;
+using Application.DTOs.Services.PesonAccess;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Api.IntegrationTests.Endpoints;
 
@@ -13,8 +15,11 @@ namespace Api.IntegrationTests.Endpoints;
 public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
 {
     private const string AccessLinksUri = "/api/v1/persons/access-links";
+    private static readonly DateTimeOffset _expiresAt = new(2026, 9, 8, 9, 35, 0, TimeSpan.Zero);
+
 
     [TestCase("", "POST")]
+    [TestCase("", "GET")]
     [TestCase("/100/revoke", "PUT")]
     public async Task Endpoints_WithoutToken_ReturnUnauthorized(string uri, string method)
     {
@@ -36,18 +41,18 @@ public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
         using var client = CreateAuthenticatedClient();
 
         // Act
-        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(personId));
+        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(personId, _expiresAt));
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 
         var responseText = await response.Content.ReadAsStringAsync();
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(response.Headers.Location, Is.Null);
             Assert.That(responseText, Does.Contain("Error.Validation"));
             Assert.That(responseText, Does.Contain("less or equals zero"));
-        });
+        }
     }
 
     [Test]
@@ -57,7 +62,7 @@ public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
         using var client = CreateAuthenticatedClient();
 
         // Act
-        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(long.MaxValue));
+        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(long.MaxValue, _expiresAt));
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -72,26 +77,25 @@ public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
     }
 
     [Test]
-    public async Task CreateAccessLink_AccessLinkAlreadyExists_ReturnsConflict()
+    public async Task CreateAccessLink_DateAlreadyExpired_ReturnValidationError()
     {
         // Arrange
         using var client = CreateAuthenticatedClient();
         var person = await CreatePersonAsync(client);
-        await CreateAccessLinkAsync(client, person);
 
         // Act
-        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(person.Id));
+        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(person.Id, _expiresAt));
 
         // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 
         var responseText = await response.Content.ReadAsStringAsync();
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(response.Headers.Location, Is.Null);
-            Assert.That(responseText, Does.Contain("Error.Conflict"));
-            Assert.That(responseText, Does.Contain("PersonAccessLink já existe"));
-        });
+            Assert.That(responseText, Does.Contain("Error.Validation"));
+            Assert.That(responseText, Does.Contain("Token with worng expire time"));
+        }
     }
 
     [Test]
@@ -101,19 +105,25 @@ public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
         using var client = CreateAuthenticatedClient();
         var person = await CreatePersonAsync(client);
 
+        var timeProvider = Factory.Services.GetRequiredService<TimeProvider>();
+        var expiresAt = timeProvider.GetUtcNow().AddMinutes(10);
+
         // Act
-        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(person.Id));
+        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(person.Id, expiresAt));
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
-        var body = await response.Content.ReadFromJsonAsync<PersonAccessLinkDto>();
-        Assert.That(body, Is.Not.Null);
-        Assert.Multiple(() =>
+        var responseBody = await response.Content.ReadFromJsonAsync<CreatePesonAccessLinkDto>();
+        Assert.That(responseBody, Is.Not.Null);
+
+        using (Assert.EnterMultipleScope())
         {
-            Assert.That(body!.Id, Is.Not.Zero);
-            Assert.That(body.Token, Has.Length.GreaterThan(20));
-        });
+            Assert.That(response.Headers.Location, Is.Null);
+            var tokenSplited = responseBody.Token.Split('.');
+            Assert.That(responseBody.Token, Has.Length.AtLeast(20));
+            Assert.That(tokenSplited, Has.Length.EqualTo(2));
+        }
     }
 
     [Test]
@@ -129,12 +139,12 @@ public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
 
         var responseText = await response.Content.ReadAsStringAsync();
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
             Assert.That(response.Headers.Location, Is.Null);
             Assert.That(responseText, Does.Contain("Error.NotFound"));
             Assert.That(responseText, Does.Contain("PersonAccessLink não encontrado"));
-        });
+        }
     }
 
     [Test]
@@ -143,13 +153,56 @@ public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
         // Arrange
         using var client = CreateAuthenticatedClient();
         var person = await CreatePersonAsync(client);
-        var accessLink = await CreateAccessLinkAsync(client, person);
+        Assert.That(person, Is.Not.Null);
+        var timeProvider = Factory.Services.GetRequiredService<TimeProvider>();
+        var expiresAt = timeProvider.GetUtcNow().AddMinutes(10);
+        var pesonAccessLinkDto = await CreateAccessLinkAsync(client, person.Id, expiresAt);
 
         // Act
-        using var response = await client.PutAsync($"{AccessLinksUri}/{accessLink.Id}/revoke", null);
+        using var response = await client.PutAsync($"{AccessLinksUri}/{pesonAccessLinkDto.Id}/revoke", null);
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+    }
+
+    [Test]
+    public async Task GetAllAsync_NotExistingAccessLink_ReturnsNoContent()
+    {
+        // Arrange
+        using var client = CreateAuthenticatedClient();
+
+        // Act
+        using var response = await client.GetAsync($"{AccessLinksUri}");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+    }
+
+    [Test]
+    public async Task GetAllAsync_ExistingTwoAccessLink_ReturnsOk()
+    {
+        // Arrange
+        using var client = CreateAuthenticatedClient();
+        var person = await CreatePersonAsync(client);
+        Assert.That(person, Is.Not.Null);
+        var timeProvider = Factory.Services.GetRequiredService<TimeProvider>();
+        var expiresAt = timeProvider.GetUtcNow().AddMinutes(10);
+        _ = await CreateAccessLinkAsync(client, person.Id, expiresAt);
+        _ = await CreateAccessLinkAsync(client, person.Id, expiresAt);
+
+        // Act
+        using var response = await client.GetAsync($"{AccessLinksUri}");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var body = await response.Content.ReadFromJsonAsync<IEnumerable<PesonAccessLinkDto>>();
+        Assert.That(body, Is.Not.Null);
+        var links = body.ToList();
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(links, Has.Count.EqualTo(2));
+            Assert.That(links, Has.All.Matches<PesonAccessLinkDto>(link => link!.PersonId == person.Id));
+        }
     }
 
     private static async Task<PersonDto> CreatePersonAsync(HttpClient client)
@@ -161,11 +214,11 @@ public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
         return body!;
     }
 
-    private static async Task<PersonAccessLinkDto> CreateAccessLinkAsync(HttpClient client, PersonDto person)
+    private static async Task<CreatePesonAccessLinkDto> CreateAccessLinkAsync(HttpClient client, long personId, DateTimeOffset expiresAt)
     {
-        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(person.Id));
-        var body = await response.Content.ReadFromJsonAsync<PersonAccessLinkDto>();
+        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(personId, expiresAt));
+        var body = await response.Content.ReadFromJsonAsync<CreatePesonAccessLinkDto>();
         Assert.That(body, Is.Not.Null);
-        return body!;
+        return body;
     }
 }

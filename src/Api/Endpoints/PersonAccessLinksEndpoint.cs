@@ -34,9 +34,7 @@ internal static class PersonAccessLinksEndpoint
     IPersonAccessLinksService service,
     CancellationToken ct)
     {
-
         var result = await service.GetAllAsync(ct);
-
         return result.ToHttpResult();
     }
 

@@ -6,7 +6,7 @@ using System.Text.Json;
 using Api.Contracts;
 using Api.IntegrationTests.TestSupport;
 using Application.Abstractions.Services;
-using Application.DTOs.Services;
+using Application.DTOs.Services.PesonAccess;
 using Domain.Abstractions;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,7 +23,10 @@ namespace Api.IntegrationTests.Endpoints;
 public sealed class ProblemDetailsTests : IntegrationTestBase
 {
     private const string AccessLinksUri = "/api/v1/persons/access-links";
+    private const string CategoryLinksUri = "/api/v1/categories";
     private const string SharedUri = "/api/v1/bills/shared";
+
+    private static readonly DateTimeOffset _expiresAt = new(2026, 9, 10, 14, 0, 0, TimeSpan.Zero);
 
     private static async Task<JsonElement> ReadProblemAsync(HttpResponseMessage response, HttpStatusCode expectedStatus)
     {
@@ -47,18 +50,18 @@ public sealed class ProblemDetailsTests : IntegrationTestBase
     public async Task ProtectedEndpoint_WithoutToken_Returns401ProblemDetails()
     {
         // Act
-        using var response = await Client.GetAsync("/api/v1/categories");
+        using var response = await Client.GetAsync(CategoryLinksUri);
 
         // Assert
         var problem = await ReadProblemAsync(response, HttpStatusCode.Unauthorized);
-        Assert.That(problem.GetProperty("instance").GetString(), Is.EqualTo("/api/v1/categories"));
+        Assert.That(problem.GetProperty("instance").GetString(), Is.EqualTo(CategoryLinksUri));
     }
 
     [Test]
     public async Task ProtectedEndpoint_WithUntrustedToken_Returns401ProblemDetails()
     {
         // Arrange
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/categories");
+        using var request = new HttpRequestMessage(HttpMethod.Get, CategoryLinksUri);
         request.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", TestTokens.CreateTokenWithUntrustedSignature());
 
@@ -98,7 +101,7 @@ public sealed class ProblemDetailsTests : IntegrationTestBase
         using var content = new StringContent("{ \"name\": ", Encoding.UTF8, "application/json");
 
         // Act
-        using var response = await client.PostAsync("/api/v1/categories", content);
+        using var response = await client.PostAsync(CategoryLinksUri, content);
 
         // Assert
         await ReadProblemAsync(response, HttpStatusCode.BadRequest);
@@ -125,7 +128,7 @@ public sealed class ProblemDetailsTests : IntegrationTestBase
         using var content = new StringContent("name=x", Encoding.UTF8, "text/plain");
 
         // Act
-        using var response = await client.PostAsync("/api/v1/categories", content);
+        using var response = await client.PostAsync(CategoryLinksUri, content);
 
         // Assert
         await ReadProblemAsync(response, HttpStatusCode.UnsupportedMediaType);
@@ -159,21 +162,18 @@ public sealed class ProblemDetailsTests : IntegrationTestBase
     {
         // Arrange
         using var client = CreateAuthenticatedClient();
-        using var personResponse = await client.PostAsJsonAsync(
-            "/api/v1/persons", new CreatePersonRequest($"Person {Guid.NewGuid():N}"));
-        var person = await personResponse.Content.ReadFromJsonAsync<PersonDto>();
-        using var first = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(person!.Id));
-        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        using var first = await client.PostAsJsonAsync(CategoryLinksUri, new CreateCategoryRequest("Bichos"));
+        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
         // Act
-        using var response = await client.PostAsJsonAsync(AccessLinksUri, new CreateAccessLinkRequest(person.Id));
+        using var response = await client.PostAsJsonAsync(CategoryLinksUri, new CreateCategoryRequest("Bichos"));
 
         // Assert
         var problem = await ReadProblemAsync(response, HttpStatusCode.Conflict);
         using (Assert.EnterMultipleScope())
         {
             Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("Error.Conflict"));
-            Assert.That(problem.GetProperty("instance").GetString(), Is.EqualTo(AccessLinksUri));
+            Assert.That(problem.GetProperty("instance").GetString(), Is.EqualTo(CategoryLinksUri));
         }
     }
 
@@ -184,7 +184,7 @@ public sealed class ProblemDetailsTests : IntegrationTestBase
         using var client = CreateAuthenticatedClient();
 
         // Act
-        using var response = await client.PostAsJsonAsync("/api/v1/categories", new CreateCategoryRequest("   "));
+        using var response = await client.PostAsJsonAsync(CategoryLinksUri, new CreateCategoryRequest("   "));
 
         // Assert
         var problem = await ReadProblemAsync(response, HttpStatusCode.BadRequest);
@@ -206,7 +206,7 @@ public sealed class ProblemDetailsTests : IntegrationTestBase
         using var response = await Client.GetAsync($"{SharedUri}{query}");
 
         // Assert
-        await ProblemAssertions.AssertValidationProblemAsync(response, "token");
+        await ProblemAssertions.AssertValidationProblemAsync(response, "Error.Validation");
     }
 
     [TestCase("not-a-token")]
@@ -255,10 +255,13 @@ public sealed class ProblemDetailsTests : IntegrationTestBase
         public Task<Result> ValidateTokenAsync(string? token, CancellationToken cancellationToken) =>
             throw new InvalidOperationException(SecretMessage);
 
-        public Task<Result<PersonAccessLinkDto>> CreateAsync(long personId, CancellationToken cancellationToken) =>
+        public Task<Result> RevokeAsync(long id, CancellationToken cancellationToken) =>
             throw new InvalidOperationException(SecretMessage);
 
-        public Task<Result> RevokeAsync(long id, CancellationToken cancellationToken) =>
+        public Task<Result<CreatePesonAccessLinkDto>> CreateAsync(long personId, DateTimeOffset? expiresAt, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException(SecretMessage);
+
+        public Task<Result<IEnumerable<PesonAccessLinkDto>>> GetAllAsync(CancellationToken cancellationToken) =>
             throw new InvalidOperationException(SecretMessage);
     }
 }

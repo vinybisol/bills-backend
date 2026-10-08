@@ -17,6 +17,7 @@
     <Project Path="tests/UnitTests/Application.UnitTests/Application.UnitTests.csproj" />
     <Project Path="tests/UnitTests/Data.UnitTests/Data.UnitTests.csproj" />
     <Project Path="tests/UnitTests/Domain.UnitTests/Domain.UnitTests.csproj" />
+    <Project Path="tests/UnitTests/UnitTestCommon/UnitTestCommon.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path="Directory.Packages.props" />

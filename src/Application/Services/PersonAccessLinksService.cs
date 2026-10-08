@@ -16,7 +16,7 @@ internal sealed class PersonAccessLinksService(
     ISharedPagesTokenService sharedPagesTokenService,
     TimeProvider timeProvider) : IPersonAccessLinksService
 {
-    public async Task<Result<string>> CreateAsync(long personId, DateTimeOffset? expiresAt, CancellationToken ct)
+    public async Task<Result<CreatePesonAccessLinkDto>> CreateAsync(long personId, DateTimeOffset? expiresAt, CancellationToken ct)
     {
         if (personId <= 0)
             return Error.Validation("Person id cannot be less or equals zero");
@@ -24,7 +24,6 @@ internal sealed class PersonAccessLinksService(
         var person = await personRepository.GetByIdAsync(personId, ct);
         if (person is null)
             return Error.NotFound(nameof(Person));
-
         if (expiresAt.HasValue && expiresAt.Value <= timeProvider.GetUtcNow())
             return Error.Validation("Token with worng expire time");
 
@@ -43,14 +42,14 @@ internal sealed class PersonAccessLinksService(
         repository.Add(personAccessLink);
 
         await unitOfWork.SaveChangesAsync(ct);
-        return sharedPagesToken.Token;
+        return new CreatePesonAccessLinkDto(personAccessLink.Id, sharedPagesToken.Token);
     }
 
-    public async Task<Result<IReadOnlyCollection<PesonAccessLinkDto>>> GetAllAsync(CancellationToken ct)
+    public async Task<Result<IEnumerable<PesonAccessLinkDto>>> GetAllAsync(CancellationToken ct)
     {
         var pagedQuery = new PagedQueryDto<PersonAccessLink, DateTimeOffset>(1000, 0, c => c.CreatedAt);
         var result = await repository.GetAllAsync(pagedQuery, ct);
-        return Result.Success(result);
+        return Result.Create<IEnumerable<PesonAccessLinkDto>>(result);
     }
 
     public async Task<Result> RevokeAsync(long id, CancellationToken ct)
@@ -69,10 +68,11 @@ internal sealed class PersonAccessLinksService(
         return Result.Success();
     }
 
-    private const string TokenField = "token";
-
-    public async Task<Result> ValidateTokenAsync(string token, CancellationToken ct)
+    public async Task<Result> ValidateTokenAsync(string? token, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(token))
+            return new ValidationError([Error.Validation("Token cannot be null, empty or whitespaces")]);
+
         var tokenResult = sharedPagesTokenService.Validate(token);
         if (tokenResult.IsFailure)
             return tokenResult;

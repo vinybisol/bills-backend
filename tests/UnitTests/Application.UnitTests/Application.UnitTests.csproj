@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="../UnitTestCommon/UnitTestCommon.csproj" />
     <ProjectReference Include="..\..\..\src\Application\Application.csproj" />
   </ItemGroup>
 

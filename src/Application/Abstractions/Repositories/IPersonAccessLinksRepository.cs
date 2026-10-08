@@ -1,6 +1,5 @@
 using Application.Abstractions.Repositories.Strategies;
 using Application.DTOs.Services.PesonAccess;
-using Domain.Abstractions;
 using Domain.Entities;
 
 namespace Application.Abstractions.Repositories;
