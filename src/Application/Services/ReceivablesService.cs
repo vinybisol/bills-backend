@@ -21,18 +21,28 @@ internal sealed class ReceivablesService(
     internal const string PersonEntity = "Pessoa";
 
     public async Task<Result<ReceivablesMonthDto>> GetMonthAsync(int? year, int? month, CancellationToken ct)
+        => await GetMonthBillsAsync(year, month, null, ct);
+    public async Task<Result<ReceivablesMonthDto>> GetMonthByPersonAsync(int? year, int? month, long personId, CancellationToken ct)
+        => await GetMonthBillsAsync(year, month, personId, ct);
+
+    private async Task<Result<ReceivablesMonthDto>> GetMonthBillsAsync(int? year, int? month, long? personId, CancellationToken ct)
     {
         List<Error> errors = [];
         EntryValidation.AddPeriodErrors(errors, year, month);
         var validation = EntryValidation.ToValidationError(errors);
+
         if (validation is not null)
             return validation;
 
-        var rows = (await billEntryRepository.GetMonthWithNamesAsync(year!.Value, month!.Value, currentOwner.Id, ct))
-            .Where(r => EntryAggregations.IsReceivable(r.Entry))
-            .ToList();
+        IReadOnlyCollection<BillEntryWithNamesDto> rows = [];
+
+        if (personId is null || personId <= 0)
+            rows = await billEntryRepository.GetMonthWithNamesAsync(year!.Value, month!.Value, currentOwner.Id, ct);
+        else
+            rows = await billEntryRepository.GetMonthByPersonIdWithNamesAsync(year!.Value, month!.Value, currentOwner.Id, personId.Value, ct);
 
         var byPerson = rows
+            .Where(r => EntryAggregations.IsReceivable(r.Entry))
             .GroupBy(r => r.Entry.PersonId!.Value)
             .Select(g =>
             {

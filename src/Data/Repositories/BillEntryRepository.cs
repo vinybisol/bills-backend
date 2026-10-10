@@ -46,6 +46,9 @@ internal sealed class BillEntryRepository(AppDbContext db) : IBillEntryRepositor
     public Task<IReadOnlyList<BillEntryWithNamesDto>> GetMonthWithNamesAsync(int year, int month, long ownerId, CancellationToken ct) =>
         GetWithNamesAsync(e => e.RefYear == year && e.RefMonth == month, ownerId, ct);
 
+    public Task<IReadOnlyList<BillEntryWithNamesDto>> GetMonthByPersonIdWithNamesAsync(int year, int month, long ownerId, long personId, CancellationToken ct) =>
+        GetWithNamesAsync(e => e.RefYear == year && e.RefMonth == month && e.PersonId == personId, ownerId, ct);
+
     public Task<IReadOnlyList<BillEntryWithNamesDto>> GetYearWithNamesAsync(int year, long ownerId, CancellationToken ct) =>
         GetWithNamesAsync(e => e.RefYear == year, ownerId, ct);
 

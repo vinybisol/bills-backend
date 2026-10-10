@@ -252,7 +252,7 @@ public sealed class ProblemDetailsTests : IntegrationTestBase
     {
         public const string SecretMessage = "boom: internal detail that must not leak";
 
-        public Task<Result> ValidateTokenAsync(string? token, CancellationToken cancellationToken) =>
+        public Task<Result<ValidatePesonAccessLinkDto>> ValidateTokenAsync(string? token, CancellationToken cancellationToken) =>
             throw new InvalidOperationException(SecretMessage);
 
         public Task<Result> RevokeAsync(long id, CancellationToken cancellationToken) =>

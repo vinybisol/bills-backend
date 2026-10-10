@@ -10,6 +10,7 @@ namespace Application.Abstractions.Services;
 public interface IReceivablesService
 {
     Task<Result<ReceivablesMonthDto>> GetMonthAsync(int? year, int? month, CancellationToken cancellationToken);
+    Task<Result<ReceivablesMonthDto>> GetMonthByPersonAsync(int? year, int? month, long personId, CancellationToken cancellationToken);
     Task<Result<BillEntryDto>> MarkAsync(long entryId, DateOnly? receivedDate, CancellationToken cancellationToken);
     Task<Result<BillEntryDto>> UnmarkAsync(long entryId, CancellationToken cancellationToken);
 

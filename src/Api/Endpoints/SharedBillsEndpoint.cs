@@ -1,6 +1,6 @@
 using Api.Extensions;
 using Application.Abstractions.Services;
-using Domain.Abstractions;
+using Domain.Abstractions.Filters;
 
 namespace Api.Endpoints;
 
@@ -20,15 +20,25 @@ internal static class SharedBillsEndpoint
     private static async Task<IResult> GetSharedBills(
         string? token,
         IPersonAccessLinksService personAccessLinksService,
+        IReceivablesService receivablesService,
+        ICurrentOwner currentOwner,
+        TimeProvider timeProvider,
         CancellationToken ct)
     {
-        var result = await personAccessLinksService.ValidateTokenAsync(token, ct);
+        var validateResult = await personAccessLinksService.ValidateTokenAsync(token, ct);
 
-        // Missing/blank token is a client error (400 ValidationProblem, errors.token); any other
-        // failure just means the token is not valid → 200 false.
-        if (result.Error is ValidationError)
-            return result.ToHttpResult();
+        if (validateResult.IsFailure)
+            return validateResult.ToHttpResult();
 
-        return Results.Ok(result.IsSuccess);
+        var validate = validateResult.Value;
+        currentOwner.SetCurrentOwnerId(validate.OwnerId);
+
+        var now = timeProvider.GetUtcNow();
+        var year = now.Year;
+        var month = now.Month;
+
+        var result = await receivablesService.GetMonthByPersonAsync(year, month, validate.PersonId, ct);
+
+        return result.ToHttpResult();
     }
 }
