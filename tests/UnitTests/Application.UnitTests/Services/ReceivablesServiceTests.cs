@@ -56,6 +56,17 @@ public sealed class ReceivablesServiceTests
     private void GivenMonthRows(params BillEntryWithNamesDto[] rows) =>
         _repository.GetMonthWithNamesAsync(2026, 3, OwnerId, Arg.Any<CancellationToken>()).Returns(rows);
 
+    private void GivenMonthByPersonIdRows(params BillEntryWithNamesDto[] rows)
+    {
+        _repository.GetMonthByPersonIdWithNamesAsync(2026, 3, OwnerId, Arg.Any<long>(), Arg.Any<CancellationToken>())
+        .Returns(call =>
+        {
+            var personId = call.ArgAt<long>(3);
+            var query = rows.Where(w => w.Entry.PersonId == personId);
+            return [.. query];
+        });
+
+    }
     private void GivenPerson(string name = "Esposa")
     {
         var person = EntityId.With(Person.Create(OwnerId, name, FixedNow), PersonId);
@@ -168,6 +179,32 @@ public sealed class ReceivablesServiceTests
                 new ReceivableItemDto(3, "Telefone", 50m, false),
             }));
             Assert.That(panel.TotalPendenteGeral, Is.EqualTo(250m));
+        }
+    }
+
+    [Test]
+    public async Task GetMonthByPersonAsync_MixedEntries_ReturnaOnliSelectPersonReceivables()
+    {
+        // Arrange
+        var selectPerson = 30L;
+        GivenMonthByPersonIdRows(
+            Row(Entry(2, planned: 50m, split: 0.5m, personId: selectPerson), "Netflix", "Joana"),
+            Row(Entry(4, planned: 200m, split: 0.5m, personId: 31L), "Luz", "Ana"));
+
+        // Act
+        var result = await _sut.GetMonthByPersonAsync(2026, 3, selectPerson, CancellationToken.None);
+
+        // Assert
+        var panel = result.Value;
+        Assert.That(panel.ByPerson, Has.Count.EqualTo(1));
+        var joana = panel.ByPerson[0];
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(joana.PersonId, Is.EqualTo(selectPerson));
+            Assert.That(joana.TotalDevido, Is.EqualTo(25));
+            Assert.That(joana.JaRecebido, Is.Zero);
+            Assert.That(joana.Pendente, Is.EqualTo(25));
+            Assert.That(panel.TotalPendenteGeral, Is.EqualTo(25));
         }
     }
 

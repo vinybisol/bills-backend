@@ -28,6 +28,12 @@ public interface IBillEntryRepository
     Task<IReadOnlyList<BillEntryWithNamesDto>> GetMonthWithNamesAsync(int year, int month, long ownerId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Returns the owner's entries by person of a month, read-only, with their bill, category and person names.
+    /// Names resolve even when the template, category or person have since been deactivated.
+    /// </summary>
+    Task<IReadOnlyList<BillEntryWithNamesDto>> GetMonthByPersonIdWithNamesAsync(int year, int month, long ownerId, long personId, CancellationToken ct);
+
+    /// <summary>
     /// Returns the owner's entries of a whole year, read-only, with their bill, category and person names.
     /// Names resolve even when the template, category or person have since been deactivated.
     /// </summary>

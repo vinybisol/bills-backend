@@ -248,7 +248,7 @@ public sealed class EntryAggregationsTests
     {
         BillEntry[] entries = [Entries.Bill(planned: 10m, split: 0.5m, received: true), Entries.Bill(planned: 20m, split: 0.5m)];
 
-        Assert.That(EntryAggregations.FilterByReceivedStatus(entries, "received"), Has.All.Matches<BillEntry>(e => e.Received));
+        Assert.That(EntryAggregations.FilterByReceivedStatus(entries, "received"), Has.All.Matches<BillEntry>(e => e!.Received));
     }
 
     // --- SummarizeByCategory ---
