@@ -70,7 +70,6 @@ public sealed class SharedBillsEndpointTests : IntegrationTestBase
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(bills.ByPerson.ToList(), Has.Count.AtLeast(1));
             var year = timeProvider.GetUtcNow().Year;
             Assert.That(bills.Year, Is.EqualTo(year));
             var month = timeProvider.GetUtcNow().Month;

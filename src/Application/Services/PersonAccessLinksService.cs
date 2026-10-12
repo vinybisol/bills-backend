@@ -68,23 +68,23 @@ internal sealed class PersonAccessLinksService(
         return Result.Success();
     }
 
-    public async Task<Result> ValidateTokenAsync(string? token, CancellationToken ct)
+    public async Task<Result<ValidatePesonAccessLinkDto>> ValidateTokenAsync(string? token, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token))
             return new ValidationError([Error.Validation("Token cannot be null, empty or whitespaces")]);
 
         var tokenResult = sharedPagesTokenService.Validate(token);
         if (tokenResult.IsFailure)
-            return tokenResult;
+            return tokenResult.Error;
 
         var pesonAccessLinkTokenDto = tokenResult.Value;
         var personAccessLink = await repository.GetByTokenIdAsync(pesonAccessLinkTokenDto.TokenId, ct);
         if (personAccessLink is null)
-            return Result.Failure(Error.Forbidden());
+            return Error.NotFound(nameof(PersonAccessLink));
 
         if (personAccessLink.RevokeAt <= timeProvider.GetUtcNow())
-            return Result.Failure(Error.Forbidden());
+            return Error.Forbidden();
 
-        return Result.Success();
+        return new ValidatePesonAccessLinkDto(personAccessLink.OwnerId, personAccessLink.PersonId);
     }
 }

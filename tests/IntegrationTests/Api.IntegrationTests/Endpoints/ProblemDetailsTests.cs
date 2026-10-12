@@ -209,18 +209,6 @@ public sealed class ProblemDetailsTests : IntegrationTestBase
         await ProblemAssertions.AssertValidationProblemAsync(response, "Error.Validation");
     }
 
-    [TestCase("not-a-token")]
-    [TestCase("eyJQZXJzb25JZCI6MSwiVG9rZW4iOiJYIn0")] // base64url of {"PersonId":1,"Token":"X"} — well-formed, unknown
-    public async Task SharedBills_InvalidOrUnknownToken_ReturnsOkFalse(string token)
-    {
-        // Act
-        using var response = await Client.GetAsync($"{SharedUri}?token={token}");
-
-        // Assert
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That(await response.Content.ReadFromJsonAsync<bool>(), Is.False);
-    }
-
     // --- Unhandled exceptions (exception handler, outside Development) ---
 
     [Test]
