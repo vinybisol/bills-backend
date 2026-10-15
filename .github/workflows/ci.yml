@@ -1,13 +1,15 @@
 name: CI
 
-# Pull requests and pushes to develop/main run validation. The CD workflows deploy
-# the tested commit after this workflow succeeds.
+# Pull requests run CI directly. The CD workflows call this workflow on pushes,
+# then deploy only after its jobs succeed.
 
 on:
-  push:
-    branches: [develop, main]
   pull_request:
     branches: [develop, main]
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        required: false
 env:
   DOTNET_VERSION: '10.0.x'
 
