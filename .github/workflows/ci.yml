@@ -1,40 +1,17 @@
-name: CI/CD
+name: CI
 
-# Single pipeline so deploy is strictly sequenced after build/test.
-#
-# Triggers:
-#   - pull_request -> runs only build-and-test (deploy is gated off PRs)
-#   - push develop -> build-and-test, then deploy (needs) -> Azure Web App (F1)
-#   - push main    -> build-and-test only
-#
-# Required GitHub configuration for the deploy job (set before the first run):
-#   - Variable  AZURE_WEBAPP_NAME            -> the Azure Web App name
-#   - Secret    AZURE_WEBAPP_PUBLISH_PROFILE -> the app's publish profile XML
-#   - Secret    NEON_CONNECTION_STRING       -> Neon connection string used to apply
-#                                               migrations from the pipeline (read by the
-#                                               AppDbContextFactory design-time factory)
-#
-# Runtime configuration (set in the Azure Web App, not here):
-#   - ConnectionStrings__Neon  -> Neon pooler connection string (SSL Mode=Require)
-#   - Firebase__ProjectId      -> Firebase project id
-# Database migrations are applied by the deploy job (dotnet ef database update), before
-# the app is published/deployed, not automatically on application startup.
+# Pull requests run CI directly. The CD workflows call this workflow on pushes,
+# then deploy only after its jobs succeed.
 
 on:
-  push:
-    branches: [develop, main]
   pull_request:
     branches: [develop, main]
-# CONFIGURATION
-# For help, go to https://github.com/Azure/Actions
-#
-# 1. Set up the following secrets in your repository:
-#   AZURE_WEBAPP_PUBLISH_PROFILE
-#
-# 2. Change these variables for your configuration:   
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        required: false
 env:
-  AZURE_WEBAPP_PACKAGE_PATH: '.'      # set this to the path to your web app project, defaults to the repository root
-  DOTNET_VERSION: '10.0.x'             # set this to the dot net version to use
+  DOTNET_VERSION: '10.0.x'
 
 jobs:
   build-and-test:
@@ -75,19 +52,19 @@ jobs:
         run: dotnet build BillsBackend.slnx --configuration Release --no-restore
 
       - name: Run Domain.UnitTests
-        run: dotnet test --project tests/UnitTests/Domain.UnitTests/Domain.UnitTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Domain.Unit/coverage.cobertura.xml"
+        run: dotnet test --project tests/UnitTests/Domain.UnitTests/Domain.UnitTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Domain.Unit/coverage.cobertura.xml"
 
       - name: Run Application.UnitTests
-        run: dotnet test --project tests/UnitTests/Application.UnitTests/Application.UnitTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Application.Unit/coverage.cobertura.xml"
+        run: dotnet test --project tests/UnitTests/Application.UnitTests/Application.UnitTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Application.Unit/coverage.cobertura.xml"
 
       - name: Run Api.UnitTests
-        run: dotnet test --project tests/UnitTests/Api.UnitTests/Api.UnitTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Api.Unit/coverage.cobertura.xml"
+        run: dotnet test --project tests/UnitTests/Api.UnitTests/Api.UnitTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Api.Unit/coverage.cobertura.xml"
 
       - name: Run Data.UnitTests
-        run: dotnet test --project tests/UnitTests/Data.UnitTests/Data.UnitTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Data.Unit/coverage.cobertura.xml"
+        run: dotnet test --project tests/UnitTests/Data.UnitTests/Data.UnitTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Data.Unit/coverage.cobertura.xml"
               
       - name: Run Api.IntegrationTests
-        run: dotnet test --project tests/IntegrationTests/Api.IntegrationTests/Api.IntegrationTests.csproj -c Release -- --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Api.Integration/coverage.cobertura.xml"
+        run: dotnet test --project tests/IntegrationTests/Api.IntegrationTests/Api.IntegrationTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Api.Integration/coverage.cobertura.xml"
         env:
           ConnectionStrings__NeonTest: "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres"
 
@@ -127,46 +104,3 @@ jobs:
         with:
           name: coverage-report
           path: ${{ github.workspace }}/CoverageReport
-
-  deploy:
-    name: Deploy to Azure (F1)
-    runs-on: ubuntu-latest
-    environment: development
-    # Run only after CI passes, and only on a merge into develop (never on PRs or main).
-    needs: build-and-test
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Restore
-        run: dotnet restore BillsBackend.slnx
-
-      - name: Install dotnet-ef
-        run: |
-          dotnet tool install --global dotnet-ef
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
-
-      # Applies pending migrations against Neon before the new app code is deployed, using
-      # the design-time AppDbContextFactory (reads NEON_CONNECTION_STRING). Runs before
-      # publish/deploy so the schema is ready by the time the new code starts serving.
-      - name: Apply database migrations
-        run: dotnet ef database update --project src/Data/Data.csproj --configuration Release
-        env:
-          NEON_CONNECTION_STRING: ${{ secrets.NEON_CONNECTION_STRING }}
-
-      - name: Publish
-        run: dotnet publish src/Api/Api.csproj -c Release -r linux-x64 --self-contained true -p:PublishReadyToRun=true -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/bill-api'
-
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/bill-api'
