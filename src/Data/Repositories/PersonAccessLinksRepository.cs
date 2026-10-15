@@ -25,13 +25,14 @@ internal sealed class PersonAccessLinksRepository(AppDbContext db) : IPersonAcce
     public async Task<PersonAccessLink?> GetByTokenIdAsync(Guid tokenId, CancellationToken ct)
         => await _entity.IgnoreQueryFilters().FirstOrDefaultAsync(f => f.TokenId == tokenId, ct);
 
-    public async Task<IReadOnlyCollection<PesonAccessLinkDto>> GetAllAsync(IPagedQuery<PersonAccessLink, DateTimeOffset> pagedQuery, CancellationToken ct)
+    public async Task<IReadOnlyCollection<PesonAccessLinkDto>> GetAllWithPersonNameAsync(IPagedQuery<PersonAccessLink, long> pagedQuery, CancellationToken ct)
         => await _entity
             .AsNoTracking()
+            .Include(i => i.Person)
             .OrderBy(pagedQuery.OrderBy)
             .Skip(pagedQuery.Skip)
             .Take(pagedQuery.Take)
-            .Select(s => new PesonAccessLinkDto(s.Id, s.PersonId, s.ExpiresAt, s.RevokeAt))
+            .Select(s => new PesonAccessLinkDto(s.Id, s.Person.Name, s.ExpiresAt, s.RevokeAt))
             .ToListAsync(ct);
 
 }

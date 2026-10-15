@@ -11,5 +11,5 @@ public interface IPersonAccessLinksRepository
     Task<PersonAccessLink?> GetByPersonIdAsync(long personId, CancellationToken cancellationToken);
     Task<bool> ExistsByPersonIdAsync(long personId, CancellationToken cancellationToken);
     Task<PersonAccessLink?> GetByTokenIdAsync(Guid tokenId, CancellationToken cancellationToken);
-    Task<IReadOnlyCollection<PesonAccessLinkDto>> GetAllAsync(IPagedQuery<PersonAccessLink, DateTimeOffset> pagedQuery, CancellationToken ct);
+    Task<IReadOnlyCollection<PesonAccessLinkDto>> GetAllWithPersonNameAsync(IPagedQuery<PersonAccessLink, long> pagedQuery, CancellationToken ct);
 }

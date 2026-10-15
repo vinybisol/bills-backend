@@ -148,7 +148,7 @@ public sealed class PersonAccessLinksServiceTests
         PagedQueryDto<PersonAccessLink, DateTimeOffset>? captured = null;
 
         _repository
-            .GetAllAsync(Arg.Do<PagedQueryDto<PersonAccessLink, DateTimeOffset>>(q => captured = q), Arg.Any<CancellationToken>())
+            .GetAllWithPersonNameAsync(Arg.Do<PagedQueryDto<PersonAccessLink, DateTimeOffset>>(q => captured = q), Arg.Any<CancellationToken>())
             .Returns(links);
 
         // Act
