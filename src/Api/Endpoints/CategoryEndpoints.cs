@@ -26,9 +26,6 @@ internal static class CategoryEndpoints
         ICategoryService categoryService,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Name))
-            return Results.BadRequest("Name is required.");
-
         var result = await categoryService.CreateCategoryAsync(req.Name, ct);
 
         if (result.IsFailure)
@@ -53,9 +50,6 @@ internal static class CategoryEndpoints
         ICategoryService categoryService,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Name))
-            return Results.BadRequest("Name is required.");
-
         var result = await categoryService.UpdateAsync(id, req.Name, ct);
 
         return result.ToHttpResult();

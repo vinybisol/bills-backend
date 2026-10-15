@@ -1,0 +1,9 @@
+<Project>
+  <!-- Common test settings (NUnit on MTP, coverage) live in tests/Directory.Build.props. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- Unit-test-only bits: pure in-memory tests with mocks, no database or host. -->
+  <ItemGroup>
+    <PackageReference Include="NSubstitute" />
+  </ItemGroup>
+</Project>

@@ -19,4 +19,12 @@ internal sealed class AppUserRepository(AppDbContext db) : IAppUserRepository
     public async Task<AppUser?> FindByFirebaseUidAsync(string firebaseUid, CancellationToken ct) =>
         await db.Users
             .FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid, ct);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Uses <c>FindAsync</c> so a user already tracked in this request (e.g. just resolved by
+    /// the provisioning filter) is served from the change tracker without a second round-trip.
+    /// </remarks>
+    public async Task<AppUser?> FindByIdAsync(long id, CancellationToken ct) =>
+        await db.Users.FindAsync([id], ct);
 }

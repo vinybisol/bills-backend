@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Domain.Abstractions.Filters;
 using Domain.Entities;
 using Domain.Enums;
@@ -20,6 +21,7 @@ namespace Data.Contexts;
 /// </remarks>
 /// <param name="options">The options used to configure the context.</param>
 /// <param name="currentOwner">The scoped current-owner context used by query filters.</param>
+[ExcludeFromCodeCoverage]
 public sealed class AppDbContext(
     DbContextOptions<AppDbContext> options,
     ICurrentOwner currentOwner) : DbContext(options)
@@ -38,6 +40,12 @@ public sealed class AppDbContext(
     /// Only active persons belonging to the authenticated owner are visible.
     /// </summary>
     public DbSet<Person> Persons => Set<Person>();
+
+    /// <summary>
+    /// Gets the pre-filtered set of person access link.
+    /// Only active person access belonging to the authenticated owner are visible.
+    /// </summary>
+    public DbSet<PersonAccessLink> PersonAccessLink => Set<PersonAccessLink>();
 
     /// <summary>
     /// Gets the pre-filtered set of income templates for the current owner.
@@ -163,6 +171,50 @@ public sealed class AppDbContext(
             // Restricts all Person reads to the current owner's active rows.
             // currentOwner.Id is evaluated at query-execution time from the scoped service.
             entity.HasQueryFilter(p => p.Active && p.OwnerId == currentOwner.Id);
+        });
+
+        modelBuilder.Entity<PersonAccessLink>(entity =>
+        {
+            entity.ToTable("person_access_link");
+
+            entity.HasKey(p => p.Id);
+            entity.Property(p => p.Id)
+                .HasColumnName("id")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(p => p.OwnerId)
+                .HasColumnName("owner_id")
+                .IsRequired();
+
+            entity.Property(p => p.PersonId)
+                .HasColumnName("person_id")
+                .IsRequired();
+
+            entity.Property(p => p.TokenId)
+                .HasColumnName("token_id")
+                .IsRequired();
+
+            entity.Property(p => p.ExpiresAt)
+                .HasColumnName("expires_at");
+
+            entity.Property(p => p.RevokeAt)
+            .HasColumnName("revoke_at");
+
+            entity.Property(p => p.CreatedAt)
+                .HasColumnName("created_at")
+                .IsRequired();
+
+            entity.HasOne(p => p.Person)
+                .WithMany(p => p.PersonAccessLinks)
+                .HasForeignKey(k => k.PersonId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => e.TokenId)
+                .IsUnique();
+
+            // Restricts all Person reads to the current owner's active rows.
+            // currentOwner.Id is evaluated at query-execution time from the scoped service.
+            entity.HasQueryFilter(p => p.OwnerId == currentOwner.Id);
         });
 
         modelBuilder.Entity<Income>(entity =>

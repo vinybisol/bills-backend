@@ -46,5 +46,13 @@ Gera 12 `*_entry` por molde **recorrente e ativo**, copiando snapshots (`planned
 ## Identidade / auth
 - Client-managed: front cria conta e loga no Firebase (SDK), envia JWT. Backend valida, traduz `firebase_uid → app_user.id` (provisiona se novo). Domínio usa só o id interno.
 
-## Fase 2 (não implementado)
+## Fase 2 (em andamento)
 Vincular login da esposa (`person.app_user_id`) com autorização de dois níveis: dono vê tudo; vinculado vê só o que deve (a fatia a-receber). Schema já suporta.
+- **Já implementado:** `person_access_link`, um link compartilhável por pessoa, com token aleatório. Só o hash é salvo, e o link pode ser revogado (`active=false`, `revoke_at`). O endpoint anônimo `GET /bills/shared?token=` valida o token.
+- **Pendente:** devolver as contas/a-receber da pessoa via link e o vínculo por login (`person.app_user_id`).
+
+## Onde as regras vivem no código
+- Invariantes de entidade (split × person, congelamento, soft delete): `src/Domain/Entities`.
+- Cálculos (`effective`, `myShare`, `receivable`, saldos, agregações, projeção, recálculo): `src/Domain/Calculations`.
+- Orquestração e validação de entrada: serviços em `src/Application/Services`.
+- Isolamento por owner: filtros globais do `AppDbContext`. Detalhes em `docs/arquitetura.md`.

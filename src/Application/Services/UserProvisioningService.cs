@@ -13,7 +13,7 @@ namespace Application.Services;
 /// <param name="categoriesService">The repository used to seed default categories for new users.</param>
 /// <param name="timeProvider">The clock used to stamp newly provisioned users and seed categories.</param>
 /// <param name="logger">The logger used to record provisioning events.</param>
-public sealed class UserProvisioningService(
+internal sealed class UserProvisioningService(
     IAppUserService usersService,
     ICategoryService categoriesService,
     TimeProvider timeProvider,

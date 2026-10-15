@@ -14,11 +14,15 @@ internal sealed class CategoryService(
     TimeProvider timeProvider,
     IUnitOfWork unitOfWork) : ICategoryService
 {
+    internal const string NameField = "name";
+
     public async Task<Result<CategoryDto>> CreateCategoryAsync(string name, CancellationToken cancellationToken)
     {
-        var trimmedName = name?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmedName))
-            return Error.Validation("Category name cannot be empty ou null");
+        var validation = Validate(name);
+        if (validation is not null)
+            return validation;
+
+        var trimmedName = name.Trim();
 
         if (await repository.ExistsByNameAsync(trimmedName, cancellationToken))
             return Error.Conflict("A category with that name already exists.");
@@ -28,7 +32,7 @@ internal sealed class CategoryService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new CategoryDto(category.Id, category.Name));
+        return new CategoryDto(category.Id, category.Name);
     }
 
     public async Task AddRangeAsync(IEnumerable<Category> categories, CancellationToken ct)
@@ -40,9 +44,11 @@ internal sealed class CategoryService(
 
     public async Task<Result<CategoryDto>> UpdateAsync(long id, string name, CancellationToken ct)
     {
-        var trimmedName = name?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmedName))
-            return Error.Validation("Category name cannot be empty ou null");
+        var validation = Validate(name);
+        if (validation is not null)
+            return validation;
+
+        var trimmedName = name.Trim();
 
         var category = await repository.GetByIdAsync(id, ct);
         if (category is null)
@@ -55,14 +61,16 @@ internal sealed class CategoryService(
 
         await unitOfWork.SaveChangesAsync(ct);
 
-        return Result.Success(new CategoryDto(category.Id, category.Name));
+        return new CategoryDto(category.Id, category.Name);
     }
 
     public async Task<Result<IEnumerable<CategoryDto>>> GetAllByNameAsync(CancellationToken ct)
     {
-        var pagedQuery = new PagedQueryDto<Category>(1000, 0, c => c.Name);
+        var pagedQuery = new PagedQueryDto<Category, string>(1000, 0, c => c.Name);
 
-        var result = await repository.GetAllByNameAsync(pagedQuery, ct);
+        var result = await repository.GetAllAsync(pagedQuery, ct);
+        if (result is null)
+            return Result.Success(Enumerable.Empty<CategoryDto>());
 
         return Result.Success(result);
     }
@@ -76,5 +84,13 @@ internal sealed class CategoryService(
         category.Deactivate();
         await unitOfWork.SaveChangesAsync(ct);
         return Result.Success();
+    }
+
+    private static ValidationError? Validate(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return new ValidationError([new Error(NameField, "Category name cannot be empty or null.", ErrorType.Validation)]);
+
+        return null;
     }
 }

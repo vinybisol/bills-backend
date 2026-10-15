@@ -4,7 +4,7 @@
 #   docker compose up -d
 #   dotnet user-secrets set "ConnectionStrings:NeonTest" \
 #     "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres" \
-#     --project tests/BillsBackend.IntegrationTests
+#     --project tests/IntegrationTests/Api.IntegrationTests
 #   dotnet test
 #
 # Data is ephemeral (no named volume): `docker compose down` discards it. Respawn resets

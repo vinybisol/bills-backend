@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 namespace Domain.Abstractions;
 
+[ExcludeFromCodeCoverage]
 public class Result
 {
     protected Result(bool isSuccess, Error error)

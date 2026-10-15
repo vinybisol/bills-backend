@@ -1,13 +1,6 @@
 using Domain.Enums;
 
-namespace BillsBackend.Api.Contracts;
-
-/// <summary>The payload returned by income read operations.</summary>
-/// <param name="Id">The internal income id.</param>
-/// <param name="Name">The income template display name.</param>
-/// <param name="Kind">The income kind.</param>
-/// <param name="DefaultAmount">The default planned amount.</param>
-internal sealed record IncomeDto(long Id, string Name, IncomeKindEnum Kind, decimal DefaultAmount);
+namespace Api.Contracts;
 
 /// <summary>The request body for <c>POST /incomes</c>.</summary>
 /// <param name="Name">The income template name.</param>

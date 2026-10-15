@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Domain.Abstractions.Filters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
@@ -14,6 +15,7 @@ namespace Data.Contexts;
 /// environment variable; if it is missing the factory fails fast rather than falling back to a
 /// placeholder, so the application is never bootstrapped against an unintended database.
 /// </remarks>
+[ExcludeFromCodeCoverage]
 public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     /// <inheritdoc/>
@@ -23,11 +25,21 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     public AppDbContext CreateDbContext(string[] args)
     {
         var connectionString = Environment.GetEnvironmentVariable("NEON_CONNECTION_STRING");
+
+        foreach (var item in args)
+            Console.WriteLine(item);
+
+#if DEBUG
+        Console.WriteLine("I am in debug configuration");
+        Console.WriteLine("Connect string will be override to local database");
+        connectionString = @"Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres";
+#endif
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
                 "The NEON_CONNECTION_STRING environment variable must be set to run the EF Core design-time tooling " +
-                "(for example 'dotnet ef migrations add'). Set it to the Neon connection string before running EF commands.");
+                "(for example 'dotnet ef migrations add'). Set it to the Neon connection string before running EF commands." +
+                "for debug and local database, use example 'dotnet ef migrations add 'your great migration name' --project src/Data/Data.csproj --configuration Debug'.Running from projeto root folder.");
         }
 
         var options = new DbContextOptionsBuilder<AppDbContext>()

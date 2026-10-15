@@ -9,7 +9,10 @@ Definição completa em `docs/schema.sql`. Resumo das tabelas e pontos-chave.
 - **bill**(id, owner_id, name, category_id, kind['recurring'|'one_off'], default_amount, split_ratio[0..1], person_id NULL, active, created_at).
 - **income**(id, owner_id, name, kind, default_amount, active, created_at).
 - **bill_entry**(id, owner_id, bill_id, ref_year, ref_month, planned_amount, actual_amount, split_ratio_snapshot, paid, paid_date, person_id, received, received_date, created_at) — UNIQUE(bill_id,ref_year,ref_month).
+- **person_access_link**(id, owner_id, person_id→person, active, token_hash, revoke_at, created_at) — link de acesso compartilhável de uma pessoa (Fase 2); guarda só o hash SHA-256 do token. Criado pela migration `Add person access link` (ainda não está em `schema.sql`).
 - **income_entry**(id, owner_id, income_id, ref_year, ref_month, planned_amount, actual_amount, received, received_date, created_at) — UNIQUE(income_id,ref_year,ref_month).
+
+Fonte de verdade do schema aplicado: as migrations do EF Core em `src/Data/Migrations` (mapeamento snake_case e filtros globais por owner em `src/Data/Contexts/AppDbContext.cs`).
 
 ## Invariantes no schema
 - `owner_id` é FK para `app_user.id` (BIGINT), **nunca** o firebase_uid.
