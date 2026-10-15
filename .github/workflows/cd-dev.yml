@@ -1,9 +1,7 @@
 name: CD-DEV
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
     branches: [develop]
 
 permissions:
@@ -13,17 +11,22 @@ env:
   DOTNET_VERSION: '10.0.x'
 
 jobs:
+  build-and-test:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   deploy:
     name: Deploy to Azure Web App (DEV)
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'develop' }}
     runs-on: ubuntu-latest
     environment: development
+    needs: build-and-test
 
     steps:
       - name: Checkout tested commit
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.sha }}
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v5
