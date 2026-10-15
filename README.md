@@ -9,7 +9,7 @@
 
 # Bills Backend
 
-Um backend simples e robusto para gerenciamento de orçamento pessoal, construído com .NET 10 e PostgreSQL
+Um backend simples e robusto para gerenciamento de orçamento pessoal, construído com .NET 10 e PostgreSQL.
 
 ## ✨ O que ele faz
 
