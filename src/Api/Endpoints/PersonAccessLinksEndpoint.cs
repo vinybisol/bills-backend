@@ -25,7 +25,7 @@ internal static class PersonAccessLinksEndpoint
         IPersonAccessLinksService service,
         CancellationToken ct)
     {
-        var result = await service.CreateAsync(createAccessLinkRequest.PersonId, createAccessLinkRequest.ExpireAt, ct);
+        var result = await service.CreateAsync(createAccessLinkRequest.PersonId, createAccessLinkRequest.ExpiresAt, ct);
 
         return result.ToHttpResult();
     }

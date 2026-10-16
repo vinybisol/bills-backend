@@ -141,14 +141,14 @@ public sealed class PersonAccessLinksServiceTests
         // Arrange
         var links = new List<PesonAccessLinkDto>
     {
-        new(1, 0, _expiresAt, _fixedNow),
-        new(2, 0, _expiresAt, _fixedNow)
+        new(1, "Ana", _expiresAt, _fixedNow),
+        new(2, "Maria", _expiresAt, _fixedNow)
     };
 
-        PagedQueryDto<PersonAccessLink, DateTimeOffset>? captured = null;
+        PagedQueryDto<PersonAccessLink, long>? captured = null;
 
         _repository
-            .GetAllAsync(Arg.Do<PagedQueryDto<PersonAccessLink, DateTimeOffset>>(q => captured = q), Arg.Any<CancellationToken>())
+            .GetAllWithPersonNameAsync(Arg.Do<PagedQueryDto<PersonAccessLink, long>>(q => captured = q), Arg.Any<CancellationToken>())
             .Returns(links);
 
         // Act

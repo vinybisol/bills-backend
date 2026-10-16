@@ -42,13 +42,13 @@ internal sealed class PersonAccessLinksService(
         repository.Add(personAccessLink);
 
         await unitOfWork.SaveChangesAsync(ct);
-        return new CreatePesonAccessLinkDto(personAccessLink.Id, sharedPagesToken.Token);
+        return new CreatePesonAccessLinkDto(sharedPagesToken.Token);
     }
 
     public async Task<Result<IEnumerable<PesonAccessLinkDto>>> GetAllAsync(CancellationToken ct)
     {
-        var pagedQuery = new PagedQueryDto<PersonAccessLink, DateTimeOffset>(1000, 0, c => c.CreatedAt);
-        var result = await repository.GetAllAsync(pagedQuery, ct);
+        var pagedQuery = new PagedQueryDto<PersonAccessLink, long>(1000, 0, c => c.PersonId);
+        var result = await repository.GetAllWithPersonNameAsync(pagedQuery, ct);
         return Result.Create<IEnumerable<PesonAccessLinkDto>>(result);
     }
 
