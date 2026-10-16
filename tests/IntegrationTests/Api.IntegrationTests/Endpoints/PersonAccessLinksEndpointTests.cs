@@ -156,7 +156,9 @@ public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
         Assert.That(person, Is.Not.Null);
         var timeProvider = Factory.Services.GetRequiredService<TimeProvider>();
         var expiresAt = timeProvider.GetUtcNow().AddMinutes(10);
-        var pesonAccessLinkDto = await CreateAccessLinkAsync(client, person.Id, expiresAt);
+        await CreateAccessLinkAsync(client, person.Id, expiresAt);
+        var peopleAccessLinkDto = await ListPersonAsync(client);
+        var pesonAccessLinkDto = peopleAccessLinkDto.First();
 
         // Act
         using var response = await client.PutAsync($"{AccessLinksUri}/{pesonAccessLinkDto.Id}/revoke", null);
@@ -198,11 +200,7 @@ public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
         var body = await response.Content.ReadFromJsonAsync<IEnumerable<PesonAccessLinkDto>>();
         Assert.That(body, Is.Not.Null);
         var links = body.ToList();
-        using (Assert.EnterMultipleScope())
-        {
-            Assert.That(links, Has.Count.EqualTo(2));
-            Assert.That(links, Has.All.Matches<PesonAccessLinkDto>(link => link!.PersonId == person.Id));
-        }
+        Assert.That(links, Has.Count.EqualTo(2));
     }
 
     private static async Task<PersonDto> CreatePersonAsync(HttpClient client)
@@ -212,6 +210,13 @@ public sealed class PersonAccessLinksEndpointTests : IntegrationTestBase
         var body = await response.Content.ReadFromJsonAsync<PersonDto>();
         Assert.That(body, Is.Not.Null);
         return body!;
+    }
+
+    private static async Task<IEnumerable<PesonAccessLinkDto>> ListPersonAsync(HttpClient client)
+    {
+        var response = await client.GetFromJsonAsync<IEnumerable<PesonAccessLinkDto>>($"{AccessLinksUri}");
+        Assert.That(response, Is.Not.Null);
+        return response;
     }
 
     private static async Task<CreatePesonAccessLinkDto> CreateAccessLinkAsync(HttpClient client, long personId, DateTimeOffset expiresAt)

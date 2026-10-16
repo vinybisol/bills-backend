@@ -1,0 +1,57 @@
+name: CD-DEV
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+jobs:
+  build-and-test:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  deploy:
+    name: Deploy to Azure Web App (DEV)
+    runs-on: ubuntu-latest
+    environment: development
+    needs: build-and-test
+
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore BillsBackend.slnx
+
+      - name: Publish
+        run: dotnet publish src/Api/Api.csproj -c Release -r linux-x64 --self-contained true -p:PublishReadyToRun=true -o '${{ github.workspace }}/bill-api'
+
+      - name: Install dotnet-ef
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.12
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Apply database migrations
+        run: dotnet ef database update --project src/Data/Data.csproj --configuration Release
+        env:
+          NEON_CONNECTION_STRING: ${{ secrets.NEON_CONNECTION_STRING }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: '${{ github.workspace }}/bill-api'

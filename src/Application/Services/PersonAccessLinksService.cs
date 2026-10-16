@@ -42,7 +42,7 @@ internal sealed class PersonAccessLinksService(
         repository.Add(personAccessLink);
 
         await unitOfWork.SaveChangesAsync(ct);
-        return new CreatePesonAccessLinkDto(personAccessLink.Id, sharedPagesToken.Token);
+        return new CreatePesonAccessLinkDto(sharedPagesToken.Token);
     }
 
     public async Task<Result<IEnumerable<PesonAccessLinkDto>>> GetAllAsync(CancellationToken ct)
