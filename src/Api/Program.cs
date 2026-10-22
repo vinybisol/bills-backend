@@ -73,6 +73,7 @@ builder.Services
 builder.Services.AddAuthorization();
 builder.Services.AddOpenApi();
 builder.Services.AddCors();
+builder.Services.AddHealthRateLimiting();
 
 var options = builder.Configuration.Get<AppSettings>()
     ?? throw new Exception();
@@ -120,6 +121,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.UseCors("Frontend");
 
 // All endpoints are versioned under /api/v1. See docs/decisoes.md for the versioning decision.
@@ -127,6 +129,7 @@ var v1 = app.MapGroup("/api/v1").RequireAuthorization();
 
 v1.MapUserEndpoints()
     .MapCategoryEndpoints()
+    .MapHealthEndpoints()
     .MapPersonEndpoints()
     .MapIncomeEndpoints()
     .MapBillEndpoints()

@@ -1,8 +1,8 @@
 # API — Endpoints
 
-Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorization: Bearer <firebase-jwt>`. `owner_id` resolvido do token. Derivados (`effective`, `myShare`, `receivable`) calculados na resposta, não persistidos.
+Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorization: Bearer <firebase-jwt>`. `owner_id` resolvido do token (exceções anônimas: `GET /bills/shared` e `GET /health/live`/`GET /health/ready`, ver "Infra" e "Links de acesso"). Derivados (`effective`, `myShare`, `receivable`) calculados na resposta, não persistidos.
 
-Camadas e fluxo da requisição (filtro → serviço → repositório): ver `docs/arquitetura.md`. Mapeamento padrão `Result` → HTTP: 400 `ValidationProblem`, 404/409 `ProblemDetails`, listas vazias → 204, criação → 201 + `Location`. Exceção: `GET /api/v1/bills/shared` é **anônimo** (ver "Links de acesso").
+Camadas e fluxo da requisição (filtro → serviço → repositório): ver `docs/arquitetura.md`. Mapeamento padrão `Result` → HTTP: 400 `ValidationProblem`, 404/409 `ProblemDetails`, listas vazias → 204, criação → 201 + `Location`. Exceção: `GET /api/v1/bills/shared`, `GET /api/v1/health/live` e `GET /api/v1/health/ready` são **anônimos** (ver "Links de acesso" e "Infra").
 
 ## Contrato de erro (RFC 9457)
 **Toda** resposta de erro (4xx/5xx) é `Content-Type: application/problem+json` no formato [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) — sejam erros de serviço, do framework ou exceções não tratadas.
@@ -24,6 +24,20 @@ Camadas e fluxo da requisição (filtro → serviço → repositório): ver `doc
 
 ## Infra
 - `GET /api/v1/health` → resolve/provisiona o app_user e confirma liveness autenticada.
+- `GET /api/v1/health/live` — **anônimo** (sem JWT, não desafia mesmo com token inválido). Sempre 200: `{"status": "healthy"}`. Uso: liveness probe (ex.: Azure App Service health check).
+- `GET /api/v1/health/ready` — **anônimo**. Verifica conectividade com o PostgreSQL e migrations pendentes. Corpo:
+  ```json
+  {
+    "status": "healthy | degraded | unhealthy",
+    "totalDurationMs": 12,
+    "checks": [
+      { "name": "postgres", "status": "healthy", "durationMs": 8, "description": null },
+      { "name": "migrations", "status": "healthy", "durationMs": 3, "description": null }
+    ]
+  }
+  ```
+  200 quando `status` é `healthy` ou `degraded` (migrations pendentes); **503** quando `status` é `unhealthy` (banco inacessível). A resposta nunca expõe mensagem de exceção, connection string, host ou nome de migration — só descrições fixas e genéricas (ex.: `"Database unreachable."`, `"Pending migrations detected."`).
+- **Rate limit** (`/health/live` e `/health/ready`): janela fixa de **10 requisições por minuto**, compartilhada pelas duas rotas e global por instância (não por cliente). Excedeu → **429** `ProblemDetails` com header `Retry-After` (segundos). Política `health` registrada em `HealthEndpoints.AddHealthRateLimiting`. O `GET /api/v1/health` autenticado não é limitado. Configure o monitor/probe para no máximo ~1 chamada a cada 6 s.
 
 ## Identidade
 - `GET /api/v1/me` → perfil do app_user (id, name, email). Provisiona se novo.

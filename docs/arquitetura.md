@@ -119,6 +119,7 @@ Todas as respostas de erro são RFC 9457 (`application/problem+json`): `title` =
 | Feature | Endpoint (`src/Api/Endpoints`) | Serviço (`src/Application/Services`) | Repositórios (`src/Data/Repositories`) |
 |---|---|---|---|
 | Health / Me | `UserEndpoints` | `AppUserService`, `UserProvisioningService` | `AppUserRepository` |
+| Health (readiness) | `HealthEndpoints` (anônimo) | `HealthService` | `HealthRepository` |
 | Categorias | `CategoryEndpoints` | `CategoryService` | `CategoryRepository` |
 | Pessoas | `PersonEndpoints` | `PersonService` | `PersonRepository` |
 | Links de acesso | `PersonAccessLinksEndpoint`, `SharedBillsEndpoint` (anônimo) | `PersonAccessLinksService` | `PersonAccessLinksRepository`, `PersonRepository` |
