@@ -39,6 +39,7 @@ public static class RegisterData
         services.AddScoped<IBillRepository, BillRepository>();
         services.AddScoped<IBillEntryRepository, BillEntryRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IHealthRepository, HealthRepository>();
         services.AddScoped<IIncomeRepository, IncomeRepository>();
         services.AddScoped<IIncomeEntryRepository, IncomeEntryRepository>();
         services.AddScoped<IPersonRepository, PersonRepository>();

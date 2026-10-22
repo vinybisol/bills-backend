@@ -19,6 +19,7 @@ public static class RegisterApplications
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IEntryService, EntryService>();
+        services.AddScoped<IHealthService, HealthService>();
         services.AddScoped<IIncomeService, IncomeService>();
         services.AddScoped<IIncomeEntryService, IncomeEntryService>();
         services.AddScoped<IPersonService, PersonService>();
