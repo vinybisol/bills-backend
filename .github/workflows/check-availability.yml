@@ -1,0 +1,29 @@
+name: Check Avaibility
+
+on: 
+  workflow_call:
+    inputs:
+      url:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      url:
+        required: true
+        type: string
+
+permissions: 
+  contents: read
+  
+jobs:
+  check-availability:
+    runs-on: ubuntu-slim
+    steps:     
+      - name: Check API
+        env:
+          URL: ${{inputs.url}}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --retry 5 --retry-delay 10 --retry-all-errors \
+            --max-time 30 \
+            "$URL"
