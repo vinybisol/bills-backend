@@ -66,10 +66,18 @@ jobs:
       - name: Exibir link
         run: echo "${{ steps.deploy_step.outputs.webapp-url }}" 
   
-  smoke-test:
-    name: Check Availability
+  smoke-test-live:
+    name: Check Liveness
     needs: deploy
     uses: ./.github/workflows/check-availability.yml
     with:
       # AGORA VOCÊ ACESSA VIA CONTEXTO 'NEEDS' DO JOB PAI
       url: ${{ needs.deploy.outputs.webapp_url }}/api/v1/health/live     
+      
+  smoke-test-ready:
+    name: Check Readiness
+    needs: deploy
+    uses: ./.github/workflows/check-availability.yml
+    with:
+      # AGORA VOCÊ ACESSA VIA CONTEXTO 'NEEDS' DO JOB PAI
+      url: ${{ needs.deploy.outputs.webapp_url }}/api/v1/health/ready
