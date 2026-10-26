@@ -118,19 +118,18 @@ Cada teste usa um `firebase_uid` (e portanto um `owner_id`) **distinto**; o filt
 
 ## Setup local de testes
 
-Os testes de integração precisam de um PostgreSQL (banco `bills_test`). A connection string vem de `ConnectionStrings:NeonTest` (user-secrets local ou a env var `ConnectionStrings__NeonTest`).
+Os testes de integração precisam de um PostgreSQL (banco `bills_test`). A connection string vem de `ConnectionStrings:Neon`: localmente, do arquivo **git-ignored** `tests/IntegrationTests/Api.IntegrationTests/appsettings.Testing.Local.json` (copiado para o output no build; modelo versionado em `appsettings.Testing.Local.example.json`); no CI, da env var `ConnectionStrings__Neon`, que tem precedência sobre o arquivo.
 
 **Recomendado — Postgres local via Docker** (rápido, sem depender do Neon):
 ```bash
 docker compose up -d
-dotnet user-secrets set "ConnectionStrings:NeonTest" \
-  "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres" \
-  --project tests/IntegrationTests/Api.IntegrationTests
+cp tests/IntegrationTests/Api.IntegrationTests/appsettings.Testing.Local.example.json \
+   tests/IntegrationTests/Api.IntegrationTests/appsettings.Testing.Local.json
 dotnet test
 ```
-> Use o formato **key-value** (acima), não a URI `postgresql://...`: assim `NeonConnectionString.Normalize` devolve a string intacta e não força `SSL Mode=Require`, que o Postgres local não tem.
+> Use o formato **key-value** (como no exemplo), não a URI `postgresql://...`: assim `NeonConnectionString.Normalize` devolve a string intacta e não força `SSL Mode=Require`, que o Postgres local não tem.
 
-**Alternativa — Neon:** aponte `ConnectionStrings:NeonTest` para um banco de teste no Neon (formato URI, com SSL).
+**Alternativa — Neon:** aponte `ConnectionStrings:Neon` (no arquivo local ou na env var) para um banco de teste no Neon (formato URI, com SSL).
 
 No **CI**, os testes rodam contra um **service container** de PostgreSQL (ver `.github/workflows/ci.yml`) — sem segredo externo nem custo adicional.
 

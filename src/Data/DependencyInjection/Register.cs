@@ -6,31 +6,27 @@ using Domain.Infrastructures;
 using Microsoft.EntityFrameworkCore;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Data.DependencyInjection;
 
 [ExcludeFromCodeCoverage]
 public static class RegisterData
 {
-    public static void Register(IServiceCollection services, AppSettings options)
+    public static void Register(IServiceCollection services)
     {
-        ResolveContexts(services, options);
+        ResolveContexts(services);
         ResolveRepositores(services);
         ResolveServices(services);
     }
 
-    private static void ResolveContexts(IServiceCollection services, AppSettings options)
+    private static void ResolveContexts(IServiceCollection services)
     {
-        // --- Database: PostgreSQL (Neon). Connection string is supplied via configuration
-        // (user-secrets locally, environment / GitHub Secrets in CI/CD) and must use the
-        // pooler endpoint with "SSL Mode=Require". "App:UseProdConnection" lets a local launch
-        // profile point at the "NeonProd" connection string while staying in the Development
-        // environment (so user-secrets keep loading); see the "prod-data" launch profile.
-        var connString = options.UseProdConnection ? options.ConnectionStrings.NeonProd
-                : options.ConnectionStrings.Neon;
-
-        services.AddDbContext<AppDbContext>(opt =>
-            opt.UseNpgsql(NeonConnectionString.Normalize(connString)));
+        services.AddDbContext<AppDbContext>((provider, opt) =>
+        {
+            var connectionStrings = provider.GetRequiredService<IOptions<ConnectionStringsOptions>>().Value;
+            opt.UseNpgsql(NeonConnectionString.Normalize(connectionStrings.Neon));
+        });
     }
 
     private static void ResolveRepositores(IServiceCollection services)

@@ -29,7 +29,7 @@ builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = Activity.Current?.Id ?? ctx.HttpContext.TraceIdentifier;
 });
 
-// --- Configuration: Firebase (strongly-typed, validated on startup) ---
+// --- Configuration: IOptions (strongly-typed, validated on startup) ---
 builder.Services
     .AddOptions<FirebaseAuthOptions>()
     .Bind(builder.Configuration.GetSection(FirebaseAuthOptions.SectionName))
@@ -39,6 +39,12 @@ builder.Services
 builder.Services
     .AddOptions<SharedPagesOptions>()
     .Bind(builder.Configuration.GetSection(SharedPagesOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<ConnectionStringsOptions>()
+    .Bind(builder.Configuration.GetSection(ConnectionStringsOptions.SectionName))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
@@ -75,11 +81,8 @@ builder.Services.AddOpenApi();
 builder.Services.AddCors();
 builder.Services.AddHealthRateLimiting();
 
-var options = builder.Configuration.Get<AppSettings>()
-    ?? throw new Exception();
-
 RegisterApplications.Register(builder.Services);
-RegisterData.Register(builder.Services, options);
+RegisterData.Register(builder.Services);
 
 builder.Services.AddCors(options =>
 {
@@ -114,9 +117,9 @@ if (app.Environment.IsDevelopment())
         .AllowAnyMethod()
         .AllowAnyHeader());
 
-    var migrationService = app.Services.CreateScope()
-        .ServiceProvider.GetRequiredService<IMigrationService>();
-    migrationService.RunMigration(options);
+    app.Services.CreateScope()
+        .ServiceProvider.GetRequiredService<IMigrationService>()
+        .RunMigration();
 }
 
 app.UseAuthentication();

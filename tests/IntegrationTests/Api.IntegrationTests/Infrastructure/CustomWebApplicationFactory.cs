@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -16,6 +15,8 @@ namespace Api.IntegrationTests.Infrastructure;
 /// </summary>
 public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
+    private const string LocalSettingsFileName = "appsettings.Testing.Local.json";
+
     private string _testConnectionString = null!;
 
     /// <summary>Resolved Npgsql connection string for the test database.</summary>
@@ -28,13 +29,19 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureAppConfiguration((_, cfg) =>
         {
-            cfg.AddUserSecrets<CustomWebApplicationFactory>();
+            // Local runs read the git-ignored JSON copied to the test output; CI sets the
+            // ConnectionStrings__Neon env var, which is added last and therefore wins.
+            cfg.AddJsonFile(
+                Path.Combine(AppContext.BaseDirectory, LocalSettingsFileName),
+                optional: true,
+                reloadOnChange: false);
             cfg.AddEnvironmentVariables();
             var built = cfg.Build();
-            _testConnectionString = NeonConnectionString.Normalize(
-                built.GetConnectionString("NeonTest")
+
+            // Normalized like the app does, so Respawn's raw NpgsqlConnection also accepts Neon URIs.
+            _testConnectionString = NeonConnectionString.Normalize(built.GetConnectionString("Neon"))
                 ?? throw new InvalidOperationException(
-                    "ConnectionStrings:NeonTest não configurada. Configure via dotnet user-secrets ou a env var ConnectionStrings__NeonTest."))!;
+                        $"ConnectionStrings:Neon não configurada. Crie {LocalSettingsFileName} em tests/IntegrationTests/Api.IntegrationTests (veja appsettings.Testing.Local.example.json) ou defina a env var ConnectionStrings__Neon.");
 
             // Firebase:ProjectId must be non-empty to satisfy ValidateOnStart; the actual
             // value is overridden in SetupJwt so Firebase is never contacted during tests.
@@ -47,29 +54,8 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
-            ReplaceDatabase(services);
             SetupJwt(services);
         });
-    }
-
-    private void ReplaceDatabase(IServiceCollection services)
-    {
-        var descriptors = services
-            .Where(d =>
-                d.ServiceType == typeof(DbContextOptions<AppDbContext>)
-                || d.ServiceType == typeof(DbContextOptions)
-                || d.ServiceType == typeof(AppDbContext)
-                || (d.ServiceType.FullName?.Contains("IDbContextOptionsConfiguration") == true
-                    && d.ServiceType.GenericTypeArguments is [var arg] && arg == typeof(AppDbContext)))
-            .ToList();
-
-        foreach (var descriptor in descriptors)
-        {
-            services.Remove(descriptor);
-        }
-
-        services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(_testConnectionString));
     }
 
     private static void SetupJwt(IServiceCollection services) =>
