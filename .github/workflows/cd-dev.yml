@@ -58,10 +58,12 @@ jobs:
           app-name: ${{ vars.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: '${{ github.workspace }}/bill-api'
-
+      - name: Exibir link
+        run: echo "${{ steps.meu-deploy-id.outputs.webapp-url }}" 
+  
   smoke-test:
     name: Check Availability
     needs: deploy
     uses: ./.github/workflows/check-availability.yml
     with:
-      url: ${{needs.deploy.outputs.app-url}}/api/v1/health/live      
+      url: ${{needs.deploy.outputs.webapp-url}}/api/v1/health/live      
