@@ -9,4 +9,4 @@ jobs:
     runs-on: ubuntu-slim
     steps:
       - run: |
-          echo "running new workflow"
+          curl ${{ inputs.url}}
