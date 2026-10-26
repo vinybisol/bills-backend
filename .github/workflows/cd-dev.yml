@@ -3,7 +3,6 @@ name: CD-DEV
 on:
   push:
     branches: [develop]
-
   workflow_dispatch: 
 
 permissions:
@@ -23,6 +22,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: development
     needs: build-and-test
+    
+    # --- A MÁGICA ACONTECE AQUI ---
+    # MAPEIA O OUTPUT DO STEP PARA O OUTPUT DO JOB
+    outputs:
+      webapp_url: ${{ steps.deploy_step.outputs.webapp-url }}
 
     steps:
       - name: Checkout tested commit
@@ -52,18 +56,20 @@ jobs:
           NEON_CONNECTION_STRING: ${{ secrets.NEON_CONNECTION_STRING }}
 
       - name: Deploy to Azure Web App
-        id: deploy
+        id: deploy_step 
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ vars.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: '${{ github.workspace }}/bill-api'
+
       - name: Exibir link
-        run: echo "${{ steps.deploy.outputs.webapp-url }}" 
+        run: echo "${{ steps.deploy_step.outputs.webapp-url }}" 
   
   smoke-test:
     name: Check Availability
     needs: deploy
     uses: ./.github/workflows/check-availability.yml
     with:
-      url: ${{needs.deploy.outputs.webapp-url}}/api/v1/health/live      
+      # AGORA VOCÊ ACESSA VIA CONTEXTO 'NEEDS' DO JOB PAI
+      url: ${{ needs.deploy.outputs.webapp_url }}/api/v1/health/live     
