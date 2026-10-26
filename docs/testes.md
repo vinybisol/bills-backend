@@ -116,7 +116,7 @@ Nunca adicione `[SetUp]` que reseta o banco nem `[Parallelizable]` no projeto de
 
 ## Banco para integração
 
-Precisa de um PostgreSQL com o banco `bills_test`. A connection string vem de `ConnectionStrings:NeonTest` (user-secrets do projeto `tests/IntegrationTests/Api.IntegrationTests` ou a variável `ConnectionStrings__NeonTest`). Passo a passo em `CLAUDE.md` › Setup local de testes. No CI, um service container `postgres:16`.
+Precisa de um PostgreSQL com o banco `bills_test`. A connection string vem de `ConnectionStrings:Neon`: localmente do arquivo git-ignored `tests/IntegrationTests/Api.IntegrationTests/appsettings.Testing.Local.json` (modelo em `appsettings.Testing.Local.example.json`); no CI da variável `ConnectionStrings__Neon`, que sobrescreve o arquivo. Passo a passo em `CLAUDE.md` › Setup local de testes. No CI, um service container `postgres:16`.
 
 ## Comandos
 

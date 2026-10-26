@@ -45,7 +45,7 @@ src/
 │  ├─ Entities/                   # AppUser, Category, Person, PersonAccessLink,
 │  │                              # Bill, Income, BillEntry, IncomeEntry
 │  ├─ Enums/                      # BillKindEnum, IncomeKindEnum
-│  └─ Infrastructures/AppOptions.cs
+│  └─ Infrastructures/            # ConnectionStringsOptions, SharedPagesOptions (IOptions)
 ├─ Application/
 │  ├─ Abstractions/
 │  │  ├─ Services/                # IXService (contratos públicos dos casos de uso)

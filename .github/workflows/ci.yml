@@ -66,7 +66,7 @@ jobs:
       - name: Run Api.IntegrationTests
         run: dotnet test --project tests/IntegrationTests/Api.IntegrationTests/Api.IntegrationTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Api.Integration/coverage.cobertura.xml"
         env:
-          ConnectionStrings__NeonTest: "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres"
+          ConnectionStrings__Neon: "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres"
 
       - name: Install ReportGenerator
         run: dotnet tool install --global dotnet-reportgenerator-globaltool

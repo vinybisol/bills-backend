@@ -3,8 +3,6 @@
   <!-- NUnit/MTP/coverage settings are inherited from tests/Directory.Build.props. -->
   <PropertyGroup>
     <RootNamespace>Api.IntegrationTests</RootNamespace>
-    <!-- Holds ConnectionStrings:NeonTest locally (CI uses the ConnectionStrings__NeonTest env var). -->
-    <UserSecretsId>b0ff660b-1fda-458f-9d68-baea5fa2507d</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,6 +13,13 @@
 
   <ItemGroup>
     <Using Include="Api.IntegrationTests.Infrastructure" />
+  </ItemGroup>
+
+  <!-- Local-only test settings (git-ignored). CI supplies ConnectionStrings__Neon instead. -->
+  <ItemGroup>
+    <None Include="appsettings.Testing.Local.json"
+          Condition="Exists('appsettings.Testing.Local.json')"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
