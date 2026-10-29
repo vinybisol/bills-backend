@@ -51,6 +51,11 @@ Vincular login da esposa (`person.app_user_id`) com autorização de dois nívei
 - **Já implementado:** `person_access_link`, um link compartilhável por pessoa, com token aleatório. Só o hash é salvo, e o link pode ser revogado (`active=false`, `revoke_at`). O endpoint anônimo `GET /bills/shared?token=` valida o token.
 - **Pendente:** devolver as contas/a-receber da pessoa via link e o vínculo por login (`person.app_user_id`).
 
+## Tempo e datas (ADR 7)
+- "Agora" vem só do `TimeProvider` injetado na `Application`; o `Domain` recebe instantes/datas por parâmetro. Um instante de referência por operação.
+- Instantes (`created_at`, `paid_at`/`received_at`, `revoke_at`, expiração de link) em UTC; datas de negócio (data de pagamento informada pelo usuário) como `DateOnly`.
+- Mês/ano corrente e datas locais devem ser derivados no **fuso de negócio explícito**, nunca no fuso do servidor. ⚠️ Hoje são derivados em UTC (`SharedBillsEndpoint`, `EntryCalculations.ResolveEventInstant`) e a borda de expiração de link é inconsistente (`<=` × `<`) — pendência #91, que define o fuso e se igualdade = expirado.
+
 ## Onde as regras vivem no código
 - Invariantes de entidade (split × person, congelamento, soft delete): `src/Domain/Entities`.
 - Cálculos (`effective`, `myShare`, `receivable`, saldos, agregações, projeção, recálculo): `src/Domain/Calculations`.

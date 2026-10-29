@@ -11,7 +11,21 @@ NUnit 4 + NSubstitute + `Assert.That` (modelo de constraints), rodando no **Micr
 | `tests/Directory.Build.props` | comum a todos os testes: `net10.0`, `OutputType=Exe`, `EnableNUnitRunner=true`, NUnit, NUnit.Analyzers, NUnit3TestAdapter (runner MTP), `Microsoft.Testing.Extensions.CodeCoverage`, `using NUnit.Framework` |
 | `tests/UnitTests/Directory.Build.props` | importa o anterior e adiciona NSubstitute |
 
-Não há `Microsoft.NET.Test.Sdk`/VSTest, xUnit, Moq nem AutoFixture.
+Não há `Microsoft.NET.Test.Sdk`/VSTest, xUnit, Moq nem AutoFixture. Decisão: ADR 8 (escopo .NET).
+
+## Dados de teste (ADR 8)
+
+- **Bogus** gera dados **incidentais** realistas (nomes de categoria/pessoa, e-mails, valores dentro de faixas explícitas, grafos compostos). ⚠️ Ainda não instalado — pendência #89; até lá, dados montados à mão em `TestSupport/`.
+- Todo valor que **decide** o resultado esperado é explícito: bordas são testadas deliberadamente (ex.: `splitRatio` 0 / 0.5 / 1, ano 1999 / 2000 / 2100 / 2101), nunca deixadas ao acaso.
+- **Seed local** por gerador/teste (`new Faker<T>().UseSeed(n)` / `Randomizer.Seed` local), nunca estado aleatório global compartilhado. Fixe a data de referência (`FixedTimeProvider`) quando a geração depende do "agora".
+- Entidades sempre pelas factories públicas (`Create`/`Provision`) — nada de burlar invariantes.
+- Só dados sintéticos; nunca copie dados de produção.
+- NSubstitute é para comportamento de dependências; Bogus é para dados. Não misture os papéis.
+- Tempo (ADR 7): teste viradas de dia/mês e a igualdade exata com o instante de expiração.
+
+## Testes de arquitetura (ADR 1)
+
+A ADR 1 exige testes automatizados no CI garantindo: `Domain` sem dependência de outras camadas/EF/ASP.NET; `Application` sem `Api`/`Data`/EF/ASP.NET; `Data` sem `Api`; endpoints sem acesso a `Data` (só `Program.cs` como composition root). ⚠️ Ainda não existem — pendência #88.
 
 ## Estrutura
 

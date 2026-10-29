@@ -4,6 +4,8 @@ Todos os endpoints vivem sob o prefixo **`/api/v1`**. Todos exigem `Authorizatio
 
 Camadas e fluxo da requisição (filtro → serviço → repositório): ver `docs/arquitetura.md`. Mapeamento padrão `Result` → HTTP: 400 `ValidationProblem`, 404/409 `ProblemDetails`, listas vazias → 204, criação → 201 + `Location`. Exceção: `GET /api/v1/bills/shared`, `GET /api/v1/health/live` e `GET /api/v1/health/ready` são **anônimos** (ver "Links de acesso" e "Infra").
 
+> ⚠️ **Mudança planejada (ADR 9, #86):** a regra é que coleção bem-sucedida responda **200 com o array, inclusive vazio (`[]`)**, nunca 204. Este documento descreve o comportamento **atual** (204 para lista vazia nos itens marcados "204 se vazia"); quando a #86 for entregue, todos passam a 200 `[]` de uma vez (breaking change para o frontend). Endpoints novos já nascem com 200 `[]`.
+
 ## Contrato de erro (RFC 9457)
 **Toda** resposta de erro (4xx/5xx) é `Content-Type: application/problem+json` no formato [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) — sejam erros de serviço, do framework ou exceções não tratadas.
 
@@ -21,6 +23,8 @@ Camadas e fluxo da requisição (filtro → serviço → repositório): ver `doc
 - Erros do framework também têm corpo `ProblemDetails` (antes vinham **sem corpo**): 401 sem token/token inválido, 404 de rota inexistente, 405 método não suportado, 415 content-type não suportado e 400 de JSON malformado / enum desconhecido no binding.
 - 500 (exceção não tratada) → `ProblemDetails` genérico, **sem** mensagem de exceção nem stack trace (fora de Development; em Development continua a página de exceção do desenvolvedor).
 - ⚠️ **Breaking change para o frontend**: `title` deixou de ser o código do erro — leia o código em `code`.
+- Clientes decidem por `type`/`code`, nunca por `title`/`detail`, e devem tolerar extensões desconhecidas (ADR 3).
+- ⚠️ **Alinhamento pendente com a ADR 3 (#90):** `type` deve ser um URI estável e documentado por tipo de problema da aplicação (hoje é o default do ASP.NET por status); `instance`, quando presente, deve identificar a ocorrência sem expor partes sensíveis da URL (hoje é o caminho da rota); erros do framework e 500 devem ter `code` controlado.
 
 ## Infra
 - `GET /api/v1/health` → resolve/provisiona o app_user e confirma liveness autenticada.
@@ -38,6 +42,8 @@ Camadas e fluxo da requisição (filtro → serviço → repositório): ver `doc
   ```
   200 quando `status` é `healthy` ou `degraded` (migrations pendentes); **503** quando `status` é `unhealthy` (banco inacessível). A resposta nunca expõe mensagem de exceção, connection string, host ou nome de migration — só descrições fixas e genéricas (ex.: `"Database unreachable."`, `"Pending migrations detected."`).
 - **Rate limit** (`/health/live` e `/health/ready`): janela fixa de **10 requisições por minuto**, compartilhada pelas duas rotas e global por instância (não por cliente). Excedeu → **429** `ProblemDetails` com header `Retry-After` (segundos). Política `health` registrada em `HealthEndpoints.AddHealthRateLimiting`. O `GET /api/v1/health` autenticado não é limitado. Configure o monitor/probe para no máximo ~1 chamada a cada 6 s.
+- **Readiness × liveness (ADR 10):** liveness não depende de serviço externo (queda do banco não deve reiniciar o processo); readiness reflete as dependências **críticas** — hoje só o PostgreSQL. Migration pendente é `degraded`, não falha. Os checks são leves, com timeout e sem efeito colateral (nunca aplicam migration). Dependência externa nova deve ser classificada (crítica/opcional) aqui. O CD hoje faz smoke test de `/live` e `/ready` **depois** do deploy; o gate antes de receber tráfego está pendente (#85).
+- **Versão (ADR 19, pendente #82):** a versão injetada pelo build (ex.: `0.2.0+e4f5a6b`, `0.2.0-dev.15+a1b2c3d`) será exposta no health; build local sem versão reporta um placeholder.
 
 ## Identidade
 - `GET /api/v1/me` → perfil do app_user (id, name, email). Provisiona se novo.
