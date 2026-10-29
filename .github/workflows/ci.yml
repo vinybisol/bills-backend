@@ -1,26 +1,104 @@
 name: CI
 
-# Pull requests run CI directly. The CD workflows call this workflow on pushes,
-# then deploy only after its jobs succeed.
+# Runs on every pull request (any target branch) to validate the branch before merge.
+# The CD workflows call this workflow on pushes and deploy only after it succeeds.
+#
+# Jobs:
+#   unit-tests ─┐
+#               ├─► coverage ─► summary
+#   integration ┘
+# unit-tests and integration run in parallel; summary always runs and fails if anything failed,
+# so "CI result" is the single check to mark as required in branch protection.
 
 on:
   pull_request:
-    branches: [develop, main]
   workflow_call:
-    secrets:
-      CODECOV_TOKEN:
-        required: false
+
+permissions:
+  contents: read
+
+# A new push to the same PR cancels the outdated run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   DOTNET_VERSION: '10.0.x'
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  # Test projects run their own executable (MTP) instead of `dotnet test`: only this way the
+  # GitHubActionsReport extension's annotations (failed test -> file/line) reach the log.
+  TEST_ARGS: --report-gh --coverage --coverage-output-format cobertura
 
 jobs:
-  build-and-test:
-    name: Build & Test
+  unit-tests:
+    name: Build & Unit tests
     runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.build.outcome }}
+      domain: ${{ steps.domain.outcome }}
+      application: ${{ steps.application.outcome }}
+      api: ${{ steps.api.outcome }}
+      data: ${{ steps.data.outcome }}
 
-    # Integration tests run against a disposable PostgreSQL service container instead of
-    # Neon: it runs inside the runner (no extra billing, no external secret) and removes
-    # the network latency that made the Neon-backed suite slow.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # setup-dotnet registers a problem matcher: compiler errors/warnings become annotations on the lines.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props', 'nuget.config') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Build
+        id: build
+        run: dotnet build BillsBackend.slnx -c Release
+
+      # Each project runs even if a previous one failed, so every failure is reported at once.
+      - name: Domain.UnitTests
+        id: domain
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: dotnet tests/UnitTests/Domain.UnitTests/bin/Release/net10.0/Domain.UnitTests.dll $TEST_ARGS --coverage-output "$GITHUB_WORKSPACE/coverage/domain.cobertura.xml"
+
+      - name: Application.UnitTests
+        id: application
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: dotnet tests/UnitTests/Application.UnitTests/bin/Release/net10.0/Application.UnitTests.dll $TEST_ARGS --coverage-output "$GITHUB_WORKSPACE/coverage/application.cobertura.xml"
+
+      - name: Api.UnitTests
+        id: api
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: dotnet tests/UnitTests/Api.UnitTests/bin/Release/net10.0/Api.UnitTests.dll $TEST_ARGS --coverage-output "$GITHUB_WORKSPACE/coverage/api.cobertura.xml"
+
+      - name: Data.UnitTests
+        id: data
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: dotnet tests/UnitTests/Data.UnitTests/bin/Release/net10.0/Data.UnitTests.dll $TEST_ARGS --coverage-output "$GITHUB_WORKSPACE/coverage/data.cobertura.xml"
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-unit
+          path: coverage/
+          retention-days: 1
+          if-no-files-found: error
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.tests.outcome }}
+
+    # Disposable PostgreSQL inside the runner: no external secret, no network latency.
     services:
       postgres:
         image: postgres:16
@@ -32,75 +110,133 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d bills_test"
-          --health-interval 10s
+          --health-interval 2s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Restore
-        run: dotnet restore BillsBackend.slnx
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props', 'nuget.config') }}
+          restore-keys: nuget-${{ runner.os }}-
 
-      - name: Build
-        run: dotnet build BillsBackend.slnx --configuration Release --no-restore
-
-      - name: Run Domain.UnitTests
-        run: dotnet test --project tests/UnitTests/Domain.UnitTests/Domain.UnitTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Domain.Unit/coverage.cobertura.xml"
-
-      - name: Run Application.UnitTests
-        run: dotnet test --project tests/UnitTests/Application.UnitTests/Application.UnitTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Application.Unit/coverage.cobertura.xml"
-
-      - name: Run Api.UnitTests
-        run: dotnet test --project tests/UnitTests/Api.UnitTests/Api.UnitTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Api.Unit/coverage.cobertura.xml"
-
-      - name: Run Data.UnitTests
-        run: dotnet test --project tests/UnitTests/Data.UnitTests/Data.UnitTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Data.Unit/coverage.cobertura.xml"
-              
-      - name: Run Api.IntegrationTests
-        run: dotnet test --project tests/IntegrationTests/Api.IntegrationTests/Api.IntegrationTests.csproj -c Release --coverage --coverage-output-format cobertura --coverage-output "$GITHUB_WORKSPACE/TestResults/Api.Integration/coverage.cobertura.xml"
+      - name: Api.IntegrationTests
+        id: tests
+        run: |
+          dotnet build tests/IntegrationTests/Api.IntegrationTests -c Release
+          dotnet tests/IntegrationTests/Api.IntegrationTests/bin/Release/net10.0/Api.IntegrationTests.dll $TEST_ARGS --coverage-output "$GITHUB_WORKSPACE/coverage/integration.cobertura.xml"
         env:
           ConnectionStrings__Neon: "Host=localhost;Port=5432;Database=bills_test;Username=postgres;Password=postgres"
 
-      - name: Install ReportGenerator
-        run: dotnet tool install --global dotnet-reportgenerator-globaltool
-
-      - name: Merge coverage reports
-        run: |
-          reportgenerator \
-            -reports:"${{ github.workspace }}/TestResults/**/coverage.cobertura.xml" \
-            -targetdir:"${{ github.workspace }}/CoverageReport" \
-            -reporttypes:"Cobertura;Html"
-            
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Upload coverage
+        uses: actions/upload-artifact@v7
         with:
-          files: ${{ github.workspace }}/CoverageReport/Cobertura.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+          name: coverage-integration
+          path: coverage/
+          retention-days: 1
+          if-no-files-found: error
 
-      - name: Code Coverage Report
-        uses: irongut/CodeCoverageSummary@v1.3.0
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    outputs:
+      report: ${{ steps.report.outcome }}
+
+    steps:
+      # Sources are needed for the line-by-line HTML report.
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download coverage
+        uses: actions/download-artifact@v8
         with:
-          filename: CoverageReport/Cobertura.xml
-          badge: true
-          fail_below_min: true
-          format: markdown
-          hide_branch_rate: false
-          hide_complexity: true
-          indicators: true
-          output: both
-          thresholds: '60 80'
+          pattern: coverage-*
+          path: coverage
+          merge-multiple: true
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: always()
+      # Merges the reports and fails the step if line coverage is below 80%.
+      - name: Merge coverage and check minimum (80%)
+        id: report
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.12
+        with:
+          reports: coverage/*.cobertura.xml
+          targetdir: coverage-report
+          reporttypes: Html;MarkdownSummaryGithub
+          # UnitTestCommon is a test helper, not production code.
+          assemblyfilters: -UnitTestCommon
+          customSettings: minimumCoverageThresholds:lineCoverage=80
+
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        run: cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Uncovered lines: download this artifact and open index.html.
+      - name: Upload HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
-          path: ${{ github.workspace }}/CoverageReport
+          path: coverage-report/
+
+  summary:
+    name: CI result
+    runs-on: ubuntu-slim
+    needs: [unit-tests, integration-tests, coverage]
+    if: ${{ always() }}
+
+    steps:
+      - name: Summary
+        env:
+          UNIT_JOB: ${{ needs.unit-tests.result }}
+          BUILD: ${{ needs.unit-tests.outputs.build }}
+          DOMAIN: ${{ needs.unit-tests.outputs.domain }}
+          APPLICATION: ${{ needs.unit-tests.outputs.application }}
+          API: ${{ needs.unit-tests.outputs.api }}
+          DATA: ${{ needs.unit-tests.outputs.data }}
+          INTEGRATION_JOB: ${{ needs.integration-tests.result }}
+          INTEGRATION: ${{ needs.integration-tests.outputs.tests }}
+          COVERAGE_JOB: ${{ needs.coverage.result }}
+          REPORT: ${{ needs.coverage.outputs.report }}
+        run: |
+          icon() {
+            case "$1" in
+              success) echo "✅" ;;
+              failure) echo "❌" ;;
+              cancelled) echo "🚫" ;;
+              *) echo "⏭️" ;;
+            esac
+          }
+          {
+            echo "## Resultado do CI"
+            echo
+            echo "| Job | Etapa | Resultado |"
+            echo "|---|---|:---:|"
+            echo "| Build & Unit tests | **Job** | $(icon "$UNIT_JOB") |"
+            echo "| | Build | $(icon "$BUILD") |"
+            echo "| | Domain.UnitTests | $(icon "$DOMAIN") |"
+            echo "| | Application.UnitTests | $(icon "$APPLICATION") |"
+            echo "| | Api.UnitTests | $(icon "$API") |"
+            echo "| | Data.UnitTests | $(icon "$DATA") |"
+            echo "| Integration tests | **Job** | $(icon "$INTEGRATION_JOB") |"
+            echo "| | Api.IntegrationTests | $(icon "$INTEGRATION") |"
+            echo "| Coverage | **Job** | $(icon "$COVERAGE_JOB") |"
+            echo "| | Cobertura de linhas ≥ 80% | $(icon "$REPORT") |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for result in "$UNIT_JOB" "$INTEGRATION_JOB" "$COVERAGE_JOB"; do
+            if [ "$result" != "success" ]; then
+              echo "::error::CI falhou — veja o resumo da execução."
+              exit 1
+            fi
+          done
