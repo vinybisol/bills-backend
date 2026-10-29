@@ -51,12 +51,20 @@ Detalhes e o padrão para novas features em `CLAUDE.md` (seção "Arquitetura").
 - `docs/api.md` — contratos e endpoints.
 - `docs/dominio.md` — regras e conceitos do domínio.
 - `docs/schema.md` — modelo de dados e schema.
-- `docs/decisoes.md` — decisões de arquitetura (por quê).
+- `docs/decisoes.md` — índice das ADRs (as regras do projeto), decisões específicas e pendências código × ADR.
+- `CHANGELOG.md` — mudanças observáveis por versão (Keep a Changelog; versão = tag anotada `vX.Y.Z`, SemVer).
+
+## 🔀 Fluxo de trabalho
+
+- Branches: `feature/<nome>` a partir de `develop` (squash no merge); `hotfix/<nome>` a partir de `main`; `develop` → `main` e back-merge `main` → `develop` sempre com merge commit.
+- PR com mudança observável pelo consumidor adiciona a entrada em `CHANGELOG.md` › `[Unreleased]`.
+- Releases: tag anotada `vX.Y.Z` no `main` (SemVer escolhido pelas categorias do changelog). Detalhes em `CLAUDE.md` › "Git flow" e "Changelog, versão e release".
 
 ## 🛠️ Execução local
 
 1. Configure o PostgreSQL para testes/desenvolvimento.
 2. Ajuste a `ConnectionStrings` no `appsettings.Development.json` ou variáveis de ambiente.
-3. Execute a API com `dotnet run --project src/Api/Api.csproj`.
+3. Aplique as migrations manualmente: `dotnet ef database update --project src/Data` (pela ADR 6 a aplicação não deve migrar no startup; hoje ainda migra em Development — #87).
+4. Execute a API com `dotnet run --project src/Api/Api.csproj`.
 
 > Este README é apenas um resumo para começar. Consulte `CLAUDE.md` e `docs/` para detalhes do projeto.

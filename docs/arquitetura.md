@@ -19,9 +19,10 @@ Clean Architecture em 4 projetos. Dependências apontam **para dentro**:
 - `Domain` não depende de nenhum projeto.
 - `Application` depende só de `Domain`. Não conhece EF Core nem HTTP.
 - `Data` implementa as abstrações de `Application` (repositórios, `IUnitOfWork`).
-- `Api` depende de `Application`. Só o `Program.cs` (composition root) usa `Data`, para registrar DI e rodar `IMigrationService` em Development.
+- `Api` depende de `Application`. Só o `Program.cs` (composition root) usa `Data`, para registrar DI. (Hoje também roda `IMigrationService` em Development, o que a ADR 6 proíbe — pendência #87.)
+- Regras verificadas por testes de arquitetura no CI, exigidos pela ADR 1 (pendência #88).
 
-Por quê: ver `docs/decisoes.md` (Clean Architecture, contrato HTTP padronizado).
+Por quê: ver `docs/decisoes.md` (índice das ADRs; ADR 1 = Clean Architecture, ADRs 2/3/9 = contrato HTTP).
 
 ## Estrutura de pastas
 
@@ -101,7 +102,7 @@ HTTP ──► ExceptionHandler* ──► StatusCodePages ──► JwtBearer (
 |---|---|
 | `Result` sucesso | 204 |
 | `Result<T>` sucesso | 200 + corpo |
-| `Result<IEnumerable<T>>` sucesso | 200, ou **204 se vazio** |
+| `Result<IEnumerable<T>>` sucesso | 200 + array, **inclusive vazio (`[]`)** — ADR 9. ⚠️ Hoje ainda 204 se vazio (#86) |
 | Criação (no endpoint) | 201 + `Location` |
 | `ValidationError` | 400 `ValidationProblem` (`errors` por campo) |
 | `Error.Validation` (erro simples, sem campo) | 400 `ProblemDetails` (`code` = `Error.Validation`, sem `errors`) |
@@ -112,7 +113,7 @@ HTTP ──► ExceptionHandler* ──► StatusCodePages ──► JwtBearer (
 | Exceção não tratada (exception handler, fora de Development) | 500 `ProblemDetails` genérico |
 | 4xx/5xx sem corpo do framework (status code pages) | `ProblemDetails` com o status |
 
-Todas as respostas de erro são RFC 9457 (`application/problem+json`): `title` = título padrão do status, `detail` = mensagem do erro, extensão `code` = código do erro (`Error.Code`), `instance` = caminho, `traceId` = id de correlação; `ValidationProblem` também tem `errors` por campo (e `code` = `Error.Validation`). Contrato completo em `docs/api.md` › "Contrato de erro".
+Todas as respostas de erro são RFC 9457 (`application/problem+json`, ADR 3): `title` = título padrão do status, `detail` = mensagem do erro, extensão `code` = código do erro (`Error.Code`), `instance` = caminho, `traceId` = id de correlação; `ValidationProblem` também tem `errors` por campo (e `code` = `Error.Validation`). A ADR 3 pede `type` estável por tipo de problema e `instance` por ocorrência (não a rota) — pendência #90. Contrato completo em `docs/api.md` › "Contrato de erro".
 
 ## Mapa das features
 
@@ -132,11 +133,11 @@ Todas as respostas de erro são RFC 9457 (`application/problem+json`): `title` =
 
 ## Como adicionar uma feature
 
-Siga `CategoryEndpoints` → `CategoryService` → `CategoryRepository` como referência.
+Siga `CategoryEndpoints` → `CategoryService` → `CategoryRepository` como referência. Crie só o que o caso de uso precisa (ADR 1): nem toda feature toca todas as camadas, e abstração só em fronteira real.
 
-1. **Domain**: entidade com estado encapsulado (construtor privado, factory `Create`, métodos de comportamento, soft delete via `Deactivate`). Lógica pura em `Calculations/`. Testes em `Domain.UnitTests`.
-2. **Repositório**: `IXRepository` em `Application/Abstractions/Repositories`; `XRepository` `internal sealed` em `Data/Repositories`; registrar em `RegisterData`. Se a entidade for nova, mapear no `AppDbContext` (snake_case + filtro por owner) e gerar migration.
-3. **Serviço**: `IXService` em `Application/Abstractions/Services`; `XService` `internal sealed` com construtor primário (`IXRepository`, `ICurrentOwner`, `TimeProvider`, `IUnitOfWork`); retorna `Result<XDto>`; DTO em `Application/DTOs/Services`; registrar em `RegisterApplications`. Testes com NSubstitute em `Application.UnitTests`.
-4. **Endpoint**: `XEndpoints.cs` com `group.MapGroup("/x").AddEndpointFilter<UserEndpointFilter>()`; request em `Api/Contracts`; encadear o `MapXEndpoints()` em `Program.cs`.
+1. **Domain**: entidade com estado encapsulado (construtor privado, factory `Create`, métodos de comportamento, soft delete via `Deactivate`). Lógica pura em `Calculations/`, recebendo instantes/datas por parâmetro (nunca lê o relógio — ADR 7). Testes em `Domain.UnitTests`.
+2. **Repositório**: `IXRepository` em `Application/Abstractions/Repositories`; `XRepository` `internal sealed` em `Data/Repositories`; registrar em `RegisterData`. Repositório não comita (ADR 5). Se a entidade for nova, mapear no `AppDbContext` (snake_case + filtro por owner) e gerar migration (aplicada pelo CD, nunca no startup — ADR 6).
+3. **Serviço**: `IXService` em `Application/Abstractions/Services`; `XService` `internal sealed` com construtor primário (`IXRepository`, `ICurrentOwner`, `TimeProvider`, `IUnitOfWork`); retorna `Result<XDto>`; DTO em `Application/DTOs/Services`; registrar em `RegisterApplications`. Configuração nova = `IOptions<T>` validado no startup (ADR 4). Testes com NSubstitute em `Application.UnitTests`.
+4. **Endpoint**: `XEndpoints.cs` com `group.MapGroup("/x").AddEndpointFilter<UserEndpointFilter>()`; request em `Api/Contracts`; encadear o `MapXEndpoints()` em `Program.cs`. Listagem → 200 com array, inclusive vazio (ADR 9).
 5. **Integração**: `Api.IntegrationTests/Endpoints/XEndpointTests.cs` herdando `IntegrationTestBase`.
-6. **Docs**: `docs/api.md` (contrato) e, se houver regra nova, `docs/dominio.md`.
+6. **Docs**: `docs/api.md` (contrato) e, se houver regra nova, `docs/dominio.md`. Mudança observável pelo consumidor → entrada em `CHANGELOG.md` › `[Unreleased]` (ADR 12).

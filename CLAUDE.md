@@ -9,9 +9,16 @@ API do sistema de orçamento pessoal. Este arquivo define como os agentes devem 
 - Autenticação: validação de JWT do Firebase; identidade própria via `app_user` (ver schema)
 - Hospedagem: Azure Web App (F1)
 
+## ADRs (fonte das regras)
+
+As decisões de arquitetura vivem no repositório de ADRs (servidor MCP `adrs`; 19 ADRs aceitas). **As ADRs são a regra**: código novo segue a ADR; onde o código atual ainda diverge, a divergência está registrada como issue e listada em `docs/decisoes.md` › "Pendências". Não "corrija" o código para o comportamento antigo nem replique a divergência em código novo.
+
+- Antes de uma decisão de arquitetura nova, busque nas ADRs (`adrs-search_adrs`). Para criar/alterar ADR siga a ADR 11 (MCP primeiro, linkar relacionadas, atualizar o índice, conferir o status no corpo depois de `update_status`, rodar `run_doctor` ao final).
+- Índice das ADRs e como cada uma se aplica aqui: `docs/decisoes.md`.
+
 ## Arquitetura
 
-Clean Architecture em 4 projetos (`src/`); detalhes, árvore de pastas e fluxo em `docs/arquitetura.md`. Dependências apontam **para dentro**: `Api → Application → Domain` e `Data → Application/Domain`. `Domain` não depende de ninguém; `Application` não conhece EF Core; só `Api/Program.cs` (composition root) referencia `Data` (registro de DI + `IMigrationService`).
+Clean Architecture em 4 projetos (`src/`) — **ADR 1**; detalhes, árvore de pastas e fluxo em `docs/arquitetura.md`. Dependências apontam **para dentro**: `Api → Application → Domain` e `Data → Application/Domain`. `Domain` não depende de ninguém; `Application` não conhece EF Core; só `Api/Program.cs` (composition root) referencia `Data` (só para registro de DI). Uma feature cria só os elementos de que precisa — não é obrigatório tocar todas as camadas nem criar abstração sem fronteira real. Testes de arquitetura automatizados no CI são exigidos pela ADR 1 (pendência #88).
 
 | Camada | O que vai lá |
 |---|---|
@@ -27,10 +34,18 @@ Clean Architecture em 4 projetos (`src/`); detalhes, árvore de pastas e fluxo e
 4. Endpoint: `group.MapGroup("/x").AddEndpointFilter<UserEndpointFilter>()`, handler só recebe request/serviço/`CancellationToken` e devolve `result.ToHttpResult()`. Nunca leia claims do Firebase nem use `AppDbContext` no endpoint. Só endpoints intencionalmente anônimos (ex.: `SharedBillsEndpoint`) ficam sem o filtro.
 5. Testes de integração em `Api.IntegrationTests/Endpoints/XEndpointTests.cs`.
 
+**Regras transversais (ADRs):**
+- **Result (ADR 2)**: falha esperada é `Result`/`Result<T>` com `Error { code, message }` estável; exceção só para o inesperado. Só traduza exceção de infraestrutura em falha quando o significado for conhecido (ex.: UNIQUE `23505` → 409); nunca capture e converta indiscriminadamente.
+- **Repositório + Unit of Work (ADR 5)**: repositórios não fazem commit; o serviço chama `IUnitOfWork.SaveChangesAsync` uma vez por caso de uso (leitura não comita). Contratos não expõem tipos do EF (`IQueryable`, `DbSet`...).
+- **Tempo (ADR 7)**: nunca leia o relógio do sistema (`DateTime.Now/UtcNow`, `DateTimeOffset.Now`); use `TimeProvider` injetado na `Application` e passe instantes/datas ao `Domain`. Capture **um** instante de referência por operação. Instantes em UTC; datas de negócio como `DateOnly`; mês/data corrente derivados no **fuso de negócio explícito**, nunca no fuso do servidor; defina se igualdade com a expiração = expirado. Testes com `FixedTimeProvider`. (Fuso de negócio e borda de expiração ainda pendentes: #91.)
+- **Configuração (ADR 4)**: toda configuração nova é um `IOptions<T>` com `ValidateDataAnnotations()` (ou validação própria) + `ValidateOnStart()`; nada de ler `IConfiguration`/env var solta no código; sem default silencioso para valor inválido; segredos nunca no repositório nem em log.
+- **Readiness (ADR 10)**: `/health/live` = liveness (não depende de dependência externa); `/health/ready` = readiness (PostgreSQL é dependência **crítica** → 503). Check leve, com timeout, sem efeito colateral (nunca cria dado nem aplica migration). Toda dependência externa nova deve ser classificada como crítica ou opcional, com o comportamento degradado documentado.
+- **Versão em runtime (ADR 19)**: a versão vem só do build (`AssemblyInformationalVersionAttribute`), nunca de constante/arquivo editado à mão (pendência #82).
+
 **Contrato HTTP padronizado** (`ResultExtensions.ToHttpResult`):
-- Sucesso: `Result` → 204; `Result<T>` → 200 com o corpo; `Result<IEnumerable<T>>` → 200, ou **204 quando a lista é vazia**. Criação usa `Results.Created` no endpoint.
-- Falha: `ValidationError` → 400 `ValidationProblem` (erros agrupados por código); `NotFound` → 404, `Conflict` → 409 (ex.: editar/pagar lançamento congelado), `Unauthorized` → 401, `Forbidden` → 403 — todos como `ProblemDetails` RFC 9457 (`application/problem+json`; `title` = título padrão do status, `detail` = mensagem, extensão `code` = código do erro, `instance` + `traceId`).
-- Sem token / token sem uid → 401. Erros do framework (401, rota 404/405, 415, 400 de binding) e exceções não tratadas (500, só fora de Development) também saem como `ProblemDetails` (ver `docs/api.md` › "Contrato de erro").
+- Sucesso: `Result` → 204; `Result<T>` → 200 com o corpo; `Result<IEnumerable<T>>` → **200 com o array, inclusive vazio (`[]`)** — **ADR 9**: nunca 204 por lista vazia, sem envelope. Criação usa `Results.Created` no endpoint. ⚠️ O código atual ainda devolve 204 para lista vazia (pendência #86): endpoint novo segue a ADR; a migração dos existentes é feita de uma vez na #86 (breaking change para o frontend).
+- Falha: `ValidationError` → 400 `ValidationProblem` (erros agrupados por código); `NotFound` → 404, `Conflict` → 409 (ex.: editar/pagar lançamento congelado), `Unauthorized` → 401, `Forbidden` → 403 — todos como `ProblemDetails` RFC 9457 (**ADR 3**; `application/problem+json`; `title` = título padrão do status, `detail` = mensagem segura, extensão `code` = código estável do erro, extensão `traceId`; `type` estável por tipo de problema; `instance` opcional e por ocorrência, sem dados sensíveis da URL). Clientes decidem por `type`/`code`, nunca por `title`/`detail`. Alinhamento de `type`/`instance` pendente (#90).
+- Sem token / token sem uid → 401. Erros do framework (401, rota 404/405, 415, 400 de binding) e exceções não tratadas (500 genérico, sem mensagem de exceção nem stack trace) também saem como `ProblemDetails` (ver `docs/api.md` › "Contrato de erro").
 
 ## Agente e skills
 
@@ -50,6 +65,8 @@ Clean Architecture em 4 projetos (`src/`); detalhes, árvore de pastas e fluxo e
   - **Testes unitários** da lógica (regras de negócio, cálculos de split, projeção, recálculo).
   - **Testes de integração** dos endpoints (incluindo autenticação e acesso ao banco).
 - **Nunca** abra um PR com testes falhando ou sem cobertura para o que foi implementado.
+- **Dados de teste (ADR 8)**: use **Bogus** para dados incidentais realistas (nomes, valores em faixa explícita), com **seed local** por gerador/teste — nunca estado aleatório global. Todo valor que decide o resultado esperado é **explícito** (bordas testadas deliberadamente, ex.: 17/18/19). Datas de referência explícitas (`FixedTimeProvider`). Entidades sempre via factory (`Create`/`Provision`). Nunca dados reais de produção. NSubstitute só para comportamento de dependências, não para gerar dados. (Bogus ainda não instalado: #89.)
+- Comportamento dependente de tempo (ADR 7): teste viradas de dia/mês e a igualdade exata com o instante de expiração.
 
 ### Ciclo de teste rápido (iteração)
 
@@ -75,27 +92,46 @@ Cada teste usa um `firebase_uid` (e portanto um `owner_id`) **distinto**; o filt
 - Para um uid único por teste, use `CreateAuthenticatedClient()` (gera um uid via `NewFirebaseUid()`) ou passe um uid próprio e distinto em `TestTokens.CreateValidToken(...)`.
 - O assembly é `[assembly: NonParallelizable]` (ver `AssemblyInfo.cs`): as fixtures rodam em sequência, porque o Respawn de uma fixture apagaria os dados de outra em execução. Não adicione `[Parallelizable]` nem crie outro projeto de integração apontando para o mesmo banco.
 
-## Git flow
+## Git flow (ADRs 15 e 16)
 
-- Branches permanentes: `main` (produção) e `develop` (integração).
-- **Todo trabalho** acontece em branch própria a partir de `develop`:
-  - Padrão: `claude/feat/[nome-da-implementacao]` (kebab-case, descritivo).
-- PRs são abertos **de** `claude/feat/...` **para** `develop`.
-- `main` recebe merge apenas a partir de `develop` em releases (não direto de feature).
+Git Flow simplificado: dois branches permanentes e dois tipos de branch curto. Sem branches `release/*` por padrão.
+
+| Branch | Papel | Sai de | Entra em | Estratégia de merge |
+|---|---|---|---|---|
+| `main` | Código liberado. Todo merge em `main` corresponde a uma release. | — | — | — |
+| `develop` | Integração; tudo aqui vai na próxima release. | `main` (uma vez) | `main` | **merge commit** |
+| `feature/<nome>` | Uma mudança (kebab-case, descritivo). | `develop` | `develop` | **squash** |
+| `hotfix/<nome>` | Correção urgente do que está em produção. | `main` | `main`, depois back-merge em `develop` | **merge commit** |
+
+- Nunca faça squash nem rebase entre `develop` e `main` (em nenhuma direção): a tag de release precisa continuar alcançável a partir de `develop`.
+- Depois de toda release ou hotfix: **back-merge `main` → `develop` com merge commit** (conferir com `git merge-base --is-ancestor vX.Y.Z develop`).
+- Sem cherry-pick entre os branches permanentes. O que não está pronto não entra em `develop` (ou entra atrás de feature flag).
+- Como o PR de feature vira um commit só, o **título do PR** é um resumo descritivo no imperativo; os commits internos podem ser informais. Não há convenção de mensagem de commit obrigatória.
+
+## Changelog, versão e release (ADRs 12, 13, 14, 17, 18, 19)
+
+- **`CHANGELOG.md`** (raiz) é escrito por pessoas, no formato Keep a Changelog 1.1.0. O PR que traz uma mudança **observável pelo consumidor** (endpoint/campo novo, comportamento alterado, bug perceptível, remoção, correção de vulnerabilidade, mudança perceptível de performance) adiciona a entrada em `## [Unreleased]`, na categoria certa (`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`). Descreva o **efeito para o consumidor**, não a implementação (“Exportar contas em CSV”, não “Adiciona ExportService”). Testes, refactor sem mudança de comportamento, pipeline/build e atualização rotineira de dependência **não** entram.
+- **Versão**: SemVer 2.0.0, definida **só** pela tag anotada `vMAJOR.MINOR.PATCH` em `main`. **Nunca** coloque `<Version>` em `.csproj`/`Directory.Build.props`: a pipeline injeta a versão. Tag publicada é imutável (erro → nova versão).
+- **Escolha do incremento** (pessoa, no momento da release, pelas categorias em `[Unreleased]`): `Removed` ou `Changed` que quebra contrato → MAJOR (MINOR enquanto `0.y.z`); `Added`/`Deprecated` → MINOR; só `Fixed`/`Security` → PATCH. `[Unreleased]` vazio = nada a liberar.
+- **Release**: revisar `[Unreleased]` → renomear para `## [X.Y.Z] - AAAA-MM-DD` → novo `[Unreleased]` vazio → atualizar links de comparação → merge `develop` → `main` (merge commit) → `git tag -a vX.Y.Z` no `main` e `git push origin vX.Y.Z` → back-merge `main` → `develop`. A pipeline de release dispara **só pela tag**, compila **uma vez**, publica a GitHub Release com as notas da seção do changelog e promove **o mesmo artefato** entre ambientes, condicionado a readiness (ADR 10).
+- **Pré-release**: todo push em `develop` gera `<última tag>-dev.<run>+<sha>` (sem tag: `0.0.0-dev...`), descartável (7 dias), só para ambientes de desenvolvimento.
+- A versão injetada é exposta em runtime (health e logs) — ADR 19.
+- ⚠️ Pipelines de versão/release ainda não seguem isso: hoje `cd-prod.yml` publica a cada push em `main` e não há versão injetada (pendências #82, #83, #85).
 
 ## Ciclo de trabalho por issue
 
-1. Sempre use a branch 'develop' como base
-2. Baixe ou atualize ela localmente
+1. Sempre use a branch `develop` como base.
+2. Baixe ou atualize ela localmente.
 3. Selecione a issue atribuída (ou a próxima da fila de onboarding).
-4. Crie a branch `claude/feat/[nome]` a partir de `develop`.
+4. Crie a branch `feature/[nome]` a partir de `develop` (ou `hotfix/[nome]` a partir de `main`, só para correção urgente de produção).
 5. Implemente, com testes unitários **e** de integração.
-6. Rode `dotnet test` — só prossiga se tudo passar.
-7. Faça commit e push da branch.
-8. Abra o PR para `develop`, referenciando a issue (`Closes #<n>`).
-9. **Pare e aguarde a aprovação humana do PR.** Não faça merge sozinho.
-10. Após o PR ser aprovado e mergeado, a issue é fechada.
-11. Pegue a próxima issue e repita.
+6. Se a mudança for observável pelo consumidor, adicione a entrada em `CHANGELOG.md` › `[Unreleased]`.
+7. Rode `dotnet test` — só prossiga se tudo passar.
+8. Faça commit e push da branch.
+9. Abra o PR para `develop` (hotfix: para `main`), com título descritivo no imperativo, referenciando a issue (`Closes #<n>`).
+10. **Pare e aguarde a aprovação humana do PR.** Não faça merge sozinho (o merge de feature é squash).
+11. Após o PR ser aprovado e mergeado, a issue é fechada.
+12. Pegue a próxima issue e repita.
 
 ## Invariantes de domínio (NUNCA violar)
 
@@ -112,7 +148,8 @@ Cada teste usa um `firebase_uid` (e portanto um `owner_id`) **distinto**; o filt
 
 ## Convenções
 
-- Migrations versionadas pelo EF Core; nunca alterar migration já aplicada.
+- Migrations versionadas pelo EF Core; nunca alterar migration já aplicada (ADR 6).
+- Migrations são aplicadas **só pelo CD**, num passo explícito antes de promover a nova versão; **nunca** no startup nem em health check. Localmente, rode manualmente `dotnet ef database update --project src/Data`. Migration aplicada com a versão anterior ainda no ar precisa ser compatível com ela (mudança incompatível = expand/contract em etapas). Migration falhou → para o deploy e investiga; sem rollback automático. (Hoje o `Program.cs` ainda migra em Development: pendência #87; bundle no CD: #83.)
 - Validação de entrada em todos os endpoints.
 - Filtro global por `owner_id` nas queries (isolamento por usuário na aplicação).
 
@@ -140,4 +177,5 @@ No **CI**, os testes rodam contra um **service container** de PostgreSQL (ver `.
 - `docs/dominio.md` — conceitos, regras e fluxos completos.
 - `docs/schema.md` — tabelas, colunas, constraints (SQL completo em `docs/schema.sql`).
 - `docs/api.md` — endpoints e contratos.
-- `docs/decisoes.md` — por que cada decisão de arquitetura.
+- `docs/decisoes.md` — índice das ADRs (como cada uma se aplica aqui), decisões específicas do projeto e pendências (código × ADR).
+- `CHANGELOG.md` — mudanças observáveis pelo consumidor, por versão (ADR 12).
