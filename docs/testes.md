@@ -8,7 +8,7 @@ NUnit 4 + NSubstitute + `Assert.That` (modelo de constraints), rodando no **Micr
 |---|---|
 | `global.json` | `"test": { "runner": "Microsoft.Testing.Platform" }`: `dotnet test` usa MTP |
 | `Directory.Packages.props` | versões de todos os pacotes (CPM); `.csproj` não tem `Version=` |
-| `tests/Directory.Build.props` | comum a todos os testes: `net10.0`, `OutputType=Exe`, `EnableNUnitRunner=true`, NUnit, NUnit.Analyzers, NUnit3TestAdapter (runner MTP), `Microsoft.Testing.Extensions.CodeCoverage`, `using NUnit.Framework` |
+| `tests/Directory.Build.props` | comum a todos os testes: `net10.0`, `OutputType=Exe`, `EnableNUnitRunner=true`, NUnit, NUnit.Analyzers, NUnit3TestAdapter (runner MTP), `Microsoft.Testing.Extensions.CodeCoverage`, `Microsoft.Testing.Extensions.GitHubActionsReport` (anotações/resumo no CI), `using NUnit.Framework` |
 | `tests/UnitTests/Directory.Build.props` | importa o anterior e adiciona NSubstitute |
 
 Não há `Microsoft.NET.Test.Sdk`/VSTest, xUnit, Moq nem AutoFixture. Decisão: ADR 8 (escopo .NET).
@@ -143,3 +143,16 @@ dotnet test --project <proj> -- --coverage --coverage-output-format cobertura  #
 ```
 
 Com MTP, use sempre `--project` ao filtrar. `dotnet test --filter` sem `--project` roda na solução inteira e falha nos projetos em que nenhum teste corresponde ao filtro ("Zero tests ran", exit code 8).
+
+## CI (`.github/workflows/ci.yml`)
+
+Roda em todo PR (qualquer branch de destino) e é chamado pelos CDs antes do deploy. Jobs:
+
+| Job | O que faz |
+|---|---|
+| `Build & Unit tests` | build da solução + os 4 projetos unitários com coverage (cada um roda mesmo se outro falhar). Em paralelo com o de integração. |
+| `Integration tests` | `Api.IntegrationTests` contra um service container `postgres:16`, com coverage. |
+| `Coverage` | junta as coberturas (ReportGenerator, excluindo `UnitTestCommon`), **falha se a cobertura de linhas < 80%**, escreve a tabela por classe no resumo da execução e publica o relatório HTML (com as **linhas não cobertas**) como artefato `coverage-report`. |
+| `CI result` | sempre roda; resumo ✅/❌ por job e etapa; falha se algo falhou. **É o check a marcar como obrigatório** na proteção de branch. |
+
+Erros de compilação viram anotações na linha (problem matcher do `setup-dotnet`); testes que falham também, além de um resumo por projeto no run (`Microsoft.Testing.Extensions.GitHubActionsReport`, ativado com `--report-gh`). Por isso o CI executa o binário de cada projeto de teste (`dotnet <proj>.dll`) em vez de `dotnet test`: pelo `dotnet test` as anotações não chegam ao log.
