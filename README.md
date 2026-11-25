@@ -1,5 +1,6 @@
-[![codecov](https://codecov.io/github/vinybisol/bills-backend/graph/badge.svg?token=ISA68KJ8DQ)](https://codecov.io/github/vinybisol/bills-backend)
-![CI/CD](https://github.com/vinybisol/bills-backend/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/vinybisol/bills-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/vinybisol/bills-backend/actions/workflows/ci.yml)
+[![CD-DEV](https://github.com/vinybisol/bills-backend/actions/workflows/cd-dev.yml/badge.svg?branch=develop)](https://github.com/vinybisol/bills-backend/actions/workflows/cd-dev.yml)
+[![CD-PROD](https://github.com/vinybisol/bills-backend/actions/workflows/cd-prod.yml/badge.svg?branch=main)](https://github.com/vinybisol/bills-backend/actions/workflows/cd-prod.yml)
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)
 ![Last Commit](https://img.shields.io/github/last-commit/vinybisol/bills-backend)
 ![Issues](https://img.shields.io/github/issues/vinybisol/bills-backend)

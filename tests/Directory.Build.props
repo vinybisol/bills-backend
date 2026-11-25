@@ -8,6 +8,7 @@
     NUnit 4 on Microsoft.Testing.Platform (MTP): the NUnit3TestAdapter package provides the
     MTP runner when EnableNUnitRunner=true, so no Microsoft.NET.Test.Sdk / VSTest is involved.
     Coverage comes from Microsoft.Testing.Extensions.CodeCoverage (pass the MTP "coverage" option).
+    Microsoft.Testing.Extensions.GitHubActionsReport annotates failed tests and writes the job summary on GitHub Actions.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -28,6 +29,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="Microsoft.Testing.Extensions.GitHubActionsReport" />
   </ItemGroup>
 
   <ItemGroup>
