@@ -1,0 +1,52 @@
+# Runs the application locally the same way it runs in production (Production environment),
+# against a local PostgreSQL. All values below are local-only, never used outside this file.
+#
+# Usage:
+#   docker compose up -d --build
+#   curl http://localhost:8080/api/v1/health/ready
+#   docker compose down           # keeps the data; add -v to drop the volume
+#
+# Migrations are not applied here (never at application startup — ADR 6). Until that is
+# automated, apply them by hand against the db service (host port 5433):
+#   NEON_CONNECTION_STRING="Host=localhost;Port=5433;Database=bills_dev;Username=postgres;Password=postgres" \
+#     dotnet ef database update --project src/Data --configuration Release
+#
+# For the integration test database use compose.test.yml instead.
+name: bills
+
+services:
+  db:
+    # Pinned by tag + digest (ADR 20).
+    image: postgres:16.16@sha256:07abc3f43c9395b0bdbbab36bc25ddb0e8d83cd4fcafb5fb7d6abe14ff156dd8
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bills_dev
+    # 5433 on the host so it does not clash with the test database (compose.test.yml, 5432).
+    ports:
+      - "5433:5432"
+    volumes:
+      - bills-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bills_dev"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  api:
+    build:
+      context: .
+    image: vinybisol/bills-backend:local
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Gss Encryption Mode=Disable: the chiseled image has no libgssapi; avoids a startup log line (see #95).
+      ConnectionStrings__Neon: "Host=db;Port=5432;Database=bills_dev;Username=postgres;Password=postgres;Gss Encryption Mode=Disable"
+      SharedPages__Secret: "local-shared-pages-secret-not-used-anywhere-else"
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  bills-db:

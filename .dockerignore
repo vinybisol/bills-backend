@@ -1,0 +1,23 @@
+# Everything not needed to build src/ stays out of the build context.
+**/bin/
+**/obj/
+**/TestResults/
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+.claude/
+docs/
+tests/
+*.md
+Dockerfile
+.dockerignore
+compose*.yml
+
+# Local settings and secrets never go into an image.
+.env
+*.env
+**/appsettings.Development.json
+**/appsettings.*.Local.json
+**/appsettings-exemple.json
