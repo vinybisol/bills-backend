@@ -63,6 +63,17 @@ Detalhes e o padrão para novas features em `CLAUDE.md` (seção "Arquitetura").
 
 ## 🛠️ Execução local
 
+**Com Docker (aplicação + PostgreSQL local, ambiente `Production`):**
+
+1. `docker compose up -d --build` — sobe o banco `bills_dev` (porta 5433 no host, volume persistente) e a API em `http://localhost:8080`. Credenciais e segredos locais já estão fixos no `compose.yml`.
+2. Aplique as migrations manualmente (a aplicação não migra no startup — ADR 6):
+   `NEON_CONNECTION_STRING="Host=localhost;Port=5433;Database=bills_dev;Username=postgres;Password=postgres" dotnet ef database update --project src/Data --configuration Release`
+3. Confira `http://localhost:8080/api/v1/health/ready`. `docker compose down` para (mantém os dados; `-v` apaga o volume).
+
+A imagem (`Dockerfile`) usa bases fixadas por digest, roda como usuário não-root e recebe a versão por `--build-arg VERSION=X.Y.Z` (padrão `0.0.0-local`). Para o banco dos testes de integração use `compose.test.yml` (ver `CLAUDE.md` › "Setup local de testes").
+
+**Sem Docker:**
+
 1. Configure o PostgreSQL para testes/desenvolvimento.
 2. Ajuste a `ConnectionStrings` no `appsettings.Development.json` ou variáveis de ambiente.
 3. Aplique as migrations manualmente: `dotnet ef database update --project src/Data` (pela ADR 6 a aplicação não deve migrar no startup; hoje ainda migra em Development — #87).

@@ -160,10 +160,11 @@ Os testes de integração precisam de um PostgreSQL (banco `bills_test`). A conn
 
 **Recomendado — Postgres local via Docker** (rápido, sem depender do Neon):
 ```bash
-docker compose up -d
+docker compose -f compose.test.yml up -d
 cp tests/IntegrationTests/Api.IntegrationTests/appsettings.Testing.Local.example.json \
    tests/IntegrationTests/Api.IntegrationTests/appsettings.Testing.Local.json
 dotnet test
+docker compose -f compose.test.yml down
 ```
 > Use o formato **key-value** (como no exemplo), não a URI `postgresql://...`: assim `NeonConnectionString.Normalize` devolve a string intacta e não força `SSL Mode=Require`, que o Postgres local não tem.
 

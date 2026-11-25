@@ -1,16 +1,20 @@
 # Local PostgreSQL for running the integration test suite without Neon.
 #
 # Usage:
-#   docker compose up -d
+#   docker compose -f compose.test.yml up -d
 #   cp tests/IntegrationTests/Api.IntegrationTests/appsettings.Testing.Local.example.json \
 #      tests/IntegrationTests/Api.IntegrationTests/appsettings.Testing.Local.json
 #   dotnet test
+#   docker compose -f compose.test.yml down
 #
-# Data is ephemeral (no named volume): `docker compose down` discards it. Respawn resets
-# the schema between fixtures anyway, so persistence is unnecessary for tests.
+# Data is ephemeral (no named volume): `down` discards it. Respawn resets the schema between
+# fixtures anyway, so persistence is unnecessary for tests.
+name: bills-test
+
 services:
   postgres:
-    image: postgres:16
+    # Pinned by tag + digest (ADR 20).
+    image: postgres:16.16@sha256:07abc3f43c9395b0bdbbab36bc25ddb0e8d83cd4fcafb5fb7d6abe14ff156dd8
     container_name: bills-test-db
     environment:
       POSTGRES_USER: postgres
