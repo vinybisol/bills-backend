@@ -127,11 +127,12 @@ Git Flow simplificado: dois branches permanentes e dois tipos de branch curto. S
 5. Implemente, com testes unitários **e** de integração.
 6. Se a mudança for observável pelo consumidor, adicione a entrada em `CHANGELOG.md` › `[Unreleased]`.
 7. Rode `dotnet test` — só prossiga se tudo passar.
-8. Faça commit e push da branch.
-9. Abra o PR para `develop` (hotfix: para `main`), com título descritivo no imperativo, referenciando a issue (`Closes #<n>`).
-10. **Pare e aguarde a aprovação humana do PR.** Não faça merge sozinho (o merge de feature é squash).
-11. Após o PR ser aprovado e mergeado, a issue é fechada.
-12. Pegue a próxima issue e repita.
+8. Rode a skill `pre-commit-check` (`.claude/skills/pre-commit-check/SKILL.md`) e só commite com o veredito `PRONTO PARA COMMIT`. Use-a também antes de release, hotfix e back-merge.
+9. Faça commit e push da branch.
+10. Abra o PR para `develop` (hotfix: para `main`), com título descritivo no imperativo, referenciando a issue (`Closes #<n>`).
+11. **Pare e aguarde a aprovação humana do PR.** Não faça merge sozinho (o merge de feature é squash).
+12. Após o PR ser aprovado e mergeado, a issue é fechada.
+13. Pegue a próxima issue e repita.
 
 ## Invariantes de domínio (NUNCA violar)
 
